@@ -123,9 +123,9 @@ function App() {
 
       <div className="workspace-content">
         <SplitPane
-          defaultSplit={50}
-          minLeft={25}
-          minRight={25}
+          defaultSplit={28}
+          minLeft={20}
+          minRight={35}
           left={
             <div className="terminal-pane">
               <Terminal

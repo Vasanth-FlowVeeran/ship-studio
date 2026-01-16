@@ -1,5 +1,40 @@
 import { useState, useEffect, useRef } from "react";
 
+type Breakpoint = "desktop" | "tablet" | "mobile";
+
+const BREAKPOINTS: Record<Breakpoint, { width: string; label: string }> = {
+  desktop: { width: "100%", label: "Desktop" },
+  tablet: { width: "768px", label: "Tablet" },
+  mobile: { width: "375px", label: "Mobile" },
+};
+
+// SVG icons for breakpoints
+const BreakpointIcon = ({ type }: { type: Breakpoint }) => {
+  if (type === "desktop") {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="2" y="3" width="20" height="14" rx="2" />
+        <line x1="8" y1="21" x2="16" y2="21" />
+        <line x1="12" y1="17" x2="12" y2="21" />
+      </svg>
+    );
+  }
+  if (type === "tablet") {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="4" y="2" width="16" height="20" rx="2" />
+        <line x1="12" y1="18" x2="12" y2="18" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="7" y="2" width="10" height="20" rx="2" />
+      <line x1="12" y1="18" x2="12" y2="18" strokeLinecap="round" />
+    </svg>
+  );
+};
+
 interface PreviewProps {
   port?: number;
 }
@@ -9,6 +44,7 @@ export function Preview({ port = 3000 }: PreviewProps) {
   const [hasError, setHasError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [serverReady, setServerReady] = useState(false);
+  const [breakpoint, setBreakpoint] = useState<Breakpoint>("desktop");
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const url = `http://localhost:${port}`;
@@ -80,6 +116,18 @@ export function Preview({ port = 3000 }: PreviewProps) {
     <div className="preview-container">
       <div className="preview-toolbar">
         <span className="preview-url">{url}</span>
+        <div className="preview-breakpoints">
+          {(Object.keys(BREAKPOINTS) as Breakpoint[]).map((bp) => (
+            <button
+              key={bp}
+              className={`breakpoint-btn ${breakpoint === bp ? "active" : ""}`}
+              onClick={() => setBreakpoint(bp)}
+              title={BREAKPOINTS[bp].label}
+            >
+              <BreakpointIcon type={bp} />
+            </button>
+          ))}
+        </div>
         <button
           className="preview-refresh"
           onClick={handleRefresh}
@@ -88,12 +136,18 @@ export function Preview({ port = 3000 }: PreviewProps) {
           ↻
         </button>
       </div>
-      <iframe
-        ref={iframeRef}
-        src={serverReady ? url : "about:blank"}
-        className="preview-iframe"
-        title="Preview"
-      />
+      <div className="preview-viewport">
+        <iframe
+          ref={iframeRef}
+          src={serverReady ? url : "about:blank"}
+          className="preview-iframe"
+          style={{
+            width: BREAKPOINTS[breakpoint].width,
+            maxWidth: "100%"
+          }}
+          title="Preview"
+        />
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { CanvasAddon } from "@xterm/addon-canvas";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import "@xterm/xterm/css/xterm.css";
@@ -49,10 +50,14 @@ export function Terminal({ projectPath, onExit }: TerminalProps) {
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 13,
-      fontFamily: '"SF Mono", Menlo, Monaco, "Cascadia Code", "Fira Code", Consolas, monospace',
+      fontFamily: 'Menlo, Monaco, "DejaVu Sans Mono", "Lucida Console", "Apple Color Emoji", "Segoe UI Emoji", monospace',
       letterSpacing: 0,
-      lineHeight: 1.1,
+      lineHeight: 1.2,
+      scrollback: 10000,
       allowProposedApi: true,
+      drawBoldTextInBrightColors: true,
+      fontWeight: "normal",
+      fontWeightBold: "bold",
       theme: {
         background: "#1a1a2e",
         foreground: "#eaeaea",
@@ -81,11 +86,19 @@ export function Terminal({ projectPath, onExit }: TerminalProps) {
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
     const unicode11Addon = new Unicode11Addon();
+    const canvasAddon = new CanvasAddon();
 
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
     term.loadAddon(unicode11Addon);
     term.open(termRef.current);
+
+    // Load canvas addon after opening for better rendering
+    try {
+      term.loadAddon(canvasAddon);
+    } catch (e) {
+      console.warn("Canvas addon failed to load:", e);
+    }
 
     // Enable unicode11 for better box-drawing character support
     term.unicode.activeVersion = "11";

@@ -77,6 +77,10 @@ async fn spawn_pty(
         cmd.env(key, value);
     }
     cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
+    cmd.env("LANG", "en_US.UTF-8");
+    cmd.env("LC_ALL", "en_US.UTF-8");
+    cmd.env("LC_CTYPE", "en_US.UTF-8");
 
     let child = pair
         .slave
@@ -259,6 +263,26 @@ struct ProjectInfo {
 }
 
 #[tauri::command]
+async fn delete_project(path: String) -> Result<(), String> {
+    let project_path = std::path::Path::new(&path);
+
+    // Safety check: only allow deleting from MarOS directory
+    let home = dirs::home_dir().ok_or("Could not find home directory")?;
+    let maros_dir = home.join("MarOS");
+
+    if !project_path.starts_with(&maros_dir) {
+        return Err("Can only delete projects from MarOS directory".to_string());
+    }
+
+    if !project_path.exists() {
+        return Err("Project not found".to_string());
+    }
+
+    std::fs::remove_dir_all(project_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn list_projects() -> Result<Vec<ProjectInfo>, String> {
     let home = dirs::home_dir().ok_or("Could not find home directory")?;
     let maros_dir = home.join("MarOS");
@@ -302,6 +326,7 @@ pub fn run() {
             get_maros_dir,
             ensure_maros_dir,
             list_projects,
+            delete_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
