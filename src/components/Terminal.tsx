@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import "@xterm/xterm/css/xterm.css";
@@ -62,14 +63,15 @@ export function Terminal({ projectPath, onExit }: TerminalProps) {
 
     const container = containerRef.current;
 
-    // Create terminal
+    // Create terminal with Nerd Font for proper glyph rendering
     const term = new XTerm({
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontFamily: '"JetBrainsMono NF", Menlo, Monaco, "Courier New", monospace',
       fontSize: 13,
       lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: "block",
       scrollback: 5000,
+      allowProposedApi: true,
       theme: {
         background: "#1e1e1e",
         foreground: "#cccccc",
@@ -95,7 +97,10 @@ export function Terminal({ projectPath, onExit }: TerminalProps) {
     });
 
     const fitAddon = new FitAddon();
+    const unicode11Addon = new Unicode11Addon();
     term.loadAddon(fitAddon);
+    term.loadAddon(unicode11Addon);
+    term.unicode.activeVersion = "11";
 
     // Open terminal in container
     term.open(container);
