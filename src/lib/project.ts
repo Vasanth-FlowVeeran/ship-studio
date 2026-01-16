@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { spawn, IPty } from "tauri-pty";
 
 export interface Project {
   name: string;
@@ -30,7 +30,7 @@ export async function ensureMarketingstackDir(): Promise<string> {
 }
 
 export interface DevServerHandle {
-  ptyId: number;
+  pty: IPty;
   stop: () => Promise<void>;
 }
 
@@ -38,31 +38,25 @@ export async function startDevServer(
   projectPath: string,
   onOutput?: (data: string) => void
 ): Promise<DevServerHandle> {
-  let unlistenOutput: UnlistenFn | null = null;
+  const decoder = new TextDecoder();
 
-  if (onOutput) {
-    unlistenOutput = await listen<{ id: number; data: string }>(
-      "pty-output",
-      (event) => {
-        onOutput(event.payload.data);
-      }
-    );
-  }
-
-  const ptyId = await invoke<number>("spawn_pty", {
+  const pty = await spawn("npm", ["run", "dev"], {
     cwd: projectPath,
-    command: "npm",
-    args: ["run", "dev"],
-    rows: 24,
     cols: 80,
+    rows: 24,
   });
 
+  if (onOutput) {
+    pty.onData((data) => {
+      onOutput(decoder.decode(data));
+    });
+  }
+
   return {
-    ptyId,
+    pty,
     stop: async () => {
-      unlistenOutput?.();
       try {
-        await invoke("kill_pty", { id: ptyId });
+        pty.kill();
       } catch {
         // Ignore errors
       }

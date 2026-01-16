@@ -187,11 +187,8 @@ function App() {
         projectPath: currentProject.path,
       });
 
-      // 2. Get PTY ID and write file path directly to terminal
-      const ptyId = terminalRef.current?.getPtyId();
-      if (ptyId) {
-        await invoke("write_pty", { id: ptyId, data: filePath });
-      }
+      // 2. Write file path directly to terminal
+      terminalRef.current?.write(filePath);
 
       // 3. Focus terminal
       terminalRef.current?.focus();

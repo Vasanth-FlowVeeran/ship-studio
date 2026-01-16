@@ -2,8 +2,7 @@ import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHand
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { spawn, IPty } from "tauri-pty";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
@@ -13,31 +12,24 @@ interface TerminalProps {
 
 export interface TerminalHandle {
   focus: () => void;
-  simulateClick: () => void;
-  getPtyId: () => number | null;
+  write: (data: string) => void;
 }
 
 export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal({ projectPath, onExit }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const ptyIdRef = useRef<number | null>(null);
-  const unlistenersRef = useRef<UnlistenFn[]>([]);
+  const ptyRef = useRef<IPty | null>(null);
   const [isReady, setIsReady] = useState(false);
 
-  const cleanup = useCallback(async () => {
-    for (const unlisten of unlistenersRef.current) {
-      unlisten();
-    }
-    unlistenersRef.current = [];
-
-    if (ptyIdRef.current !== null) {
+  const cleanup = useCallback(() => {
+    if (ptyRef.current) {
       try {
-        await invoke("kill_pty", { id: ptyIdRef.current });
+        ptyRef.current.kill();
       } catch {
         // Ignore
       }
-      ptyIdRef.current = null;
+      ptyRef.current = null;
     }
 
     if (terminalRef.current) {
@@ -119,53 +111,39 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     terminalRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Setup PTY connection
+    // Setup PTY connection using tauri-pty
     const setupPty = async () => {
       try {
         // Fit again to ensure correct size
         fitAddon.fit();
 
-        // Listen for output
-        const unlistenOutput = await listen<{ id: number; data: string }>(
-          "pty-output",
-          (event) => {
-            if (event.payload.id === ptyIdRef.current && terminalRef.current) {
-              terminalRef.current.write(event.payload.data);
-            }
-          }
-        );
-        unlistenersRef.current.push(unlistenOutput);
-
-        // Listen for exit
-        const unlistenExit = await listen<{ id: number; code: number | null }>(
-          "pty-exit",
-          (event) => {
-            if (event.payload.id === ptyIdRef.current) {
-              terminalRef.current?.write("\r\n[Process exited]\r\n");
-              onExit?.(event.payload.code);
-            }
-          }
-        );
-        unlistenersRef.current.push(unlistenExit);
-
-        // Spawn PTY
-        const id = await invoke<number>("spawn_pty", {
+        // Spawn PTY using tauri-pty
+        const pty = await spawn("claude", [], {
           cwd: projectPath,
-          command: "claude",
-          rows: term.rows,
           cols: term.cols,
+          rows: term.rows,
         });
-        ptyIdRef.current = id;
 
-        // Handle input
+        ptyRef.current = pty;
+
+        // Handle PTY output -> terminal
+        pty.onData((data) => {
+          terminalRef.current?.write(data);
+        });
+
+        // Handle PTY exit
+        pty.onExit(({ exitCode }) => {
+          terminalRef.current?.write("\r\n[Process exited]\r\n");
+          onExit?.(exitCode);
+        });
+
+        // Handle terminal input -> PTY
         term.onData((data) => {
-          if (ptyIdRef.current !== null) {
-            invoke("write_pty", { id: ptyIdRef.current, data });
-          }
+          ptyRef.current?.write(data);
         });
 
       } catch (err) {
-        term.write(`\x1b[31mError: ${err}\x1b[0m\r\n`);
+        term.write(`\x1b[31mError starting Claude: ${err}\x1b[0m\r\n`);
       }
     };
 
@@ -173,13 +151,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
-      if (fitAddonRef.current && terminalRef.current && ptyIdRef.current !== null) {
+      if (fitAddonRef.current && terminalRef.current && ptyRef.current) {
         fitAddonRef.current.fit();
-        invoke("resize_pty", {
-          id: ptyIdRef.current,
-          rows: terminalRef.current.rows,
-          cols: terminalRef.current.cols,
-        });
+        ptyRef.current.resize(terminalRef.current.cols, terminalRef.current.rows);
       }
     });
     resizeObserver.observe(container);
@@ -198,37 +172,14 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   // Expose methods to parent
   useImperativeHandle(ref, () => ({
     focus: () => {
-      // Multiple focus attempts to ensure it works
       terminalRef.current?.focus();
       containerRef.current?.focus();
-      // Also try clicking the textarea inside xterm
       const textarea = containerRef.current?.querySelector('textarea');
       textarea?.focus();
     },
-    simulateClick: () => {
-      const container = containerRef.current;
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        const clickEvent = new MouseEvent('mousedown', {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-          clientX: rect.left + rect.width / 2,
-          clientY: rect.top + rect.height / 2,
-        });
-        container.dispatchEvent(clickEvent);
-        const upEvent = new MouseEvent('mouseup', {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-          clientX: rect.left + rect.width / 2,
-          clientY: rect.top + rect.height / 2,
-        });
-        container.dispatchEvent(upEvent);
-      }
-      terminalRef.current?.focus();
+    write: (data: string) => {
+      ptyRef.current?.write(data);
     },
-    getPtyId: () => ptyIdRef.current,
   }), []);
 
   return (
