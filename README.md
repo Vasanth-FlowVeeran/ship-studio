@@ -10,6 +10,7 @@ Marketingstack is a desktop application that combines Claude Code's AI capabilit
 - **Live Preview** - Real-time preview with responsive breakpoints (Desktop, Tablet, Mobile)
 - **Project Management** - Visual project cards with automatic screenshot thumbnails
 - **GitHub Integration** - One-click repo creation and publishing with smart change detection
+- **Vercel Integration** - Deploy to production with one click, auto-deploys on push
 - **Page Navigation** - Quick switcher for all your Next.js routes
 
 ## Prerequisites
@@ -23,6 +24,7 @@ Before running Marketingstack, make sure you have the following installed:
 | **Git** | Yes | [git-scm.com](https://git-scm.com/) |
 | **Claude Code CLI** | Yes | `npm install -g @anthropic-ai/claude-code` |
 | **GitHub CLI** | Optional | [cli.github.com](https://cli.github.com/) |
+| **Vercel CLI** | Optional | `npm install -g vercel` |
 | **Rust** | For development | [rustup.rs](https://rustup.rs/) |
 
 ## Quick Start
@@ -82,9 +84,12 @@ marketingstack/
 │   │   ├── Terminal.tsx    # Claude Code terminal
 │   │   ├── Preview.tsx     # Live preview iframe
 │   │   ├── GitHubButton.tsx# GitHub integration
+│   │   ├── VercelButton.tsx# Vercel deployment
+│   │   ├── CreateProject.tsx # Project creation wizard
 │   │   └── ...
 │   ├── lib/                # Utilities
 │   │   ├── github.ts       # GitHub API helpers
+│   │   ├── vercel.ts       # Vercel API helpers
 │   │   └── project.ts      # Project management
 │   ├── App.tsx             # Main application
 │   └── App.css             # Styles
@@ -115,6 +120,16 @@ Marketingstack integrates with GitHub CLI for seamless version control:
    - Greyed out when up-to-date
    - Active when changes detected (polls every 5s)
 4. **Publish** → Confirmation modal → Commits & pushes
+
+### Vercel Integration
+
+Deploy your projects to production with one click:
+
+1. **Connect Vercel** → Authenticate with your Vercel account
+2. **Deploy to Vercel** → Links project and deploys to production
+3. **Live** → Opens your live site at `https://your-project.vercel.app`
+
+Auto-deploys are enabled when connected to GitHub—every push triggers a new deployment.
 
 ### Project Thumbnails
 

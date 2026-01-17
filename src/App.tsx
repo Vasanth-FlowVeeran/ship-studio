@@ -158,6 +158,11 @@ function App() {
     terminalRef.current?.focus();
   }, []);
 
+  // Handle terminal exit (memoized to prevent re-spawning Claude on every render)
+  const handleTerminalExit = useCallback((code: number | null) => {
+    console.log("Terminal exited with code:", code);
+  }, []);
+
   // Capture project screenshot in background
   const captureScreenshot = useCallback(async (projectPath: string) => {
     try {
@@ -246,8 +251,17 @@ function App() {
     }
   };
 
-  const handleVercelStatusChange = async () => {
-    // Refresh project Vercel status after linking
+  const handleVercelStatusChange = async (deployedUrl?: string) => {
+    // If we have a deployed URL from a successful deployment, use it directly
+    if (deployedUrl && currentProject) {
+      setProjectVercelStatus({
+        is_linked: true,
+        project_name: currentProject.name,
+        production_url: deployedUrl,
+      });
+      return;
+    }
+    // Otherwise refresh project Vercel status
     if (currentProject) {
       const status = await getProjectVercelStatus(currentProject.path).catch(() => null);
       setProjectVercelStatus(status);
@@ -350,9 +364,7 @@ function App() {
                 <Terminal
                   ref={terminalRef}
                   projectPath={currentProject?.path || ""}
-                  onExit={(code) => {
-                    console.log("Terminal exited with code:", code);
-                  }}
+                  onExit={handleTerminalExit}
                 />
               </div>
             </div>

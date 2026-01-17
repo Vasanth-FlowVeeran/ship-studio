@@ -12,9 +12,19 @@ interface CreateProjectProps {
 
 const TEMPLATE_REPO = "https://github.com/marketingstack/marketingstack-boilerplate";
 
+type Step = "clone" | "init" | "install" | "done";
+
+const STEPS: { id: Step; label: string }[] = [
+  { id: "clone", label: "Clone template" },
+  { id: "init", label: "Initialize project" },
+  { id: "install", label: "Install dependencies" },
+  { id: "done", label: "Done" },
+];
+
 export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
   const [projectName, setProjectName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [currentStep, setCurrentStep] = useState<Step>("clone");
   const [error, setError] = useState<string | null>(null);
   const termRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
@@ -28,8 +38,9 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       disableStdin: true,
       theme: {
-        background: "#1a1a2e",
-        foreground: "#eaeaea",
+        background: "#0d0d14",
+        foreground: "#a0a0b0",
+        cursor: "#a0a0b0",
       },
     });
 
@@ -86,6 +97,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
 
     setIsCreating(true);
     setError(null);
+    setCurrentStep("clone");
 
     let unlistenOutput: UnlistenFn | null = null;
 
@@ -99,7 +111,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
       writeLine("");
 
       // Clone template
-      writeLine("Cloning template...");
+      writeLine("$ git clone template...");
 
       unlistenOutput = await listen<{ id: number; data: string }>(
         "pty-output",
@@ -109,42 +121,51 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
       );
 
       const cloneId = await invoke<number>("spawn_pty", {
-        cwd: marketingstackDir,
-        command: "git",
-        args: ["clone", TEMPLATE_REPO, safeName],
-        rows: 10,
-        cols: 80,
+        options: {
+          cwd: marketingstackDir,
+          command: "git",
+          args: ["clone", TEMPLATE_REPO, safeName],
+          rows: 10,
+          cols: 80,
+        },
       });
 
       await waitForPtyExit(cloneId);
 
       // Remove .git folder so project starts fresh (not connected to template repo)
+      setCurrentStep("init");
       writeLine("");
-      writeLine("Initializing project...");
+      writeLine("$ Initializing project...");
       const rmGitId = await invoke<number>("spawn_pty", {
-        cwd: projectPath,
-        command: "rm",
-        args: ["-rf", ".git"],
-        rows: 10,
-        cols: 80,
+        options: {
+          cwd: projectPath,
+          command: "rm",
+          args: ["-rf", ".git"],
+          rows: 10,
+          cols: 80,
+        },
       });
 
       await waitForPtyExit(rmGitId);
 
+      setCurrentStep("install");
       writeLine("");
-      writeLine("Installing dependencies...");
+      writeLine("$ npm install");
 
       // Install dependencies
       const installId = await invoke<number>("spawn_pty", {
-        cwd: projectPath,
-        command: "npm",
-        args: ["install"],
-        rows: 10,
-        cols: 80,
+        options: {
+          cwd: projectPath,
+          command: "npm",
+          args: ["install"],
+          rows: 10,
+          cols: 80,
+        },
       });
 
       await waitForPtyExit(installId);
 
+      setCurrentStep("done");
       writeLine("");
       writeLine("\x1b[32mProject created successfully!\x1b[0m");
 
@@ -162,11 +183,48 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
     }
   };
 
+  const getStepStatus = (stepId: Step): "pending" | "active" | "done" => {
+    const stepOrder = STEPS.map((s) => s.id);
+    const currentIndex = stepOrder.indexOf(currentStep);
+    const stepIndex = stepOrder.indexOf(stepId);
+
+    if (stepIndex < currentIndex) return "done";
+    if (stepIndex === currentIndex) return "active";
+    return "pending";
+  };
+
   if (isCreating) {
     return (
       <div className="create-project creating">
-        <h2>Creating Project...</h2>
+        <div className="create-header">
+          <h2>Creating {projectName}</h2>
+          <p>Setting up your new project</p>
+        </div>
+
+        <div className="create-steps">
+          {STEPS.map((step, index) => {
+            const status = getStepStatus(step.id);
+            return (
+              <div key={step.id} className={`create-step ${status}`}>
+                <div className="step-indicator">
+                  {status === "done" ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : status === "active" ? (
+                    <div className="step-spinner" />
+                  ) : (
+                    <span>{index + 1}</span>
+                  )}
+                </div>
+                <span className="step-label">{step.label}</span>
+              </div>
+            );
+          })}
+        </div>
+
         <div ref={termRef} className="create-terminal" />
+
         {error && (
           <div className="create-error">
             <p>{error}</p>

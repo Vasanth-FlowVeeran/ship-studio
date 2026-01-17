@@ -17,7 +17,7 @@ interface VercelButtonProps {
   projectGithubStatus: ProjectGitHubStatus | null;
   projectPath: string;
   projectName: string;
-  onStatusChange: () => void;
+  onStatusChange: (deployedUrl?: string) => void;
   onVercelConnect: () => void;
   onModalClose?: () => void;
 }
@@ -155,13 +155,13 @@ export function VercelButton({
     setShowDeployModal(false); // Close modal to show deploying state on button
     try {
       console.log("Starting Vercel deployment...", { projectPath, deployName });
-      const result = await deployToVercel({
+      const deployedUrl = await deployToVercel({
         projectPath,
         projectName: deployName,
         githubRepo: projectGithubStatus?.github_repo || undefined,
       });
-      console.log("Deployment successful:", result);
-      onStatusChange();
+      console.log("Deployment successful:", deployedUrl);
+      onStatusChange(deployedUrl); // Pass the deployed URL
     } catch (e) {
       console.error("Deployment failed:", e);
       setError(String(e));

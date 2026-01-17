@@ -23,6 +23,12 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const ptyRef = useRef<IPty | null>(null);
   const [isReady, setIsReady] = useState(false);
 
+  // Use ref for onExit to prevent effect re-runs when callback reference changes
+  const onExitRef = useRef(onExit);
+  useEffect(() => {
+    onExitRef.current = onExit;
+  }, [onExit]);
+
   const cleanup = useCallback(() => {
     if (ptyRef.current) {
       try {
@@ -181,7 +187,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         // Handle PTY exit
         pty.onExit(({ exitCode }) => {
           terminalRef.current?.write("\r\n[Process exited]\r\n");
-          onExit?.(exitCode);
+          onExitRef.current?.(exitCode);
         });
 
         // Handle terminal input -> PTY
@@ -218,7 +224,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       resizeObserver.disconnect();
       cleanup();
     };
-  }, [isReady, projectPath, onExit, cleanup]);
+  }, [isReady, projectPath, cleanup]);
 
   // Click to focus terminal
   const handleClick = useCallback(() => {

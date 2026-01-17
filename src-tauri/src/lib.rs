@@ -1,7 +1,12 @@
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::io::{BufRead, BufReader};
+use tauri::Emitter;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+
+static PTY_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 #[derive(Serialize)]
 struct PrerequisiteCheck {
@@ -545,19 +550,9 @@ async fn deploy_to_vercel(options: DeployToVercelOptions) -> Result<String, Stri
         return Err(format!("Failed to deploy to Vercel: {} {}", stderr, stdout));
     }
 
-    // Parse the deployment URL from the output
-    // vercel --prod outputs the production URL on success
-    let stdout = String::from_utf8_lossy(&deploy_output.stdout);
-
-    // The URL is typically on its own line, look for vercel.app or https://
-    for line in stdout.lines().rev() {
-        let line = line.trim();
-        if line.contains(".vercel.app") || line.starts_with("https://") {
-            return Ok(line.to_string());
-        }
-    }
-
-    // Fallback: construct URL from project name
+    // Return the production URL (always based on project name)
+    // The vercel --prod output contains a deployment-specific URL with a hash,
+    // but the actual production URL is always https://{project_name}.vercel.app
     Ok(format!("https://{}.vercel.app", project_name))
 }
 
@@ -661,17 +656,8 @@ async fn get_project_vercel_status(project_path: String) -> ProjectVercelStatus 
 
     eprintln!("Project ID: {:?}, Project Name: {:?}", project_id, project_name_from_config);
 
-    // If we have a project name in config, we can construct the URL directly
-    // This is the most reliable method since the config is created by vercel link
-    if let Some(name) = project_name_from_config {
-        let production_url = format!("https://{}.vercel.app", name);
-        eprintln!("Using project name from config: {} -> {}", name, production_url);
-        return ProjectVercelStatus {
-            is_linked: true,
-            project_name: Some(name.to_string()),
-            production_url: Some(production_url),
-        };
-    }
+    // Store project name for later - but don't assume it's deployed just because it's linked
+    let project_name = project_name_from_config.map(|s| s.to_string());
 
     if project_id.is_none() {
         eprintln!("No projectId found in project.json");
@@ -759,6 +745,7 @@ async fn get_project_vercel_status(project_path: String) -> ProjectVercelStatus 
     }
 
     // Method 2: Try `vercel project ls --json` to find the project by ID
+    // Note: This only verifies the project exists, not that it has deployments
     eprintln!("Trying vercel project ls --json...");
     let output = get_vercel_command()
         .args(["project", "ls", "--json"])
@@ -778,13 +765,12 @@ async fn get_project_vercel_status(project_path: String) -> ProjectVercelStatus 
                             eprintln!("Checking project ID: {} vs {}", id, project_id);
                             if id == project_id {
                                 let name = proj.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                // Construct production URL from project name
-                                let production_url = name.as_ref().map(|n| format!("https://{}.vercel.app", n));
-                                eprintln!("Found matching project! Name: {:?}, URL: {:?}", name, production_url);
+                                // Don't construct URL - project exists but may not have deployments
+                                eprintln!("Found matching project! Name: {:?}, but no verified deployment", name);
                                 return ProjectVercelStatus {
                                     is_linked: true,
-                                    project_name: name,
-                                    production_url,
+                                    project_name: name.or(project_name.clone()),
+                                    production_url: None, // No verified deployment
                                 };
                             }
                         }
@@ -824,39 +810,12 @@ async fn get_project_vercel_status(project_path: String) -> ProjectVercelStatus 
         }
     }
 
-    // Fallback: linked but couldn't get details - construct URL from project name if we can find it
-    // Try to get project name from a simple vercel command
-    let whoami_output = get_vercel_command()
-        .args(["project", "ls", "--json"])
-        .output();
-
-    if let Ok(output) = whoami_output {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Ok(projects) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                if let Some(projects_array) = projects.as_array() {
-                    for proj in projects_array {
-                        if let Some(id) = proj.get("id").and_then(|v| v.as_str()) {
-                            if id == project_id {
-                                let name = proj.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                let production_url = name.as_ref().map(|n| format!("https://{}.vercel.app", n));
-                                return ProjectVercelStatus {
-                                    is_linked: true,
-                                    project_name: name,
-                                    production_url,
-                                };
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Final fallback: linked but couldn't get details
+    // Final fallback: linked but no verified deployment found
+    // Return project name if we have it, but no production URL
+    eprintln!("Fallback: linked but no verified deployment");
     ProjectVercelStatus {
         is_linked: true,
-        project_name: None,
+        project_name,
         production_url: None,
     }
 }
@@ -1314,6 +1273,95 @@ async fn publish_to_github(project_path: String, commit_message: Option<String>)
     Ok(())
 }
 
+#[derive(Deserialize)]
+struct SpawnPtyOptions {
+    cwd: String,
+    command: String,
+    args: Vec<String>,
+    #[allow(dead_code)]
+    rows: u32,
+    #[allow(dead_code)]
+    cols: u32,
+}
+
+#[tauri::command]
+async fn spawn_pty(app: tauri::AppHandle, options: SpawnPtyOptions) -> Result<u32, String> {
+    let id = PTY_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let app_handle = app.clone();
+
+    std::thread::spawn(move || {
+        let result = (|| -> Result<i32, String> {
+            let mut child = Command::new(&options.command)
+                .args(&options.args)
+                .current_dir(&options.cwd)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .map_err(|e| e.to_string())?;
+
+            let stdout = child.stdout.take();
+            let stderr = child.stderr.take();
+
+            // Read stdout in a thread
+            let app_for_stdout = app_handle.clone();
+            let stdout_handle = if let Some(stdout) = stdout {
+                Some(std::thread::spawn(move || {
+                    let reader = BufReader::new(stdout);
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            let _ = app_for_stdout.emit("pty-output", serde_json::json!({
+                                "id": id,
+                                "data": format!("{}\r\n", line)
+                            }));
+                        }
+                    }
+                }))
+            } else {
+                None
+            };
+
+            // Read stderr in a thread
+            let app_for_stderr = app_handle.clone();
+            let stderr_handle = if let Some(stderr) = stderr {
+                Some(std::thread::spawn(move || {
+                    let reader = BufReader::new(stderr);
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            let _ = app_for_stderr.emit("pty-output", serde_json::json!({
+                                "id": id,
+                                "data": format!("{}\r\n", line)
+                            }));
+                        }
+                    }
+                }))
+            } else {
+                None
+            };
+
+            // Wait for output threads
+            if let Some(h) = stdout_handle {
+                let _ = h.join();
+            }
+            if let Some(h) = stderr_handle {
+                let _ = h.join();
+            }
+
+            // Wait for process to exit
+            let status = child.wait().map_err(|e| e.to_string())?;
+            Ok(status.code().unwrap_or(-1))
+        })();
+
+        // Emit exit event
+        let exit_code = result.unwrap_or(-1);
+        let _ = app_handle.emit("pty-exit", serde_json::json!({
+            "id": id,
+            "code": exit_code
+        }));
+    });
+
+    Ok(id)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1348,6 +1396,7 @@ pub fn run() {
             init_git_repo,
             push_to_github,
             publish_to_github,
+            spawn_pty,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
