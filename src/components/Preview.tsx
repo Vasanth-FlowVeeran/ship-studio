@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
+// Constants
+const ZOOM_MIN = 50;
+const ZOOM_MAX = 150;
+const ZOOM_STEP = 10;
+const PAGE_REFRESH_INTERVAL_MS = 5000;
+const SERVER_CHECK_TIMEOUT_MS = 3000;
+const SERVER_MAX_RETRIES = 60;
+
 type Breakpoint = "desktop" | "tablet" | "mobile";
 
 interface PageInfo {
@@ -54,7 +62,8 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
   const [serverReady, setServerReady] = useState(false);
   const [breakpoint, setBreakpoint] = useState<Breakpoint>("desktop");
   const [zoom, setZoom] = useState(100);
-  const [zoomInput, setZoomInput] = useState("100%");
+  const [zoomInputValue, setZoomInputValue] = useState(""); // Only used while editing
+  const [isEditingZoom, setIsEditingZoom] = useState(false);
   const [pages, setPages] = useState<PageInfo[]>([]);
   const [currentPage, setCurrentPage] = useState("/");
   const [showPageDropdown, setShowPageDropdown] = useState(false);
@@ -65,6 +74,13 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
 
   const baseUrl = `http://localhost:${port}`;
   const currentUrl = `${baseUrl}${currentPage === "/" ? "" : currentPage}`;
+
+  // Zoom calculations
+  const zoomScale = zoom / 100;
+  const inverseZoom = 100 / zoomScale; // For scaling iframe to compensate
+
+  // Clamp zoom to valid range
+  const clampZoom = (value: number) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
 
   // Load pages
   const loadPages = async () => {
@@ -79,7 +95,7 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
   // Load pages on mount and periodically
   useEffect(() => {
     loadPages();
-    const interval = setInterval(loadPages, 5000); // Refresh every 5 seconds
+    const interval = setInterval(loadPages, PAGE_REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [projectPath]);
 
@@ -114,11 +130,10 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
     setHasError(false);
     setServerReady(false);
 
-    // Poll until the dev server is ready
     const checkServer = async () => {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const timeoutId = setTimeout(() => controller.abort(), SERVER_CHECK_TIMEOUT_MS);
 
         await fetch(baseUrl, {
           mode: "no-cors",
@@ -130,8 +145,7 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
         setHasError(false);
         setServerReady(true);
       } catch {
-        if (retryCount < 60) {
-          // Retry for up to 60 seconds
+        if (retryCount < SERVER_MAX_RETRIES) {
           setTimeout(() => setRetryCount((c) => c + 1), 1000);
         } else {
           setIsLoading(false);
@@ -153,11 +167,20 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
     setCurrentPage(route);
     setShowPageDropdown(false);
     setPageSearch("");
-    // Update iframe
     if (iframeRef.current && serverReady) {
       const newUrl = `${baseUrl}${route === "/" ? "" : route}`;
       iframeRef.current.src = newUrl;
     }
+  };
+
+  const handleZoomChange = (delta: number) => {
+    setZoom(clampZoom(zoom + delta));
+  };
+
+  const handleZoomInputBlur = () => {
+    const parsed = parseInt(zoomInputValue, 10);
+    setZoom(isNaN(parsed) ? 100 : clampZoom(parsed));
+    setIsEditingZoom(false);
   };
 
   const filteredPages = pages.filter(page =>
@@ -171,7 +194,7 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
         <p>Starting dev server...</p>
         <p className="hint">Waiting for localhost:{port}</p>
         <p className="hint" style={{ marginTop: 8, fontSize: 11 }}>
-          {retryCount > 0 && `Attempt ${retryCount}/60`}
+          {retryCount > 0 && `Attempt ${retryCount}/${SERVER_MAX_RETRIES}`}
         </p>
       </div>
     );
@@ -261,23 +284,21 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
         </div>
 
         <div className="preview-zoom">
-          <button onClick={() => { const n = Math.max(50, zoom - 10); setZoom(n); setZoomInput(n + "%"); }} title="Zoom out">−</button>
+          <button onClick={() => handleZoomChange(-ZOOM_STEP)} title="Zoom out">−</button>
           <input
             type="text"
-            value={zoomInput}
-            onChange={(e) => setZoomInput(e.target.value.replace(/[^0-9%]/g, ''))}
-            onFocus={(e) => setZoomInput(zoomInput.replace('%', ''))}
-            onBlur={() => {
-              const val = parseInt(zoomInput, 10);
-              if (isNaN(val) || val < 50) { setZoom(50); setZoomInput("50%"); }
-              else if (val > 150) { setZoom(150); setZoomInput("150%"); }
-              else { setZoom(val); setZoomInput(val + "%"); }
+            value={isEditingZoom ? zoomInputValue : `${zoom}%`}
+            onChange={(e) => setZoomInputValue(e.target.value.replace(/[^0-9]/g, ''))}
+            onFocus={() => {
+              setIsEditingZoom(true);
+              setZoomInputValue(String(zoom));
             }}
+            onBlur={handleZoomInputBlur}
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
             }}
           />
-          <button onClick={() => { const n = Math.min(150, zoom + 10); setZoom(n); setZoomInput(n + "%"); }} title="Zoom in">+</button>
+          <button onClick={() => handleZoomChange(ZOOM_STEP)} title="Zoom in">+</button>
         </div>
       </div>
       <div className="preview-viewport">
@@ -293,9 +314,9 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
             src={serverReady ? currentUrl : "about:blank"}
             className="preview-iframe"
             style={{
-              width: `${100 / (zoom / 100)}%`,
-              height: `${100 / (zoom / 100)}%`,
-              transform: `scale(${zoom / 100})`,
+              width: `${inverseZoom}%`,
+              height: `${inverseZoom}%`,
+              transform: `scale(${zoomScale})`,
               transformOrigin: "top left",
             }}
             title="Preview"

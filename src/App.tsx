@@ -26,6 +26,11 @@ import { checkClaudeCliStatus, ClaudeCliStatus } from "./lib/claude";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
+// Constants
+const SCREENSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const SCREENSHOT_DELAY_MS = 2000; // Wait for page to render
+const DEV_SERVER_PORT = 3000;
+
 type AppView = "loading" | "setup" | "projects" | "create" | "project-loading" | "workspace";
 
 export interface GitHubState {
@@ -168,7 +173,7 @@ function App() {
     try {
       await invoke("capture_project_thumbnail", {
         projectPath,
-        url: "http://localhost:3000",
+        url: `http://localhost:${DEV_SERVER_PORT}`,
       });
     } catch (error) {
       console.error("Failed to capture thumbnail:", error);
@@ -178,10 +183,9 @@ function App() {
   // Handle preview server ready - capture initial screenshot
   const handlePreviewReady = useCallback(() => {
     if (currentProject) {
-      // Small delay to let the page fully render
       setTimeout(() => {
         captureScreenshot(currentProject.path);
-      }, 2000);
+      }, SCREENSHOT_DELAY_MS);
     }
   }, [currentProject, captureScreenshot]);
 
@@ -212,10 +216,10 @@ function App() {
 
     setView("workspace");
 
-    // Capture screenshots every 5 minutes
+    // Capture screenshots periodically
     screenshotIntervalRef.current = setInterval(() => {
       captureScreenshot(project.path);
-    }, 5 * 60 * 1000);
+    }, SCREENSHOT_INTERVAL_MS);
   };
 
   const handleCreateProject = () => {
@@ -387,7 +391,7 @@ function App() {
           right={
             <div className="preview-pane">
               <Preview
-                port={3000}
+                port={DEV_SERVER_PORT}
                 projectPath={currentProject?.path || ""}
                 onServerReady={handlePreviewReady}
               />
