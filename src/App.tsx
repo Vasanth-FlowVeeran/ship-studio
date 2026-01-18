@@ -166,12 +166,10 @@ function App() {
   // Capture project screenshot in background
   const captureScreenshot = useCallback(async (projectPath: string) => {
     try {
-      console.log("Invoking capture_project_thumbnail for:", projectPath);
-      const result = await invoke("capture_project_thumbnail", {
+      await invoke("capture_project_thumbnail", {
         projectPath,
         url: "http://localhost:3000",
       });
-      console.log("Screenshot captured:", result);
     } catch (error) {
       console.error("Failed to capture thumbnail:", error);
     }
@@ -179,11 +177,9 @@ function App() {
 
   // Handle preview server ready - capture initial screenshot
   const handlePreviewReady = useCallback(() => {
-    console.log("Preview ready, current project:", currentProject?.name);
     if (currentProject) {
       // Small delay to let the page fully render
       setTimeout(() => {
-        console.log("Capturing screenshot for:", currentProject.path);
         captureScreenshot(currentProject.path);
       }, 2000);
     }

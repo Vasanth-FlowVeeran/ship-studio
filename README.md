@@ -8,6 +8,7 @@ Marketingstack is a desktop application that combines Claude Code's AI capabilit
 
 - **AI-Powered Development** - Built-in Claude Code terminal for AI-assisted coding
 - **Live Preview** - Real-time preview with responsive breakpoints (Desktop, Tablet, Mobile)
+- **Preview Zoom** - Zoom out (50-150%) to see larger layouts on smaller screens
 - **Project Management** - Visual project cards with automatic screenshot thumbnails
 - **GitHub Integration** - One-click repo creation and publishing with smart change detection
 - **Vercel Integration** - Deploy to production with one click, auto-deploys on push
@@ -25,6 +26,7 @@ Before running Marketingstack, make sure you have the following installed:
 | **Claude Code CLI** | Yes | `npm install -g @anthropic-ai/claude-code` |
 | **GitHub CLI** | Optional | [cli.github.com](https://cli.github.com/) |
 | **Vercel CLI** | Optional | `npm install -g vercel` |
+| **Chrome/Chromium/Edge** | For thumbnails | Any Chromium-based browser |
 | **Rust** | For development | [rustup.rs](https://rustup.rs/) |
 
 ## Quick Start
@@ -133,7 +135,13 @@ Auto-deploys are enabled when connected to GitHub—every push triggers a new de
 
 ### Project Thumbnails
 
-When you close a project, Marketingstack automatically captures a screenshot of your site at `localhost:3000` and saves it as a thumbnail for the project card.
+When you open a project, Marketingstack automatically captures a screenshot of your site using Chrome/Chromium/Edge in headless mode. Thumbnails are:
+- Captured once the dev server is ready
+- Standardized to 640px wide with 16:10 aspect ratio
+- Updated every 5 minutes while the project is open
+- Stored in `.marketingstack/thumbnail.png` in each project
+
+**Note:** Requires Chrome, Chromium, or Edge installed for thumbnail capture.
 
 ## Tech Stack
 

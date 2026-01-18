@@ -1407,9 +1407,9 @@ fn cleanup_claude_processes() {
             .output();
 
         // Also kill any orphaned claude processes (parent is init/launchd - PID 1)
-        // by checking for claude processes whose parent is 1
+        // Note: Using grep -v to avoid killing if no matches (xargs on macOS doesn't have -r)
         let _ = Command::new("sh")
-            .args(["-c", "ps -eo pid,ppid,comm | grep claude | awk '$2 == 1 {print $1}' | xargs -r kill 2>/dev/null"])
+            .args(["-c", "ps -eo pid,ppid,comm | grep '[c]laude' | awk '$2 == 1 {print $1}' | xargs kill 2>/dev/null || true"])
             .output();
     }
 }
