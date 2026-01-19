@@ -199,6 +199,14 @@ button:hover {
   max-width: 900px;
   margin: 0 auto;
   padding: 60px 24px;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.project-list::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .project-list-header {
@@ -353,8 +361,9 @@ button:hover {
 }
 
 .project-card-thumbnail {
-  aspect-ratio: 16 / 10;
+  position: relative;
   width: 100%;
+  aspect-ratio: 16 / 8.85;
   padding: 0;
   border: none;
   background: var(--bg-tertiary);
@@ -363,9 +372,11 @@ button:hover {
 }
 
 .project-card-thumbnail img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  height: auto;
   background: var(--bg-tertiary);
 }
 
@@ -496,111 +507,105 @@ button:hover {
 }
 
 .create-project.creating {
-  max-width: 700px;
-}
-
-.create-header {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.create-header h2 {
-  font-size: 20px;
-  margin-bottom: 4px;
-}
-
-.create-header p {
-  color: var(--text-muted);
-  font-size: 14px;
-}
-
-.create-steps {
-  display: flex;
-  justify-content: center;
-  gap: 24px;
-  margin-bottom: 24px;
-}
-
-.create-step {
+  max-width: 600px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.create-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+}
+
+.create-loading h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.create-spinner {
+  width: 48px;
+  height: 48px;
+  margin: 32px 0;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.create-status {
+  color: var(--text-secondary);
+  font-size: 15px;
+  margin-bottom: 40px;
+}
+
+.create-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+  width: 100%;
+  max-width: 280px;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   color: var(--text-muted);
+  font-size: 14px;
   transition: color 0.2s;
 }
 
-.create-step.active {
-  color: var(--accent);
+.checklist-item.done {
+  color: var(--success);
 }
 
-.create-step.done {
-  color: var(--success, #4ade80);
+.checklist-item.active {
+  color: var(--text-primary);
 }
 
-.step-indicator {
-  width: 24px;
-  height: 24px;
+.checklist-item svg {
+  flex-shrink: 0;
+}
+
+.checklist-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-primary);
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 500;
-  background: var(--bg-tertiary, var(--bg-secondary));
-  border: 1px solid var(--border);
-  transition: all 0.2s;
-}
-
-.create-step.active .step-indicator {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
-.create-step.done .step-indicator {
-  background: var(--success, #4ade80);
-  border-color: var(--success, #4ade80);
-  color: white;
-}
-
-.step-spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.step-label {
-  white-space: nowrap;
-}
-
-.create-terminal {
-  height: 260px;
-  background: #0d0d14;
-  border-radius: 8px;
-  margin: 0;
-  overflow: hidden;
-  border: 1px solid var(--border);
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
 }
 
 .create-error {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px;
-  margin-top: 16px;
+  gap: 16px;
+  padding: 20px 24px;
+  margin-top: 32px;
   background: rgba(255, 107, 107, 0.1);
   border: 1px solid var(--error);
   border-radius: 8px;
+  text-align: center;
+  width: 100%;
+  max-width: 320px;
+}
+
+.create-error p {
+  color: var(--error);
+  font-size: 14px;
+  margin: 0;
 }
 
 /* Workspace */
@@ -1484,23 +1489,43 @@ button:hover {
 }
 
 /* GitHub Modal */
+/* GitHub Modal - Modern Design */
 .github-modal {
-  max-width: 440px;
+  max-width: 380px;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.github-modal h3 {
+  padding: 20px 20px 0;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.github-modal > p {
+  padding: 6px 20px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
 }
 
 .github-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
   margin-top: 16px;
 }
 
-.github-form label {
+.github-form > label:first-child {
+  padding: 0 20px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 14px;
-  color: var(--text-secondary);
 }
 
 .repo-name-input {
@@ -1508,16 +1533,17 @@ button:hover {
   align-items: center;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
+  transition: border-color 0.15s;
 }
 
 .repo-name-input:focus-within {
-  border-color: var(--accent);
+  border-color: var(--text-muted);
 }
 
 .repo-prefix {
-  padding: 10px 0 10px 12px;
+  padding: 12px 0 12px 14px;
   color: var(--text-muted);
   font-family: monospace;
   font-size: 14px;
@@ -1526,51 +1552,81 @@ button:hover {
 
 .repo-name-input input {
   flex: 1;
-  padding: 10px 12px 10px 0;
+  padding: 12px 14px 12px 0;
   background: transparent;
   border: none;
   color: var(--text-primary);
   font-family: monospace;
   font-size: 14px;
+  font-weight: 600;
   outline: none;
 }
 
+/* Visibility Options - Row Style */
 .visibility-option {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  padding: 12px;
-  background: var(--bg-tertiary);
-  border: 2px solid transparent;
-  border-radius: 8px;
+  padding: 14px 20px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s;
 }
 
 .visibility-option:hover {
-  background: var(--border);
+  background: var(--bg-tertiary);
 }
 
 .visibility-option:has(input[type="radio"]:checked) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--accent);
+  background: transparent;
 }
 
 .visibility-option input[type="radio"] {
-  margin-top: 2px;
-  accent-color: var(--accent);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-muted);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.visibility-option input[type="radio"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.visibility-option input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: #1e1e1e;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .visibility-option div {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
 }
 
 .visibility-option strong {
   color: var(--text-primary);
   font-size: 14px;
+  font-weight: 500;
 }
 
 .visibility-option span {
@@ -1579,8 +1635,27 @@ button:hover {
 }
 
 .github-form .github-error {
-  margin-left: 0;
-  margin-top: 8px;
+  margin: 0;
+  padding: 12px 20px;
+  background: rgba(244, 71, 71, 0.1);
+  font-size: 13px;
+}
+
+/* GitHub Modal Actions */
+.github-modal .modal-actions {
+  padding: 16px 20px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border);
+  margin-top: 0;
+}
+
+.github-modal .modal-actions button:first-child {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+}
+
+.github-modal .modal-actions button:first-child:hover {
+  background: var(--border);
 }
 
 /* Vercel Integration - Workspace Header */
@@ -1856,6 +1931,25 @@ button:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   z-index: 1000;
   overflow: hidden;
+}
+
+.publish-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.publish-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-muted);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 /* Publish Row - Simple checkbox row */
@@ -2210,7 +2304,8 @@ button:hover {
 }
 
 .publish-done {
-  padding: 8px 24px;
+  width: 100%;
+  padding: 10px 24px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -2249,6 +2344,16 @@ button:hover {
 .publish-link-button:hover {
   background: var(--border);
   color: var(--text-primary);
+}
+
+.publish-link-button.publish-link-loading {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.publish-link-button.publish-link-loading:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
 }
 
 /* Publish Error State */
@@ -2371,16 +2476,8 @@ button:hover {
   animation: toast-slide-in 0.3s ease;
 }
 
-.toast.toast-success {
-  border-color: #22c55e;
-}
-
 .toast.toast-success .toast-icon {
   color: #22c55e;
-}
-
-.toast.toast-error {
-  border-color: #ef4444;
 }
 
 .toast.toast-error .toast-icon {
@@ -2716,6 +2813,61 @@ button:hover {
   font-size: 14px;
 }
 
+.env-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.env-empty-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: monospace;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.env-empty-state h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.env-empty-state p {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 20px 0;
+  max-width: 260px;
+}
+
+.env-create-btn {
+  padding: 10px 20px;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #1e1e1e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.env-create-btn:hover {
+  background: var(--accent-hover);
+}
+
 .env-loading {
   padding: 40px 20px;
   text-align: center;
@@ -2744,6 +2896,17 @@ button:hover {
   font-size: 12px;
   cursor: pointer;
   transition: all 0.15s;
+}
+
+.env-button-icon {
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.env-button:hover .env-button-icon {
+  color: var(--text-secondary);
 }
 
 .env-button:hover {

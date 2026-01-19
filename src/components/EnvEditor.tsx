@@ -472,8 +472,16 @@ export function EnvEditor({ projectPath, isOpen, onClose }: EnvEditorProps) {
               </div>
             </div>
           ) : (
-            <div className="env-empty">
-              No environment files found. Click + to create one.
+            <div className="env-empty-state">
+              <div className="env-empty-icon">$</div>
+              <h4>No environment files</h4>
+              <p>Create an .env file to store your API keys and secrets.</p>
+              <button
+                className="env-create-btn"
+                onClick={() => setShowNewFileInput(true)}
+              >
+                Create .env.local
+              </button>
             </div>
           )}
 

@@ -213,29 +213,43 @@ export function PublishDropdown({
                 </div>
               )}
               <div className="publish-success-sites">
-                {(publishState.target === "staging" || publishState.target === "both") && stagingUrl && (
-                  <button
-                    className="publish-link-button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(stagingUrl);
-                      onToast?.("Staging URL copied", "success");
-                    }}
-                  >
-                    <CopyIcon />
-                    Copy Staging URL
-                  </button>
+                {(publishState.target === "staging" || publishState.target === "both") && (
+                  stagingUrl ? (
+                    <button
+                      className="publish-link-button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(stagingUrl);
+                        onToast?.("Staging URL copied", "success");
+                      }}
+                    >
+                      <CopyIcon />
+                      Copy Staging URL
+                    </button>
+                  ) : (
+                    <button className="publish-link-button publish-link-loading" disabled>
+                      <SmallSpinnerIcon />
+                      Loading Staging URL...
+                    </button>
+                  )
                 )}
-                {(publishState.target === "production" || publishState.target === "both") && productionUrl && (
-                  <button
-                    className="publish-link-button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(productionUrl);
-                      onToast?.("Production URL copied", "success");
-                    }}
-                  >
-                    <CopyIcon />
-                    Copy Production URL
-                  </button>
+                {(publishState.target === "production" || publishState.target === "both") && (
+                  productionUrl ? (
+                    <button
+                      className="publish-link-button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(productionUrl);
+                        onToast?.("Production URL copied", "success");
+                      }}
+                    >
+                      <CopyIcon />
+                      Copy Production URL
+                    </button>
+                  ) : (
+                    <button className="publish-link-button publish-link-loading" disabled>
+                      <SmallSpinnerIcon />
+                      Loading Production URL...
+                    </button>
+                  )
                 )}
               </div>
               <div className="publish-actions publish-actions-center">
@@ -307,13 +321,21 @@ export function PublishDropdown({
             </>
           )}
 
+          {/* Idle State - Loading */}
+          {publishState.status === "idle" && !branchStatus && (
+            <div className="publish-loading">
+              <div className="publish-loading-spinner" />
+              <span>Loading...</span>
+            </div>
+          )}
+
           {/* Idle State - Selection UI */}
-          {publishState.status === "idle" && (() => {
+          {publishState.status === "idle" && branchStatus && (() => {
             // Determine if there are changes to push for each target
             // Include local_changes because publish auto-commits before pushing
             const hasLocalChanges = branchStatus?.local_changes ?? false;
-            const canPushToStaging = branchStatus ? (!branchStatus.staging_exists || branchStatus.staging_ahead > 0 || hasLocalChanges) : false;
-            const canPushToProduction = branchStatus ? (branchStatus.main_ahead > 0 || hasLocalChanges) : false;
+            const canPushToStaging = !branchStatus.staging_exists || branchStatus.staging_ahead > 0 || hasLocalChanges;
+            const canPushToProduction = branchStatus.main_ahead > 0 || hasLocalChanges;
 
             // Can only publish if selected targets have changes
             const wouldPublishSomething =
@@ -481,6 +503,14 @@ function CopyIcon() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function SmallSpinnerIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spinner-icon">
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
     </svg>
   );
 }

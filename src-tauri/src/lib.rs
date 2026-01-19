@@ -99,6 +99,8 @@ struct ProjectInfo {
     path: String,
     /// Asset protocol URL to thumbnail image, if it exists
     thumbnail: Option<String>,
+    /// Unix timestamp (ms) when project was last opened
+    last_opened: Option<u64>,
 }
 
 // ============ Project Metadata (Publish State Persistence) ============
@@ -125,6 +127,9 @@ struct ProjectMetadata {
     #[serde(rename = "_description")]
     description: String,
     publish: PublishMetadata,
+    /// Unix timestamp (ms) when project was last opened
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_opened: Option<u64>,
 }
 
 impl Default for ProjectMetadata {
@@ -132,6 +137,7 @@ impl Default for ProjectMetadata {
         ProjectMetadata {
             description: "Marketingstack project metadata. Auto-generated - safe to delete if needed, will be recreated.".to_string(),
             publish: PublishMetadata::default(),
+            last_opened: None,
         }
     }
 }
@@ -173,6 +179,45 @@ async fn write_project_metadata(project_path: String, metadata: ProjectMetadata)
     let contents = serde_json::to_string_pretty(&metadata)
         .map_err(|e| format!("Failed to serialize project metadata: {}", e))?;
 
+    std::fs::write(&metadata_path, contents)
+        .map_err(|e| format!("Failed to write project metadata: {}", e))?;
+
+    Ok(())
+}
+
+/// Marks a project as opened by updating its last_opened timestamp
+#[tauri::command]
+async fn mark_project_opened(project_path: String) -> Result<(), String> {
+    let project = validate_project_path(&project_path)?;
+    let marketingstack_dir = project.join(".marketingstack");
+    let metadata_path = marketingstack_dir.join("project.json");
+
+    // Read existing metadata or create default
+    let mut metadata = if metadata_path.exists() {
+        std::fs::read_to_string(&metadata_path)
+            .ok()
+            .and_then(|contents| serde_json::from_str::<ProjectMetadata>(&contents).ok())
+            .unwrap_or_default()
+    } else {
+        ProjectMetadata::default()
+    };
+
+    // Update last_opened to current time
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    metadata.last_opened = Some(now);
+
+    // Ensure .marketingstack directory exists
+    if !marketingstack_dir.exists() {
+        std::fs::create_dir_all(&marketingstack_dir)
+            .map_err(|e| format!("Failed to create .marketingstack directory: {}", e))?;
+    }
+
+    // Write updated metadata
+    let contents = serde_json::to_string_pretty(&metadata)
+        .map_err(|e| format!("Failed to serialize project metadata: {}", e))?;
     std::fs::write(&metadata_path, contents)
         .map_err(|e| format!("Failed to write project metadata: {}", e))?;
 
@@ -708,14 +753,36 @@ async fn list_projects() -> Result<Vec<ProjectInfo>, String> {
                     None
                 };
 
+                // Read last_opened from project metadata
+                let metadata_path = path.join(".marketingstack").join("project.json");
+                let last_opened = if metadata_path.exists() {
+                    std::fs::read_to_string(&metadata_path)
+                        .ok()
+                        .and_then(|contents| serde_json::from_str::<ProjectMetadata>(&contents).ok())
+                        .and_then(|m| m.last_opened)
+                } else {
+                    None
+                };
+
                 projects.push(ProjectInfo {
                     name: entry.file_name().to_string_lossy().to_string(),
                     path: path.to_string_lossy().to_string(),
                     thumbnail,
+                    last_opened,
                 });
             }
         }
     }
+
+    // Sort by last_opened (most recent first), then by name for projects never opened
+    projects.sort_by(|a, b| {
+        match (a.last_opened, b.last_opened) {
+            (Some(a_time), Some(b_time)) => b_time.cmp(&a_time), // Most recent first
+            (Some(_), None) => std::cmp::Ordering::Less, // Opened projects come first
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.name.cmp(&b.name), // Alphabetical for never-opened
+        }
+    });
 
     Ok(projects)
 }
@@ -745,11 +812,13 @@ async fn capture_project_thumbnail(project_path: String, url: String) -> Result<
     if let Some(browser) = chrome_path {
         let screenshot_arg = format!("--screenshot={}", thumbnail_path_str);
         // Use exact dimensions for consistent thumbnails
+        // force-device-scale-factor=1 prevents Retina 2x capture
         let output = Command::new(browser)
             .args([
                 "--headless=new",
                 "--disable-gpu",
                 "--hide-scrollbars",
+                "--force-device-scale-factor=1",
                 "--window-size=1280,800",
                 &screenshot_arg,
                 &url,
@@ -762,11 +831,14 @@ async fn capture_project_thumbnail(project_path: String, url: String) -> Result<
             return Err(format!("Browser screenshot failed: {}", stderr));
         }
 
-        // Resize to exact thumbnail dimensions using sips (macOS)
+        // Crop to exact viewport size from top-left, then resize for thumbnail
+        // --cropOffset sets the crop origin (x, y from top-left)
+        // -c crops to specified height width
         let _ = Command::new("sips")
             .args([
-                "-z", "800", "1280",  // Resize to exact height width
-                "--resampleWidth", "640",  // Then scale down for thumbnail
+                "--cropOffset", "0", "0",
+                "-c", "800", "1280",
+                "--resampleWidth", "640",
                 &thumbnail_path_str,
             ])
             .output();
@@ -2268,6 +2340,7 @@ pub fn run() {
             // Project metadata
             read_project_metadata,
             write_project_metadata,
+            mark_project_opened,
             // Environment variables
             list_env_files,
             read_env_file,

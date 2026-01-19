@@ -308,6 +308,9 @@ function App() {
     currentProjectPathRef.current = project.path;
     setView("project-loading");
 
+    // Mark project as opened (for sorting by last opened)
+    invoke("mark_project_opened", { projectPath: project.path }).catch(() => {});
+
     // Check project's GitHub and Vercel status in parallel
     try {
       const [ghStatus, vcStatus] = await Promise.all([
@@ -523,10 +526,7 @@ function App() {
             onClick={() => setShowEnvEditor(true)}
             title="Environment Variables"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 3v18" />
-              <rect x="3" y="8" width="18" height="8" rx="1" />
-            </svg>
+            <span className="env-button-icon">$</span>
             .env
           </button>
           <GitHubButton

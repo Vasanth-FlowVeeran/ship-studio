@@ -212,6 +212,11 @@ export function GitHubButton({
 
                     // Refresh status - this will clear isCreatingRepo when status updates
                     onStatusChange();
+
+                    // Fallback: clear isCreatingRepo after a delay if status doesn't update
+                    setTimeout(() => {
+                      setIsCreatingRepo(false);
+                    }, 3000);
                   } catch (e) {
                     setError(String(e));
                     setIsLoading(false);
