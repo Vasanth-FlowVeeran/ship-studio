@@ -1377,26 +1377,27 @@ async fn get_project_vercel_status(project_path: String) -> ProjectVercelStatus 
         }
     }
 
-    // If no staging URL from aliases, check vercel list for staging deployments
+    // If no staging URL from aliases, check vercel list for Preview deployments
     if staging_url.is_none() {
         let list_output = get_vercel_command()
-            .args(["list", "--limit", "20"])
+            .args(["list"])
             .current_dir(&project)
             .output()
             .ok();
 
         if let Some(output) = list_output {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            // Look for staging branch deployments
+            // Look for Preview deployments (staging branch shows as "Preview" environment)
             for line in stdout.lines() {
-                let line_lower = line.to_lowercase();
-                // Check if this line mentions staging branch
-                if line_lower.contains("staging") {
-                    // Extract the URL from the line (usually first column or contains .vercel.app)
+                // Check if this line is a Preview deployment (not Production)
+                if line.contains("Preview") && !line.contains("Production") {
+                    // Extract the URL from the line
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     for part in parts {
-                        if part.contains(".vercel.app") || part.contains("-git-staging-") {
-                            staging_url = Some(part.to_string());
+                        if part.contains(".vercel.app") {
+                            // Remove https:// prefix if present for consistency
+                            let url = part.trim_start_matches("https://");
+                            staging_url = Some(url.to_string());
                             break;
                         }
                     }
