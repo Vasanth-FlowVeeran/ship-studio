@@ -232,12 +232,48 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     }
   };
 
-  // Capture preview screenshot for Claude - temporarily disabled
-  // TODO: Re-implement using Tauri webview script injection
+  // Capture preview screenshot using Tauri window capture + crop
   const captureForClaude = useCallback(async (): Promise<string | null> => {
-    console.log("Capture feature temporarily disabled - proxy approach had issues");
-    return null;
-  }, []);
+    if (!iframeWrapperRef.current) {
+      return null;
+    }
+
+    try {
+      const { getScreenshotableWindows, getWindowScreenshot } = await import("tauri-plugin-screenshots-api");
+
+      const windows = await getScreenshotableWindows();
+      const ourWindow = windows.find(w =>
+        w.title?.toLowerCase().includes("marketingstack") ||
+        w.title?.toLowerCase().includes("tauri")
+      );
+
+      if (!ourWindow) {
+        return null;
+      }
+
+      // Capture the full window
+      const tempPath = await getWindowScreenshot(ourWindow.id);
+
+      // Get the iframe's bounding rect and account for device pixel ratio
+      const rect = iframeWrapperRef.current.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+
+      // Crop to iframe bounds and save
+      const finalPath = await invoke<string>("crop_and_save_screenshot", {
+        projectPath,
+        sourcePath: tempPath,
+        x: Math.round(rect.left * dpr),
+        y: Math.round(rect.top * dpr),
+        width: Math.round(rect.width * dpr),
+        height: Math.round(rect.height * dpr),
+      });
+
+      return finalPath;
+    } catch (error) {
+      console.error("[Preview] Capture failed:", error);
+      return null;
+    }
+  }, [projectPath]);
 
   // Expose methods to parent
   useImperativeHandle(ref, () => ({

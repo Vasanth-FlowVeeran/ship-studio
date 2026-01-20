@@ -21,7 +21,18 @@ export function ProjectCard({
 
   return (
     <div className="project-card">
-      <button className="project-card-thumbnail" onClick={onSelect}>
+      <div
+        className="project-card-thumbnail"
+        onClick={onSelect}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
+      >
         {thumbnailData ? (
           <img src={thumbnailData} alt={project.name} />
         ) : (
@@ -58,7 +69,7 @@ export function ProjectCard({
             )}
           </div>
         </div>
-      </button>
+      </div>
       <div className="project-card-info">
         <div className="project-card-details">
           <span className="project-card-name">{project.name}</span>

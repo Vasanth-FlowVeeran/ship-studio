@@ -13,11 +13,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicU32, AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::io::{BufRead, BufReader};
 use tauri::Emitter;
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
 
 /// Counter for generating unique PTY IDs
 static PTY_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
@@ -1060,6 +1058,59 @@ async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
     Ok(projects)
 }
 
+/// Crop an image and save it to the project's screenshots folder
+/// Takes the source image path, crop bounds (x, y, width, height), and returns the saved path
+#[tauri::command]
+async fn crop_and_save_screenshot(
+    project_path: String,
+    source_path: String,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+) -> Result<String, String> {
+    let project = validate_project_path(&project_path)?;
+    let screenshots_dir = project.join(".marketingstack").join("screenshots");
+
+    // Ensure screenshots directory exists
+    if !screenshots_dir.exists() {
+        std::fs::create_dir_all(&screenshots_dir).map_err(|e| e.to_string())?;
+    }
+
+    // Generate timestamped filename
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis();
+    let screenshot_path = screenshots_dir.join(format!("screenshot-{}.png", timestamp));
+    let screenshot_path_str = screenshot_path.to_string_lossy().to_string();
+
+    // Load the source image
+    let img = image::open(&source_path)
+        .map_err(|e| format!("Failed to open image: {}", e))?;
+
+    // Crop the image (ensure bounds are within image dimensions)
+    let img_width = img.width();
+    let img_height = img.height();
+
+    let crop_x = x.min(img_width.saturating_sub(1));
+    let crop_y = y.min(img_height.saturating_sub(1));
+    let crop_width = width.min(img_width.saturating_sub(crop_x));
+    let crop_height = height.min(img_height.saturating_sub(crop_y));
+
+    let cropped = img.crop_imm(crop_x, crop_y, crop_width, crop_height);
+
+    // Save the cropped image
+    cropped
+        .save(&screenshot_path)
+        .map_err(|e| format!("Failed to save cropped image: {}", e))?;
+
+    // Clean up the source temp file
+    let _ = std::fs::remove_file(&source_path);
+
+    Ok(screenshot_path_str)
+}
+
 #[tauri::command]
 async fn capture_project_thumbnail(project_path: String, url: String) -> Result<String, String> {
     let project = validate_project_path(&project_path)?;
@@ -1210,323 +1261,6 @@ async fn get_project_thumbnail(project_path: String) -> Result<Option<String>, S
     } else {
         Ok(None)
     }
-}
-
-#[tauri::command]
-async fn capture_preview_to_clipboard(project_path: String) -> Result<(), String> {
-    let project = validate_project_path(&project_path)?;
-    let screenshots_dir = project.join(".marketingstack").join("screenshots");
-
-    // Ensure screenshots directory exists
-    if !screenshots_dir.exists() {
-        std::fs::create_dir_all(&screenshots_dir).map_err(|e| e.to_string())?;
-    }
-
-    // Generate timestamped filename
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_millis();
-    let screenshot_path = screenshots_dir.join(format!("screenshot-{}.png", timestamp));
-    let screenshot_path_str = screenshot_path.to_string_lossy().to_string();
-
-    // Use Playwright to capture localhost:3000 preview
-    // Spawn in a NEW PROCESS GROUP to prevent signals from killing Claude Code
-    #[cfg(unix)]
-    let mut cmd = {
-        let mut cmd = Command::new("npx");
-        cmd.args([
-            "playwright",
-            "screenshot",
-            "http://localhost:3000",
-            &screenshot_path_str,
-            "--viewport-size=1200,800",
-        ]);
-        cmd.process_group(0); // Create new process group
-        cmd
-    };
-
-    #[cfg(not(unix))]
-    let mut cmd = {
-        let mut cmd = Command::new("npx");
-        cmd.args([
-            "playwright",
-            "screenshot",
-            "http://localhost:3000",
-            &screenshot_path_str,
-            "--viewport-size=1200,800",
-        ]);
-        cmd
-    };
-
-    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn playwright: {}", e))?;
-    let status = child.wait().map_err(|e| format!("Failed to wait for playwright: {}", e))?;
-
-    if !status.success() {
-        return Err("Playwright screenshot failed".to_string());
-    }
-
-    // Copy the image file to clipboard using osascript
-    let copy_script = format!(
-        "set the clipboard to (read (POSIX file \"{}\") as «class PNGf»)",
-        screenshot_path_str
-    );
-    let copy_output = Command::new("osascript")
-        .args(["-e", &copy_script])
-        .output()
-        .map_err(|e| format!("Failed to copy to clipboard: {}", e))?;
-
-    if !copy_output.status.success() {
-        let stderr = String::from_utf8_lossy(&copy_output.stderr);
-        return Err(format!("Failed to copy to clipboard: {}", stderr));
-    }
-
-    Ok(())
-}
-
-// ============ Preview Proxy ============
-// Proxy server that injects capture script into dev server responses
-
-/// Track if proxy is running
-static PROXY_RUNNING: AtomicBool = AtomicBool::new(false);
-static PROXY_PORT: AtomicU32 = AtomicU32::new(3001);
-
-/// The capture script to inject into HTML pages
-/// Uses html2canvas loaded from CDN for reliable DOM capture
-const CAPTURE_SCRIPT: &str = r#"
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script>
-(function() {
-  window.addEventListener('message', async function(e) {
-    if (e.data && e.data.type === 'CAPTURE_PREVIEW') {
-      try {
-        const canvas = await html2canvas(document.body, {
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: null,
-          scale: window.devicePixelRatio || 1,
-        });
-        const dataUrl = canvas.toDataURL('image/png');
-        window.parent.postMessage({ type: 'CAPTURE_RESULT', dataUrl: dataUrl }, '*');
-      } catch (err) {
-        window.parent.postMessage({ type: 'CAPTURE_ERROR', error: err.message }, '*');
-      }
-    }
-  });
-})();
-</script>
-"#;
-
-/// Start the preview proxy server
-#[tauri::command]
-async fn start_preview_proxy(upstream_port: u32) -> Result<u32, String> {
-    use axum::{
-        body::Body,
-        extract::Request,
-        http::StatusCode,
-        response::Response,
-        routing::any,
-        Router,
-    };
-    use bytes::Bytes;
-    use std::net::SocketAddr;
-
-    // Check if already running
-    if PROXY_RUNNING.load(Ordering::SeqCst) {
-        return Ok(PROXY_PORT.load(Ordering::SeqCst));
-    }
-
-    let proxy_port = 3001u32;
-    PROXY_PORT.store(proxy_port, Ordering::SeqCst);
-
-    let upstream = format!("http://localhost:{}", upstream_port);
-
-    // Create the proxy handler
-    let app = Router::new().fallback(any(move |req: Request| {
-        let upstream = upstream.clone();
-        async move {
-            let client = reqwest::Client::new();
-
-            // Build upstream URL
-            let path = req.uri().path_and_query()
-                .map(|pq| pq.as_str())
-                .unwrap_or("/");
-            let upstream_url = format!("{}{}", upstream, path);
-
-            // Forward the request
-            let method = match req.method().as_str() {
-                "GET" => reqwest::Method::GET,
-                "POST" => reqwest::Method::POST,
-                "PUT" => reqwest::Method::PUT,
-                "DELETE" => reqwest::Method::DELETE,
-                "HEAD" => reqwest::Method::HEAD,
-                "OPTIONS" => reqwest::Method::OPTIONS,
-                "PATCH" => reqwest::Method::PATCH,
-                _ => reqwest::Method::GET,
-            };
-
-            let mut upstream_req = client.request(method, &upstream_url);
-
-            // Forward headers (except host)
-            for (name, value) in req.headers() {
-                if name != "host" {
-                    if let Ok(v) = value.to_str() {
-                        upstream_req = upstream_req.header(name.as_str(), v);
-                    }
-                }
-            }
-
-            // Send request
-            let upstream_resp = match upstream_req.send().await {
-                Ok(r) => r,
-                Err(e) => {
-                    return Response::builder()
-                        .status(StatusCode::BAD_GATEWAY)
-                        .body(Body::from(format!("Proxy error: {}", e)))
-                        .unwrap();
-                }
-            };
-
-            let status = upstream_resp.status();
-            let headers = upstream_resp.headers().clone();
-            let content_type = headers
-                .get("content-type")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .to_lowercase();
-
-            // Get response body
-            let body_bytes = match upstream_resp.bytes().await {
-                Ok(b) => b,
-                Err(e) => {
-                    return Response::builder()
-                        .status(StatusCode::BAD_GATEWAY)
-                        .body(Body::from(format!("Proxy body error: {}", e)))
-                        .unwrap();
-                }
-            };
-
-            // Only inject into HTML documents - be very strict about detection
-            let is_html = content_type.starts_with("text/html");
-
-            let final_body = if is_html {
-                // Try to parse as UTF-8, only inject if valid
-                match String::from_utf8(body_bytes.to_vec()) {
-                    Ok(html) => {
-                        // Only inject if it looks like actual HTML
-                        let html_lower = html.to_lowercase();
-                        if html_lower.contains("<!doctype html") || html_lower.contains("<html") {
-                            let injected = if html.contains("</body>") {
-                                html.replace("</body>", &format!("{}</body>", CAPTURE_SCRIPT))
-                            } else if html.contains("</html>") {
-                                html.replace("</html>", &format!("{}</html>", CAPTURE_SCRIPT))
-                            } else {
-                                format!("{}{}", html, CAPTURE_SCRIPT)
-                            };
-                            Bytes::from(injected)
-                        } else {
-                            // Claimed HTML but doesn't look like it
-                            body_bytes
-                        }
-                    }
-                    Err(_) => {
-                        // Not valid UTF-8, pass through unchanged
-                        body_bytes
-                    }
-                }
-            } else {
-                // Not HTML, pass through unchanged
-                body_bytes
-            };
-
-            // Build response
-            let mut response = Response::builder().status(status.as_u16());
-
-            // Forward response headers
-            // Skip content-length (body may be modified), transfer-encoding (we send complete body),
-            // and content-encoding (reqwest auto-decompresses, so we send uncompressed)
-            for (name, value) in headers.iter() {
-                let name_str = name.as_str();
-                if name_str != "content-length"
-                    && name_str != "transfer-encoding"
-                    && name_str != "content-encoding"
-                {
-                    if let Ok(v) = value.to_str() {
-                        response = response.header(name_str, v);
-                    }
-                }
-            }
-
-            response.body(Body::from(final_body)).unwrap()
-        }
-    }));
-
-    // Spawn the server
-    let addr = SocketAddr::from(([127, 0, 0, 1], proxy_port as u16));
-
-    tokio::spawn(async move {
-        let listener = match tokio::net::TcpListener::bind(addr).await {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("Failed to bind proxy: {}", e);
-                PROXY_RUNNING.store(false, Ordering::SeqCst);
-                return;
-            }
-        };
-
-        PROXY_RUNNING.store(true, Ordering::SeqCst);
-
-        if let Err(e) = axum::serve(listener, app).await {
-            eprintln!("Proxy server error: {}", e);
-            PROXY_RUNNING.store(false, Ordering::SeqCst);
-        }
-    });
-
-    // Give it a moment to start
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-    Ok(proxy_port)
-}
-
-/// Save a base64 image to a file and return the path
-#[tauri::command]
-async fn save_capture_image(
-    project_path: String,
-    data_url: String,
-) -> Result<String, String> {
-    let project = validate_project_path(&project_path)?;
-    let screenshots_dir = project.join(".marketingstack").join("screenshots");
-
-    // Ensure screenshots directory exists
-    if !screenshots_dir.exists() {
-        std::fs::create_dir_all(&screenshots_dir).map_err(|e| e.to_string())?;
-    }
-
-    // Parse data URL: data:image/png;base64,xxxxx
-    let base64_data = data_url
-        .strip_prefix("data:image/png;base64,")
-        .or_else(|| data_url.strip_prefix("data:image/jpeg;base64,"))
-        .ok_or("Invalid data URL format")?;
-
-    // Decode base64
-    use base64::Engine;
-    let image_data = base64::engine::general_purpose::STANDARD
-        .decode(base64_data)
-        .map_err(|e| format!("Failed to decode base64: {}", e))?;
-
-    // Generate timestamped filename
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_millis();
-    let screenshot_path = screenshots_dir.join(format!("preview-{}.png", timestamp));
-    let screenshot_path_str = screenshot_path.to_string_lossy().to_string();
-
-    // Write file
-    std::fs::write(&screenshot_path, image_data)
-        .map_err(|e| format!("Failed to write image: {}", e))?;
-
-    Ok(screenshot_path_str)
 }
 
 // ============ Claude Integration ============
@@ -3087,6 +2821,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_pty::init())
+        .plugin(tauri_plugin_screenshots::init())
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 cleanup_claude_processes();
@@ -3122,9 +2857,7 @@ pub fn run() {
             delete_project,
             capture_project_thumbnail,
             get_project_thumbnail,
-            capture_preview_to_clipboard,
-            start_preview_proxy,
-            save_capture_image,
+            crop_and_save_screenshot,
             // Claude integration
             check_claude_cli_status,
             install_claude_cli,

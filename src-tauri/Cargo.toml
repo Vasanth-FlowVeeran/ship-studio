@@ -24,10 +24,6 @@ dirs = "5"
 which = "6"
 base64 = "0.22"
 url = "2"
-# Preview proxy for script injection
-axum = "0.7"
-reqwest = { version = "0.12", features = ["stream"] }
-tower-http = { version = "0.5", features = ["cors"] }
-bytes = "1"
-once_cell = "1"
+tauri-plugin-screenshots = "2.2.0"
+image = "0.25.9"
 
