@@ -149,6 +149,9 @@ function App() {
   // Publishing state (lifted from PublishDropdown so button shows "Publishing..." even when dropdown closed)
   const [isPublishing, setIsPublishing] = useState(false);
 
+  // Vercel auto-connecting state (when linking after GitHub repo creation)
+  const [isVercelAutoConnecting, setIsVercelAutoConnecting] = useState(false);
+
   const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     const id = ++toastIdRef.current;
     setToasts(prev => {
@@ -365,8 +368,9 @@ function App() {
       screenshotIntervalRef.current = null;
     }
 
-    // Reset publishing state when switching projects
+    // Reset publishing and auto-connecting state when switching projects
     setIsPublishing(false);
+    setIsVercelAutoConnecting(false);
 
     setCurrentProject(project);
     setCurrentPreviewPage("/");
@@ -427,8 +431,9 @@ function App() {
     }
     currentProjectPathRef.current = null;
 
-    // Reset publishing state
+    // Reset publishing and auto-connecting state
     setIsPublishing(false);
+    setIsVercelAutoConnecting(false);
 
     // Stop dev server if running
     if (devServerRef.current) {
@@ -440,9 +445,29 @@ function App() {
     setView("projects");
   };
 
-  const handleGitHubStatusChange = async () => {
+  const handleGitHubStatusChange = async (vercelDeployedUrl?: string) => {
     // Refresh project GitHub and Vercel status after push/publish
     if (currentProject) {
+      // If we have a vercel deployed URL, optimistically set Vercel as connected
+      // This avoids race conditions where the status check runs before Vercel's state propagates
+      if (vercelDeployedUrl) {
+        const ghStatus = await getProjectGitHubStatus(currentProject.path).catch(() => null);
+        dispatch({
+          type: 'SET_PROJECT_STATUSES',
+          payload: {
+            github: ghStatus,
+            vercel: {
+              status: "connected",
+              project_name: currentProject.name,
+              production_url: vercelDeployedUrl.replace(/^https?:\/\//, ''),
+              staging_url: null,
+              vercel_org: null,
+            },
+          },
+        });
+        return;
+      }
+
       const [ghStatus, vcStatus] = await Promise.all([
         getProjectGitHubStatus(currentProject.path).catch(() => null),
         getProjectVercelStatus(currentProject.path).catch(() => null),
@@ -584,6 +609,8 @@ function App() {
             onGitHubConnect={refreshGitHubStatus}
             onModalClose={focusTerminal}
             onToast={showToast}
+            onVercelAutoConnectStart={() => setIsVercelAutoConnecting(true)}
+            onVercelAutoConnectEnd={() => setIsVercelAutoConnecting(false)}
           />
           <VercelButton
             vercelState={integrations.vercel}
@@ -595,6 +622,7 @@ function App() {
             onVercelConnect={refreshVercelStatus}
             onModalClose={focusTerminal}
             onToast={showToast}
+            isAutoConnecting={isVercelAutoConnecting}
           />
           <PublishDropdown
             projectGithubStatus={integrations.projectGithub}

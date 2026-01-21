@@ -1842,21 +1842,60 @@ async fn link_to_vercel(options: LinkToVercelOptions) -> Result<String, String> 
         .output();
 
     // Try to parse the deployment URL from the output
+    let mut deployed_url: Option<String> = None;
     if let Ok(output) = deploy_output {
         let stdout = String::from_utf8_lossy(&output.stdout);
         // Look for URL in output (format: "Production: https://...")
         for line in stdout.lines() {
             if line.contains("Production:") || line.starts_with("https://") {
                 if let Some(url) = line.split_whitespace().find(|s| s.starts_with("https://")) {
-                    return Ok(url.to_string());
+                    deployed_url = Some(url.to_string());
+                    break;
                 }
             }
         }
     }
 
     // Fallback: construct URL from repo name
-    let repo_name = github_repo.split('/').last().unwrap_or("project");
-    Ok(format!("https://{}.vercel.app", repo_name))
+    let url = deployed_url.unwrap_or_else(|| {
+        let repo_name = github_repo.split('/').last().unwrap_or("project");
+        format!("https://{}.vercel.app", repo_name)
+    });
+
+    // Save the URL to project metadata so dashboard shows it immediately
+    let project = std::path::Path::new(project_path);
+    let marketingstack_dir = project.join(".marketingstack");
+    let metadata_path = marketingstack_dir.join("project.json");
+
+    // Read existing metadata or create default
+    let mut metadata: ProjectMetadata = if metadata_path.exists() {
+        std::fs::read_to_string(&metadata_path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        ProjectMetadata::default()
+    };
+
+    // Update production publish record with the deployed URL
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    metadata.publish.production = Some(PublishRecord {
+        url: url.clone(),
+        state: "READY".to_string(),
+        published_at: now,
+    });
+
+    // Ensure .marketingstack directory exists and write metadata
+    let _ = std::fs::create_dir_all(&marketingstack_dir);
+    if let Ok(contents) = serde_json::to_string_pretty(&metadata) {
+        let _ = std::fs::write(&metadata_path, contents);
+    }
+
+    Ok(url)
 }
 
 // ============ GitHub Integration ============

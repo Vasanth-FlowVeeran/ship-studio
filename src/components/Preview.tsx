@@ -94,8 +94,10 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
 
   // Dev server URL (for health checks and page loading)
   const devServerUrl = `http://localhost:${port}`;
+  // Cache-buster to prevent showing stale content when switching projects
+  const [cacheBuster, setCacheBuster] = useState(() => Date.now());
   // For now, always use dev server directly (proxy disabled due to issues)
-  const currentUrl = `${devServerUrl}${currentPage === "/" ? "" : currentPage}`;
+  const currentUrl = `${devServerUrl}${currentPage === "/" ? "" : currentPage}?_cb=${cacheBuster}`;
 
   // Reset state when project changes
   useEffect(() => {
@@ -112,6 +114,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     setPageSearch("");
     setShowCmsModal(false);
     setCmsWebviewReady(false);
+    setCacheBuster(Date.now()); // New cache-buster for new project
 
     // Delay server check to allow old dev server to terminate
     const timer = setTimeout(() => setRetryCount(0), 1500);
@@ -224,19 +227,15 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   }, [devServerUrl, retryCount]);
 
   const handleRefresh = () => {
-    if (iframeRef.current) {
-      iframeRef.current.src = currentUrl + "?t=" + Date.now();
-    }
+    setCacheBuster(Date.now());
   };
 
   const handlePageSelect = (route: string) => {
     setCurrentPage(route);
     setShowPageDropdown(false);
     setPageSearch("");
-    if (iframeRef.current && serverReady) {
-      const newUrl = `${devServerUrl}${route === "/" ? "" : route}`;
-      iframeRef.current.src = newUrl;
-    }
+    // Update cache-buster to force reload with new page
+    setCacheBuster(Date.now());
   };
 
   // Shared helper: capture the current window and return the temp file path

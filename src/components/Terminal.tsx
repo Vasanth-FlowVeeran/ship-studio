@@ -69,10 +69,11 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const lastDropTimeRef = useRef(0);
   useEffect(() => {
     let unlisten: (() => void) | null = null;
+    let mounted = true;
 
     const setupDropListener = async () => {
       // Listen for the tauri://drag-drop event
-      unlisten = await listen<{ paths: string[]; position: { x: number; y: number } }>(
+      const unlistenFn = await listen<{ paths: string[]; position: { x: number; y: number } }>(
         "tauri://drag-drop",
         async (event) => {
           // Debounce - ignore duplicate events within 500ms
@@ -97,11 +98,19 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           }
         }
       );
+
+      // If component unmounted while awaiting, clean up immediately
+      if (!mounted) {
+        unlistenFn();
+      } else {
+        unlisten = unlistenFn;
+      }
     };
 
     setupDropListener();
 
     return () => {
+      mounted = false;
       if (unlisten) {
         unlisten();
       }

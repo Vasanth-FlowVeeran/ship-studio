@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { GitHubState, VercelState } from "../App";
 import { ProjectGitHubStatus, pushToGitHub, getGitHubOrgs } from "../lib/github";
 import { linkToVercel } from "../lib/vercel";
@@ -10,10 +10,12 @@ interface GitHubButtonProps {
   projectStatus: ProjectGitHubStatus | null;
   projectPath: string;
   projectName: string;
-  onStatusChange: () => void;
+  onStatusChange: (vercelDeployedUrl?: string) => Promise<void> | void;
   onGitHubConnect: () => void;
   onModalClose?: () => void;
   onToast?: (message: string, type?: "success" | "error") => void;
+  onVercelAutoConnectStart?: () => void;
+  onVercelAutoConnectEnd?: () => void;
 }
 
 export function GitHubButton({
@@ -26,6 +28,8 @@ export function GitHubButton({
   onGitHubConnect,
   onModalClose,
   onToast,
+  onVercelAutoConnectStart,
+  onVercelAutoConnectEnd,
 }: GitHubButtonProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [repoName, setRepoName] = useState(projectName);
@@ -35,8 +39,19 @@ export function GitHubButton({
   const [error, setError] = useState<string | null>(null);
   const [orgs, setOrgs] = useState<string[]>([]);
   const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
+  const authPollCancelledRef = useRef(false);
 
   const { cliStatus, username } = githubState;
+
+  // Cancel auth polling on unmount or when auth succeeds
+  useEffect(() => {
+    if (cliStatus.authenticated) {
+      authPollCancelledRef.current = true;
+    }
+    return () => {
+      authPollCancelledRef.current = true;
+    };
+  }, [cliStatus.authenticated]);
 
   // Fetch orgs when modal opens
   useEffect(() => {
@@ -68,10 +83,13 @@ export function GitHubButton({
         onClick={async () => {
           try {
             await openUrl("https://github.com/login/device");
-            // Poll for auth completion
+            // Poll for auth completion (with cancellation support)
+            authPollCancelledRef.current = false;
             const pollAuth = async () => {
               for (let i = 0; i < 60; i++) {
+                if (authPollCancelledRef.current) break;
                 await new Promise((r) => setTimeout(r, 2000));
+                if (authPollCancelledRef.current) break;
                 onGitHubConnect();
               }
             };
@@ -227,14 +245,19 @@ export function GitHubButton({
 
                     // Auto-connect to Vercel if authenticated (don't block, but refresh status when done)
                     if (vercelState?.cliStatus.authenticated) {
+                      onVercelAutoConnectStart?.();
                       linkToVercel({
                         projectPath,
                         githubRepo: fullRepoName,
-                      }).then(() => {
-                        // Refresh status after Vercel links
-                        onStatusChange();
-                      }).catch((e) => {
+                      }).then(async (deployedUrl) => {
+                        // Refresh status first, then end connecting state to avoid flash of "Connect Vercel"
+                        await onStatusChange(deployedUrl);
+                        onVercelAutoConnectEnd?.();
+                      }).catch(async (e) => {
                         console.error("Failed to auto-connect to Vercel:", e);
+                        // Still refresh status even on error to show correct state
+                        await onStatusChange();
+                        onVercelAutoConnectEnd?.();
                       });
                     }
 

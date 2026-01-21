@@ -21,6 +21,7 @@ interface VercelButtonProps {
   onVercelConnect: () => void;
   onModalClose?: () => void;
   onToast?: (message: string, type?: "success" | "error") => void;
+  isAutoConnecting?: boolean;
 }
 
 export function VercelButton({
@@ -33,6 +34,7 @@ export function VercelButton({
   onVercelConnect,
   onModalClose,
   onToast,
+  isAutoConnecting,
 }: VercelButtonProps) {
   const [isInstalling, setIsInstalling] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -44,6 +46,7 @@ export function VercelButton({
   const [error, setError] = useState<string | null>(null);
   const ptyIdRef = useRef<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
+  const ptyListenersRef = useRef<{ unlistenOutput?: () => void; unlistenExit?: () => void }>({});
 
   const { cliStatus } = vercelState;
 
@@ -54,9 +57,14 @@ export function VercelButton({
     }
   }, [loginOutput]);
 
-  // Cleanup PTY on unmount
+  // Cleanup PTY and listeners on unmount
   useEffect(() => {
     return () => {
+      // Clean up any active listeners
+      ptyListenersRef.current.unlistenOutput?.();
+      ptyListenersRef.current.unlistenExit?.();
+      ptyListenersRef.current = {};
+
       if (ptyIdRef.current !== null) {
         invoke("kill_pty", { id: ptyIdRef.current }).catch(() => {});
       }
@@ -117,8 +125,11 @@ export function VercelButton({
           if (event.payload.id === ptyId) {
             ptyIdRef.current = null;
             setIsLoggingIn(false);
+
+            // Clean up listeners
             unlistenOutput();
             unlistenExit();
+            ptyListenersRef.current = {};
 
             const status = await checkVercelCliStatus();
             if (status.authenticated) {
@@ -129,6 +140,9 @@ export function VercelButton({
           }
         }
       );
+
+      // Store listeners for cleanup on unmount
+      ptyListenersRef.current = { unlistenOutput, unlistenExit };
     } catch (e) {
       setError(String(e));
       setIsLoggingIn(false);
@@ -231,6 +245,16 @@ export function VercelButton({
       <button className="vercel-button vercel-deploying" disabled title="Deploying to Vercel...">
         <VercelIcon />
         <span className="deploying-text">Deploying...</span>
+      </button>
+    );
+  }
+
+  // If auto-connecting after GitHub repo creation
+  if (isAutoConnecting) {
+    return (
+      <button className="vercel-button vercel-deploying" disabled title="Connecting to Vercel...">
+        <VercelIcon />
+        <span className="deploying-text">Connecting...</span>
       </button>
     );
   }
