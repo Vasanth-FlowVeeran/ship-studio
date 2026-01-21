@@ -1,88 +1,173 @@
-/* Create Project */
-.create-project {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 60px 24px;
-}
-
-.create-project h2 {
-  font-size: 24px;
-  margin-bottom: 8px;
-}
-
-.create-project > p {
-  color: var(--text-secondary);
-  margin-bottom: 32px;
-}
-
-.create-project form {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.create-project label {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.create-project input {
-  padding: 12px 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: 16px;
-}
-
-.create-project input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.create-project .error {
-  color: var(--error);
-  font-size: 14px;
-}
-
-.create-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.create-project.creating {
-  max-width: 600px;
+/* Create Project Modal */
+.create-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  padding: 24px;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
 }
 
-.create-loading {
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.create-modal {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: hidden;
+  animation: slideUp 0.2s ease-out;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.create-modal-content {
+  padding: 28px;
+}
+
+.create-modal-content.creating {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  width: 100%;
+  padding: 48px 28px;
 }
 
-.create-loading h2 {
-  font-size: 24px;
+.create-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.create-modal-header h2 {
+  font-size: 20px;
   font-weight: 600;
-  margin-bottom: 8px;
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+}
+
+.create-modal-header p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.create-modal-close {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+  margin: -4px -4px 0 0;
+}
+
+.create-modal-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Form styles */
+.create-modal-content form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.create-modal-content label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.create-modal-content input {
+  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 15px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.create-modal-content input:focus {
+  outline: none;
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+
+.create-modal-content input::placeholder {
+  color: var(--text-muted);
+}
+
+.create-modal-content .error {
+  color: var(--error);
+  font-size: 13px;
+  margin: -8px 0 0 0;
+}
+
+/* Actions */
+.create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.create-actions button {
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.create-actions .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Creating state */
+.create-modal-content.creating h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
   color: var(--text-primary);
 }
 
 .create-spinner {
-  width: 48px;
-  height: 48px;
-  margin: 32px 0;
+  width: 40px;
+  height: 40px;
+  margin: 28px 0;
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
@@ -91,17 +176,17 @@
 
 .create-status {
   color: var(--text-secondary);
-  font-size: 15px;
-  margin-bottom: 40px;
+  font-size: 14px;
+  margin-bottom: 32px;
 }
 
 .create-checklist {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   text-align: left;
   width: 100%;
-  max-width: 280px;
+  max-width: 240px;
 }
 
 .checklist-item {
@@ -139,20 +224,73 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 20px 24px;
-  margin-top: 32px;
-  background: rgba(255, 107, 107, 0.1);
-  border: 1px solid var(--error);
+  gap: 14px;
+  padding: 16px 20px;
+  margin-top: 24px;
+  background: rgba(244, 71, 71, 0.1);
+  border: 1px solid rgba(244, 71, 71, 0.3);
   border-radius: 8px;
   text-align: center;
   width: 100%;
-  max-width: 320px;
+  max-width: 280px;
 }
 
 .create-error p {
   color: var(--error);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* Template Selection */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+  padding: 14px 16px;
+}
+
+.template-card:hover {
+  border-color: var(--text-muted);
+  background: var(--bg-tertiary);
+}
+
+.template-card.selected {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.template-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+}
+
+.template-card p {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.template-context {
+  color: var(--text-secondary);
   font-size: 14px;
   margin: 0;
 }
 
+.template-context strong {
+  color: var(--text-primary);
+}

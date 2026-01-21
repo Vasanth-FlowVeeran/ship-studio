@@ -33,7 +33,7 @@ const SCREENSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const SCREENSHOT_DELAY_MS = 2000; // Wait for page to render
 const DEV_SERVER_PORT = 3000;
 
-type AppView = "loading" | "setup" | "projects" | "create" | "project-loading" | "workspace";
+type AppView = "loading" | "setup" | "projects" | "project-loading" | "workspace";
 
 export interface GitHubState {
   cliStatus: GitHubCliStatus;
@@ -119,6 +119,9 @@ function App() {
 
   // Env editor modal
   const [showEnvEditor, setShowEnvEditor] = useState(false);
+
+  // Create project modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // IDE dropdown
   const [showIdeDropdown, setShowIdeDropdown] = useState(false);
@@ -395,25 +398,12 @@ function App() {
     }, SCREENSHOT_INTERVAL_MS);
   };
 
-  const handleCreateProject = async () => {
-    // Stop any existing dev server
-    if (devServerRef.current) {
-      await devServerRef.current.stop();
-      devServerRef.current = null;
-    }
-
-    // Clear screenshot interval and project ref
-    if (screenshotIntervalRef.current) {
-      clearInterval(screenshotIntervalRef.current);
-      screenshotIntervalRef.current = null;
-    }
-    currentProjectPathRef.current = null;
-
-    setCurrentProject(null);
-    setView("create");
+  const handleCreateProject = () => {
+    setShowCreateModal(true);
   };
 
   const handleProjectCreated = async (projectPath: string) => {
+    setShowCreateModal(false);
     const projectName = projectPath.split("/").pop() || "project";
     handleSelectProject({ name: projectName, path: projectPath, thumbnail: null });
   };
@@ -502,17 +492,12 @@ function App() {
           onVercelConnect={refreshVercelStatus}
           onClaudeConnect={refreshClaudeStatus}
         />
-      </div>
-    );
-  }
-
-  if (view === "create") {
-    return (
-      <div className="app">
-        <CreateProject
-          onComplete={handleProjectCreated}
-          onCancel={() => setView("projects")}
-        />
+        {showCreateModal && (
+          <CreateProject
+            onComplete={handleProjectCreated}
+            onCancel={() => setShowCreateModal(false)}
+          />
+        )}
       </div>
     );
   }

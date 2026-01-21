@@ -7,8 +7,23 @@ interface CreateProjectProps {
   onCancel: () => void;
 }
 
-const TEMPLATE_REPO = "https://github.com/marketingstack/marketingstack-boilerplate";
+interface Template {
+  id: string;
+  name: string;
+  description: string;
+  repo: string;
+}
 
+const TEMPLATES: Template[] = [
+  {
+    id: "nextjs-basic",
+    name: "Next.js Basic",
+    description: "A minimal Next.js starter with Tailwind CSS",
+    repo: "https://github.com/marketingstack/marketingstack-boilerplate",
+  },
+];
+
+type FormStep = "select-template" | "enter-name";
 type Step = "clone" | "init" | "install" | "done";
 
 const STEPS: { id: Step; label: string }[] = [
@@ -27,6 +42,8 @@ const STATUS_MESSAGES: Record<Step, string> = {
 };
 
 export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
+  const [formStep, setFormStep] = useState<FormStep>("select-template");
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [projectName, setProjectName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [currentStep, setCurrentStep] = useState<Step>("clone");
@@ -52,6 +69,11 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
   };
 
   const handleCreate = async () => {
+    if (!selectedTemplate) {
+      setError("Please select a template");
+      return;
+    }
+
     if (!projectName.trim()) {
       setError("Please enter a project name");
       return;
@@ -94,7 +116,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
         options: {
           cwd: marketingstackDir,
           command: "git",
-          args: ["clone", TEMPLATE_REPO, safeName],
+          args: ["clone", selectedTemplate.repo, safeName],
           rows: 10,
           cols: 80,
         },
@@ -153,10 +175,27 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
     return "pending";
   };
 
-  if (isCreating) {
-    return (
-      <div className="create-project creating">
-        <div className="create-loading">
+  const handleTemplateSelect = (template: Template) => {
+    setSelectedTemplate(template);
+  };
+
+  const handleContinue = () => {
+    if (selectedTemplate) {
+      setFormStep("enter-name");
+      setError(null);
+    }
+  };
+
+  const handleBack = () => {
+    setFormStep("select-template");
+    setError(null);
+  };
+
+  const renderContent = () => {
+    // Creating state - show progress
+    if (isCreating) {
+      return (
+        <div className="create-modal-content creating">
           <h2>Creating "{projectName}"</h2>
 
           <div className="create-spinner" />
@@ -188,50 +227,123 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
           {error && (
             <div className="create-error">
               <p>{error}</p>
-              <button onClick={onCancel}>Back</button>
+              <button onClick={onCancel}>Close</button>
             </div>
           )}
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  return (
-    <div className="create-project">
-      <h2>New Project</h2>
-      <p>Create a new Next.js site with Claude Code</p>
+    // Template selection step
+    if (formStep === "select-template") {
+      return (
+        <div className="create-modal-content">
+          <div className="create-modal-header">
+            <div>
+              <h2>New Project</h2>
+              <p>Select a starting point</p>
+            </div>
+            <button className="create-modal-close" onClick={onCancel} type="button">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleCreate();
-        }}
-      >
-        <label>
-          Project Name
-          <input
-            type="text"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            placeholder="my-awesome-site"
-            autoFocus
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-          />
-        </label>
+          <div className="template-grid">
+            {TEMPLATES.map((template) => (
+              <button
+                key={template.id}
+                type="button"
+                className={`template-card ${selectedTemplate?.id === template.id ? "selected" : ""}`}
+                onClick={() => handleTemplateSelect(template)}
+              >
+                <h3>{template.name}</h3>
+                <p>{template.description}</p>
+              </button>
+            ))}
+          </div>
 
-        {error && <p className="error">{error}</p>}
+          <div className="create-actions">
+            <button type="button" onClick={onCancel}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!selectedTemplate}
+              onClick={handleContinue}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      );
+    }
 
-        <div className="create-actions">
-          <button type="button" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="submit" className="btn-primary">
-            Create Project
+    // Name entry step
+    return (
+      <div className="create-modal-content">
+        <div className="create-modal-header">
+          <div>
+            <h2>New Project</h2>
+            <p className="template-context">
+              Using <strong>{selectedTemplate?.name}</strong>
+            </p>
+          </div>
+          <button className="create-modal-close" onClick={onCancel} type="button">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
-      </form>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleCreate();
+          }}
+        >
+          <label>
+            Project Name
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="my-awesome-site"
+              autoFocus
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+          </label>
+
+          {error && <p className="error">{error}</p>}
+
+          <div className="create-actions">
+            <button type="button" onClick={handleBack}>
+              Back
+            </button>
+            <button type="submit" className="btn-primary">
+              Create Project
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
+  return (
+    <div className="create-modal-overlay" onClick={(e) => {
+      if (e.target === e.currentTarget && !isCreating) {
+        onCancel();
+      }
+    }}>
+      <div className="create-modal">
+        {renderContent()}
+      </div>
     </div>
   );
 }
