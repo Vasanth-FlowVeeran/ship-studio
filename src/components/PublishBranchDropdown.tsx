@@ -43,14 +43,14 @@ interface PublishBranchDropdownProps {
   /** Set publishing state */
   setIsPublishing: (publishing: boolean) => void;
   /** Callback when a publish error occurs */
-  onPublishError?: (error: string, errorType: "push_rejected" | "auth_error" | "generic") => void;
+  onPublishError?: (error: string, errorType: "push_rejected" | "auth_error" | "merge_conflict" | "generic") => void;
 }
 
 type PublishState =
   | { status: "idle" }
   | { status: "publishing" }
   | { status: "success" }
-  | { status: "error"; message: string; errorType?: "push_rejected" | "auth_error" | "generic" };
+  | { status: "error"; message: string; errorType?: "push_rejected" | "auth_error" | "merge_conflict" | "generic" };
 
 export function PublishBranchDropdown({
   currentBranch,
@@ -114,7 +114,7 @@ export function PublishBranchDropdown({
 
       setPublishState({ status: "success" });
       onToast?.(
-        isMainBranch ? "Published to production!" : `Published ${currentBranch}!`,
+        isMainBranch ? "Published to production!" : "Changes synced!",
         "success"
       );
       onStatusChange();
@@ -130,16 +130,18 @@ export function PublishBranchDropdown({
 
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      let errorType: "push_rejected" | "auth_error" | "generic" = "generic";
+      let errorType: "push_rejected" | "auth_error" | "merge_conflict" | "generic" = "generic";
 
-      if (message.includes("PUSH_REJECTED")) {
+      if (message.includes("MERGE_CONFLICT")) {
+        errorType = "merge_conflict";
+      } else if (message.includes("PUSH_REJECTED")) {
         errorType = "push_rejected";
       } else if (message.includes("AUTH_ERROR")) {
         errorType = "auth_error";
       }
 
       setPublishState({ status: "error", message, errorType });
-      onToast?.("Publish failed", "error");
+      onToast?.(isMainBranch ? "Publish failed" : "Sync failed", "error");
 
       // Notify parent about the error for GitErrorHandler
       if (onPublishError) {
@@ -186,7 +188,9 @@ export function PublishBranchDropdown({
         className={`publish-button ${isPublishing ? "publishing" : ""}`}
         onClick={() => setIsOpen(!isOpen)}
       >
-        {isPublishing ? "Publishing..." : "Publish"}
+        {isPublishing
+          ? (isMainBranch ? "Publishing..." : "Syncing...")
+          : (isMainBranch ? "Publish" : "Sync")}
         <ChevronIcon />
       </button>
 
@@ -198,7 +202,7 @@ export function PublishBranchDropdown({
               <div className="publish-success">
                 <SuccessIcon />
                 <span>
-                  {isMainBranch ? "Published to production" : `Published ${currentBranch}`}
+                  {isMainBranch ? "Published to production" : "Changes synced"}
                 </span>
               </div>
               {hasVercel && (
@@ -232,7 +236,7 @@ export function PublishBranchDropdown({
             <>
               <div className="publish-error-header">
                 <ErrorIcon />
-                <span>Failed to publish</span>
+                <span>{isMainBranch ? "Failed to publish" : "Failed to sync"}</span>
               </div>
               <div className="publish-error-message">
                 {publishState.errorType === "push_rejected"
@@ -261,7 +265,7 @@ export function PublishBranchDropdown({
               <div className="publish-in-progress-header">
                 <SpinnerIcon />
                 <span>
-                  Publishing {isMainBranch ? "to production" : currentBranch}...
+                  {isMainBranch ? "Publishing to production..." : "Syncing changes..."}
                 </span>
               </div>
               <div className="publish-actions">
@@ -276,7 +280,7 @@ export function PublishBranchDropdown({
           {publishState.status === "idle" && (
             <>
               <div className="publish-branch-header">
-                <h3>{isMainBranch ? "Publish to Production" : "Publish your changes"}</h3>
+                <h3>{isMainBranch ? "Publish to Production" : "Sync your changes"}</h3>
               </div>
 
               <div className="publish-branch-body">
@@ -315,7 +319,7 @@ export function PublishBranchDropdown({
                   onClick={handlePublish}
                   disabled={isPublishing}
                 >
-                  {isMainBranch ? "Go Live" : "Publish Branch"}
+                  {isMainBranch ? "Go Live" : "Sync"}
                 </button>
               </div>
             </>

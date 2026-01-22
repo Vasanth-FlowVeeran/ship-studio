@@ -14,7 +14,7 @@
  * @module components/BranchesTab
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   BranchInfo,
   switchBranch,
@@ -67,6 +67,21 @@ export function BranchesTab({
   const [showNewBranch, setShowNewBranch] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
+  const [prefixUsername, setPrefixUsername] = useState(true);
+
+  // Load prefix preference on mount
+  useEffect(() => {
+    invoke<boolean>("get_branch_prefix_preference", { projectPath })
+      .then(setPrefixUsername)
+      .catch(() => {}); // Ignore errors, default to true
+  }, [projectPath]);
+
+  // Save prefix preference when changed
+  const handlePrefixChange = (checked: boolean) => {
+    setPrefixUsername(checked);
+    invoke("set_branch_prefix_preference", { projectPath, prefix: checked })
+      .catch(() => {}); // Ignore errors
+  };
 
   // Group branches
   const currentBranchInfo = branches.find(b => b.isCurrent);
@@ -143,9 +158,9 @@ export function BranchesTab({
 
     setIsCreatingBranch(true);
     try {
-      // Auto-prefix with username if available and not already prefixed
+      // Prefix with username if checkbox is checked
       let branchName = newBranchName.trim();
-      if (githubUsername && !branchName.includes("/")) {
+      if (prefixUsername && githubUsername) {
         branchName = `${githubUsername}/${branchName}`;
       }
 
@@ -223,42 +238,59 @@ export function BranchesTab({
           </button>
         ) : (
           <div className="branches-new-branch-form">
-            <input
-              type="text"
-              className="branches-new-branch-input"
-              placeholder={githubUsername ? `${githubUsername}/branch-name` : "branch-name"}
-              value={newBranchName}
-              onChange={(e) => setNewBranchName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreateBranch();
-                if (e.key === "Escape") {
-                  setShowNewBranch(false);
-                  setNewBranchName("");
-                }
-              }}
-              autoFocus
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-            />
-            <div className="branches-new-branch-actions">
-              <button
-                className="branch-card-action"
-                onClick={() => {
-                  setShowNewBranch(false);
-                  setNewBranchName("");
+            <div className="branches-new-branch-input-wrapper">
+              {prefixUsername && githubUsername && (
+                <span className="branches-new-branch-prefix">{githubUsername}/</span>
+              )}
+              <input
+                type="text"
+                className="branches-new-branch-input"
+                placeholder="branch-name"
+                value={newBranchName}
+                onChange={(e) => setNewBranchName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreateBranch();
+                  if (e.key === "Escape") {
+                    setShowNewBranch(false);
+                    setNewBranchName("");
+                  }
                 }}
-              >
-                Cancel
-              </button>
-              <button
-                className="branch-card-action primary"
-                onClick={handleCreateBranch}
-                disabled={!newBranchName.trim() || isCreatingBranch}
-              >
-                {isCreatingBranch ? "Creating..." : "Create"}
-              </button>
+                autoFocus
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+              />
+            </div>
+            <div className="branches-new-branch-footer">
+              {githubUsername && (
+                <label className="branches-new-branch-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={prefixUsername}
+                    onChange={(e) => handlePrefixChange(e.target.checked)}
+                  />
+                  <span>Add {githubUsername}/</span>
+                </label>
+              )}
+              <div className="branches-new-branch-actions">
+                <button
+                  className="branch-card-action"
+                  onClick={() => {
+                    setShowNewBranch(false);
+                    setNewBranchName("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="branch-card-action primary"
+                  onClick={handleCreateBranch}
+                  disabled={!newBranchName.trim() || isCreatingBranch}
+                >
+                  {isCreatingBranch ? "Creating..." : "Create"}
+                </button>
+              </div>
             </div>
           </div>
         )}

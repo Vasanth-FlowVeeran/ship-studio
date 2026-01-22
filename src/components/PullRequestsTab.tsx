@@ -30,6 +30,8 @@ interface PullRequestsTabProps {
   onBranchSwitch?: (branchName: string) => void;
   /** Callback to navigate to branches tab */
   onNavigateToBranches?: () => void;
+  /** Callback to resolve conflicts for a PR (headBranch, baseBranch) */
+  onResolveConflicts?: (headBranch: string, baseBranch: string) => void;
 }
 
 export function PullRequestsTab({
@@ -39,6 +41,7 @@ export function PullRequestsTab({
   onToast,
   onBranchSwitch,
   onNavigateToBranches,
+  onResolveConflicts,
 }: PullRequestsTabProps) {
   const [pullRequests, setPullRequests] = useState<PullRequestInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -162,6 +165,7 @@ export function PullRequestsTab({
               isOwn={pr.author === githubUsername}
               isMerging={mergingPr === pr.number}
               onMerge={() => handleMerge(pr.number, pr.headRef, pr.baseRef)}
+              onResolveConflicts={onResolveConflicts}
             />
           ))
         )}
@@ -223,9 +227,10 @@ interface PrCardProps {
   isOwn: boolean;
   isMerging: boolean;
   onMerge?: () => void;
+  onResolveConflicts?: (headBranch: string, baseBranch: string) => void;
 }
 
-function PrCard({ pr, isOwn, isMerging, onMerge }: PrCardProps) {
+function PrCard({ pr, isOwn, isMerging, onMerge, onResolveConflicts }: PrCardProps) {
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -286,14 +291,20 @@ function PrCard({ pr, isOwn, isMerging, onMerge }: PrCardProps) {
           >
             View on GitHub <ExternalLinkIcon size={10} />
           </button>
-          {onMerge && (
+          {hasConflicts && onResolveConflicts ? (
+            <button
+              className="branch-card-action primary"
+              onClick={() => onResolveConflicts(pr.headRef, pr.baseRef)}
+            >
+              Resolve
+            </button>
+          ) : onMerge && (
             <button
               className={`branch-card-action ${canMerge ? "primary" : ""}`}
               onClick={onMerge}
               disabled={isMerging || !canMerge}
-              title={hasConflicts ? "Resolve conflicts first" : undefined}
             >
-              {isMerging ? "Merging..." : hasConflicts ? "Resolve" : "Merge"}
+              {isMerging ? "Merging..." : "Merge"}
             </button>
           )}
         </div>

@@ -22,6 +22,8 @@ interface GitErrorHandlerProps {
   onSendToClaude?: (prompt: string) => void;
   /** Callback for toast notifications */
   onToast?: (message: string, type?: "success" | "error") => void;
+  /** Callback to open conflict resolution UI (only for merge_conflict type) */
+  onResolveConflicts?: () => void;
 }
 
 export function GitErrorHandler({
@@ -31,6 +33,7 @@ export function GitErrorHandler({
   onClose,
   onSendToClaude,
   onToast,
+  onResolveConflicts,
 }: GitErrorHandlerProps) {
   const getErrorInfo = () => {
     switch (errorType) {
@@ -55,7 +58,7 @@ export function GitErrorHandler({
       case "merge_conflict":
         return {
           title: "Merge conflict",
-          description: "There are conflicting changes that need to be resolved manually.",
+          description: "Someone else changed the same files you modified. You can resolve these conflicts visually or ask Claude for help.",
           claudePrompt: `I have merge conflicts on branch "${branchName}". Please help me:
 1. Show me which files have conflicts
 2. Guide me through resolving them
@@ -108,20 +111,40 @@ Please help me understand what went wrong and how to fix it.`,
         </div>
 
         <div className="git-error-footer">
-          <button
-            className="branch-card-action"
-            onClick={handleCopyPrompt}
-          >
-            <CopyIcon size={12} />
-            Copy to Clipboard
-          </button>
-          {onSendToClaude && (
-            <button
-              className="branch-card-action primary"
-              onClick={handleSendToClaude}
-            >
-              Send to Claude
-            </button>
+          {errorType === "merge_conflict" && onResolveConflicts ? (
+            <>
+              <button
+                className="branch-card-action"
+                onClick={handleCopyPrompt}
+              >
+                <CopyIcon size={12} />
+                Copy Prompt
+              </button>
+              <button
+                className="branch-card-action primary"
+                onClick={onResolveConflicts}
+              >
+                Resolve Conflicts
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className="branch-card-action"
+                onClick={handleCopyPrompt}
+              >
+                <CopyIcon size={12} />
+                Copy to Clipboard
+              </button>
+              {onSendToClaude && (
+                <button
+                  className="branch-card-action primary"
+                  onClick={handleSendToClaude}
+                >
+                  Send to Claude
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

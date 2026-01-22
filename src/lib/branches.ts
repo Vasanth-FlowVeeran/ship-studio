@@ -257,6 +257,17 @@ export async function mergePullRequest(
 }
 
 /**
+ * Pull remote changes and merge.
+ * This can result in merge conflicts if local and remote changes overlap.
+ * @param projectPath - Absolute path to the project directory
+ * @param mergeBranch - Optional branch to merge (e.g., "main"). If not provided, pulls from upstream.
+ * @throws Error with MERGE_CONFLICT prefix if conflicts occur
+ */
+export async function pullAndMerge(projectPath: string, mergeBranch?: string): Promise<void> {
+  return invoke("pull_and_merge", { projectPath, mergeBranch });
+}
+
+/**
  * Format a relative time string from a timestamp.
  * @param timestamp - Unix timestamp in milliseconds
  * @returns Human-readable relative time (e.g., "2 hours ago")

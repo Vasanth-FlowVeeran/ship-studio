@@ -41,6 +41,8 @@ export interface TerminalHandle {
   write: (data: string) => void;
   /** Paste text into the terminal */
   paste: (data: string) => void;
+  /** Kill the PTY process */
+  kill: () => void;
 }
 
 export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal({ projectPath, onExit }, ref) {
@@ -335,7 +337,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         (terminalRef.current as any).paste(data);
       }
     },
-  }), []);
+    kill: () => {
+      cleanup();
+    },
+  }), [cleanup]);
 
   return (
     <div

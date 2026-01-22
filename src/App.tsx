@@ -31,10 +31,13 @@ import { BranchesTab } from "./components/BranchesTab";
 import { PullRequestsTab } from "./components/PullRequestsTab";
 import { GitErrorHandler } from "./components/GitErrorHandler";
 import { SubmitReviewModal } from "./components/SubmitReviewModal";
+import { ConflictResolutionModal } from "./components/ConflictResolutionModal";
 import {
   BranchInfo,
   listBranches,
   getCurrentBranch,
+  switchBranch,
+  pullAndMerge,
 } from "./lib/branches";
 import {
   CodeIcon,
@@ -49,6 +52,7 @@ import {
   BranchIcon,
   PullRequestIcon,
   EyeIcon,
+  PlusIcon,
 } from "./components/icons";
 import { startDevServer, Project, DevServerHandle } from "./lib/project";
 import {
@@ -165,10 +169,17 @@ function App() {
   const [view, setView] = useState<AppView>("loading");
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const devServerRef = useRef<DevServerHandle | null>(null);
-  const terminalRef = useRef<TerminalHandle | null>(null);
+  const terminalRefsMap = useRef<Map<number, TerminalHandle | null>>(new Map());
   const previewRef = useRef<PreviewHandle | null>(null);
   const screenshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentProjectPathRef = useRef<string | null>(null);
+
+  // Terminal tabs state
+  const [terminalTabs, setTerminalTabs] = useState<number[]>([1]);
+  const [activeTerminalTab, setActiveTerminalTab] = useState(1);
+  const terminalTabCounterRef = useRef(1);
+  const [terminalSessionId, setTerminalSessionId] = useState(1); // Changes when project changes to force remount
+  const MAX_TERMINAL_TABS = 5;
 
   // Integration states consolidated via reducer for atomic updates
   const [integrations, dispatch] = useReducer(integrationReducer, initialIntegrationState);
@@ -213,6 +224,9 @@ function App() {
     message: string;
     branchName: string;
   } | null>(null);
+
+  // Conflict resolution modal state
+  const [showConflictResolution, setShowConflictResolution] = useState(false);
 
   // Workspace tab state (preview/branches/prs)
   const [workspaceTab, setWorkspaceTab] = useState<"preview" | "branches" | "prs">("preview");
@@ -347,8 +361,8 @@ function App() {
 
   // Focus terminal (called after modals close)
   const focusTerminal = useCallback(() => {
-    terminalRef.current?.focus();
-  }, []);
+    terminalRefsMap.current.get(activeTerminalTab)?.focus();
+  }, [activeTerminalTab]);
 
   // Handle capture for Claude - screenshot preview and paste path into terminal
   const handleCaptureForClaude = useCallback(async () => {
@@ -360,12 +374,12 @@ function App() {
       if (filePath) {
         // Quote path if it contains spaces
         const quotedPath = filePath.includes(" ") ? `"${filePath}"` : filePath;
-        terminalRef.current?.paste(quotedPath);
+        terminalRefsMap.current.get(activeTerminalTab)?.paste(quotedPath);
       }
     } finally {
       setIsCapturing(false);
     }
-  }, [isCapturing]);
+  }, [isCapturing, activeTerminalTab]);
 
   // Handle crop mode start - show loading state
   const handleCropStart = useCallback(() => {
@@ -378,9 +392,9 @@ function App() {
     setIsCropCapturing(false);
     if (filePath) {
       const quotedPath = filePath.includes(" ") ? `"${filePath}"` : filePath;
-      terminalRef.current?.paste(quotedPath);
+      terminalRefsMap.current.get(activeTerminalTab)?.paste(quotedPath);
     }
-  }, []);
+  }, [activeTerminalTab]);
 
   // Handle crop mode cancel
   const handleCropCancel = useCallback(() => {
@@ -454,7 +468,7 @@ function App() {
   }, [currentProject, fetchBranchInfo, checkUncommittedChanges]);
 
   // Handle publish error
-  const handlePublishError = useCallback((error: string, errorType: "push_rejected" | "auth_error" | "generic") => {
+  const handlePublishError = useCallback((error: string, errorType: "push_rejected" | "auth_error" | "merge_conflict" | "generic") => {
     if (currentBranch) {
       setGitError({
         errorType,
@@ -464,10 +478,99 @@ function App() {
     }
   }, [currentBranch]);
 
+  // Handle opening conflict resolution modal
+  // For PR conflicts: switch to head branch, merge base branch, then show UI
+  const handleResolveConflicts = useCallback(async (headBranch?: string, baseBranch?: string) => {
+    setGitError(null);
+
+    if (!currentProject) return;
+
+    // If we have branch info, we're resolving PR conflicts
+    if (headBranch && baseBranch) {
+      try {
+        showToast("Preparing to resolve conflicts...", "success");
+
+        // Switch to the PR's head branch
+        const switchResult = await switchBranch(currentProject.path, headBranch, true);
+        if (!switchResult.success) {
+          showToast(switchResult.error || "Failed to switch branch", "error");
+          return;
+        }
+
+        // Update current branch state
+        setCurrentBranch(headBranch);
+
+        // Merge the base branch to create conflicts locally
+        try {
+          await pullAndMerge(currentProject.path, baseBranch);
+          // If merge succeeds without conflicts, we're done
+          showToast("Branch is up to date, no conflicts!", "success");
+          fetchBranchInfo(currentProject.path);
+          return;
+        } catch (e) {
+          const errorMsg = e instanceof Error ? e.message : String(e);
+          if (errorMsg.includes("MERGE_CONFLICT")) {
+            // Conflicts created locally - show the UI
+            setShowConflictResolution(true);
+          } else {
+            showToast(`Failed to merge: ${errorMsg}`, "error");
+          }
+        }
+      } catch (e) {
+        showToast(`Error: ${e instanceof Error ? e.message : String(e)}`, "error");
+      }
+    } else {
+      // Direct conflict resolution (e.g., from GitErrorHandler after a failed push)
+      setShowConflictResolution(true);
+    }
+  }, [currentProject, showToast, fetchBranchInfo]);
+
+  // Handle conflict resolution completed
+  const handleConflictsResolved = useCallback(() => {
+    setShowConflictResolution(false);
+    if (currentProject) {
+      fetchBranchInfo(currentProject.path);
+    }
+  }, [currentProject, fetchBranchInfo]);
+
   // Send prompt to Claude terminal
   const sendToClaude = useCallback((prompt: string) => {
-    terminalRef.current?.paste(prompt);
+    terminalRefsMap.current.get(activeTerminalTab)?.paste(prompt);
+  }, [activeTerminalTab]);
+
+  // Kill all terminal processes
+  const killAllTerminals = useCallback(() => {
+    terminalRefsMap.current.forEach((ref) => {
+      ref?.kill();
+    });
+    terminalRefsMap.current.clear();
   }, []);
+
+  // Terminal tab management
+  const addTerminalTab = useCallback(() => {
+    if (terminalTabs.length >= MAX_TERMINAL_TABS) return;
+    const newTabId = ++terminalTabCounterRef.current;
+    setTerminalTabs(prev => [...prev, newTabId]);
+    setActiveTerminalTab(newTabId);
+  }, [terminalTabs.length]);
+
+  const closeTerminalTab = useCallback((tabId: number) => {
+    // Don't close if it's the last tab
+    if (terminalTabs.length <= 1) return;
+
+    setTerminalTabs(prev => {
+      const newTabs = prev.filter(id => id !== tabId);
+      // If we're closing the active tab, switch to the previous one or the first
+      if (tabId === activeTerminalTab) {
+        const closedIndex = prev.indexOf(tabId);
+        const newActiveIndex = Math.max(0, closedIndex - 1);
+        setActiveTerminalTab(newTabs[newActiveIndex]);
+      }
+      return newTabs;
+    });
+    // Clean up the ref
+    terminalRefsMap.current.delete(tabId);
+  }, [terminalTabs, activeTerminalTab]);
 
   // Handle terminal exit (memoized to prevent re-spawning Claude on every render)
   const handleTerminalExit = useCallback((code: number | null) => {
@@ -519,6 +622,13 @@ function App() {
     // Reset publishing and auto-connecting state when switching projects
     setIsPublishing(false);
     setIsVercelAutoConnecting(false);
+
+    // Kill all terminals and reset tabs
+    killAllTerminals();
+    terminalTabCounterRef.current = 1;
+    setTerminalTabs([1]);
+    setActiveTerminalTab(1);
+    setTerminalSessionId(prev => prev + 1);
 
     setCurrentProject(project);
     setCurrentPreviewPage("/");
@@ -590,6 +700,13 @@ function App() {
     setCurrentBranch(null);
     setBranches([]);
     setHasUncommittedChanges(false);
+
+    // Kill all terminals and reset tabs
+    killAllTerminals();
+    terminalTabCounterRef.current = 1;
+    setTerminalTabs([1]);
+    setActiveTerminalTab(1);
+    setTerminalSessionId(prev => prev + 1);
 
     // Stop dev server if running
     if (devServerRef.current) {
@@ -833,13 +950,56 @@ function App() {
                   </button>
                 </div>
               </div>
+              <div className="terminal-tabs-bar">
+                <div className="terminal-tabs">
+                  {terminalTabs.map((tabId, index) => (
+                    <button
+                      key={tabId}
+                      className={`terminal-tab ${activeTerminalTab === tabId ? 'active' : ''}`}
+                      onClick={() => setActiveTerminalTab(tabId)}
+                    >
+                      <span className="terminal-tab-number">{index + 1}</span>
+                      {terminalTabs.length > 1 && (
+                        <span
+                          className="terminal-tab-close"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeTerminalTab(tabId);
+                          }}
+                        >
+                          <CloseIcon size={10} />
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {terminalTabs.length < MAX_TERMINAL_TABS && (
+                  <button
+                    className="terminal-tab-add"
+                    onClick={addTerminalTab}
+                  >
+                    <PlusIcon size={12} />
+                  </button>
+                )}
+              </div>
               <div className="terminal-content">
-                <Terminal
-                  key={currentProject?.path || "none"}
-                  ref={terminalRef}
-                  projectPath={currentProject?.path || ""}
-                  onExit={handleTerminalExit}
-                />
+                {terminalTabs.map(tabId => (
+                  <div
+                    key={`session-${terminalSessionId}-tab-${tabId}`}
+                    className="terminal-tab-content"
+                    style={{ display: activeTerminalTab === tabId ? 'block' : 'none' }}
+                  >
+                    <Terminal
+                      ref={(ref) => {
+                        if (ref) {
+                          terminalRefsMap.current.set(tabId, ref);
+                        }
+                      }}
+                      projectPath={currentProject?.path || ""}
+                      onExit={handleTerminalExit}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           }
@@ -925,6 +1085,7 @@ function App() {
                   onToast={showToast}
                   onBranchSwitch={handleBranchSwitch}
                   onNavigateToBranches={() => setWorkspaceTab("branches")}
+                  onResolveConflicts={handleResolveConflicts}
                 />
               )}
             </div>
@@ -989,6 +1150,20 @@ function App() {
           branchName={gitError.branchName}
           onClose={() => setGitError(null)}
           onSendToClaude={sendToClaude}
+          onToast={showToast}
+          onResolveConflicts={handleResolveConflicts}
+        />
+      )}
+
+      {/* Conflict Resolution Modal */}
+      {showConflictResolution && currentProject && (
+        <ConflictResolutionModal
+          projectPath={currentProject.path}
+          onClose={() => {
+            setShowConflictResolution(false);
+            focusTerminal();
+          }}
+          onResolved={handleConflictsResolved}
           onToast={showToast}
         />
       )}

@@ -607,26 +607,73 @@
   border-radius: 8px;
 }
 
-.branches-new-branch-input {
-  width: 100%;
-  padding: 10px 12px;
+.branches-new-branch-input-wrapper {
+  display: flex;
+  align-items: center;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s;
-  box-sizing: border-box;
+  overflow: hidden;
   margin-bottom: 12px;
 }
 
-.branches-new-branch-input:focus {
+.branches-new-branch-input-wrapper:focus-within {
   border-color: #3b82f6;
+}
+
+.branches-new-branch-prefix {
+  padding: 10px 0 10px 12px;
+  color: var(--text-muted);
+  font-size: 14px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.branches-new-branch-input {
+  flex: 1;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+
+.branches-new-branch-prefix + .branches-new-branch-input {
+  padding-left: 0;
 }
 
 .branches-new-branch-input::placeholder {
   color: var(--text-muted);
+}
+
+.branches-new-branch-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.branches-new-branch-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.branches-new-branch-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.branches-new-branch-checkbox:hover {
+  color: var(--text-secondary);
 }
 
 .branches-new-branch-actions {
@@ -1061,7 +1108,7 @@
 }
 
 .pr-card-warning {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-top: 8px;
@@ -1324,6 +1371,7 @@ select.submit-review-input {
   padding: 12px 20px;
   border-top: 1px solid var(--border);
   background: var(--bg-tertiary);
+  overflow: hidden;
 }
 
 .unsaved-changes-btn {
@@ -1332,7 +1380,9 @@ select.submit-review-input {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .unsaved-changes-btn.secondary {
@@ -1360,6 +1410,9 @@ select.submit-review-input {
   background: #3b82f6;
   border: 1px solid #3b82f6;
   color: white;
+  min-width: 120px;
+  text-align: center;
+  justify-content: center;
 }
 
 .unsaved-changes-btn.primary:hover {
