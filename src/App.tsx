@@ -20,7 +20,7 @@ import { Terminal, TerminalHandle } from "./components/Terminal";
 import { Preview, PreviewHandle } from "./components/Preview";
 import { ProjectList } from "./components/ProjectList";
 import { CreateProject } from "./components/CreateProject";
-import { SetupScreen } from "./components/SetupScreen";
+import { OnboardingScreen } from "./components/setup";
 import { SplitPane } from "./components/SplitPane";
 import { GitHubButton } from "./components/GitHubButton";
 import { VercelButton } from "./components/VercelButton";
@@ -37,7 +37,7 @@ import {
   VSCodeIcon,
   CursorIcon,
 } from "./components/icons";
-import { checkPrerequisites, startDevServer, Prerequisite, Project, DevServerHandle } from "./lib/project";
+import { startDevServer, Project, DevServerHandle } from "./lib/project";
 import {
   checkGitHubCliStatus,
   getGitHubUsername,
@@ -53,6 +53,7 @@ import {
   ProjectVercelStatus,
 } from "./lib/vercel";
 import { checkClaudeCliStatus, ClaudeCliStatus } from "./lib/claude";
+import { getFullSetupStatus } from "./lib/setup";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { invoke } from "@tauri-apps/api/core";
 import "./styles/index.css";
@@ -65,7 +66,7 @@ const SCREENSHOT_DELAY_MS = 2000;
 const DEV_SERVER_PORT = 3000;
 
 /** Current application view/screen */
-type AppView = "loading" | "setup" | "projects" | "project-loading" | "workspace";
+type AppView = "loading" | "onboarding" | "projects" | "project-loading" | "workspace";
 
 /** Global GitHub CLI and authentication state */
 export interface GitHubState {
@@ -149,7 +150,6 @@ function integrationReducer(state: IntegrationState, action: IntegrationAction):
 
 function App() {
   const [view, setView] = useState<AppView>("loading");
-  const [prerequisites, setPrerequisites] = useState<Prerequisite[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const devServerRef = useRef<DevServerHandle | null>(null);
   const terminalRef = useRef<TerminalHandle | null>(null);
@@ -236,8 +236,8 @@ function App() {
   const checkSetup = async () => {
     setView("loading");
     try {
-      const prereqs = await checkPrerequisites();
-      setPrerequisites(prereqs);
+      // Get full setup status (tools + auth)
+      const setupStatus = await getFullSetupStatus();
 
       // Check GitHub, Vercel, and Claude status in parallel
       const [ghStatus, vcStatus, clStatus] = await Promise.all([
@@ -274,15 +274,15 @@ function App() {
         },
       });
 
-      const allAvailable = prereqs.every((p) => p.available);
-      if (allAvailable) {
+      // Use full setup status to determine if onboarding is needed
+      if (setupStatus.allReady) {
         setView("projects");
       } else {
-        setView("setup");
+        setView("onboarding");
       }
     } catch (error) {
       console.error("Failed to check prerequisites:", error);
-      setView("setup");
+      setView("onboarding");
     }
   };
 
@@ -544,10 +544,10 @@ function App() {
     );
   }
 
-  if (view === "setup") {
+  if (view === "onboarding") {
     return (
       <div className="app">
-        <SetupScreen prerequisites={prerequisites} onRetry={checkSetup} />
+        <OnboardingScreen onComplete={checkSetup} />
       </div>
     );
   }

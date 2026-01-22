@@ -1,4 +1,291 @@
-/* Setup Screen */
+/* Setup/Onboarding Screen Styles */
+
+/* ============ Onboarding Screen ============ */
+
+.onboarding-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px 24px;
+}
+
+.onboarding-loading {
+  gap: 16px;
+  color: var(--text-secondary);
+}
+
+.onboarding-content {
+  max-width: 500px;
+  width: 100%;
+}
+
+.onboarding-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.onboarding-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.onboarding-header p {
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.onboarding-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.onboarding-error p {
+  color: var(--error);
+  margin-bottom: 12px;
+}
+
+/* ============ Setup Checklist ============ */
+
+.setup-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+/* ============ Setup Item ============ */
+
+.setup-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.setup-item:hover {
+  border-color: var(--border-hover);
+}
+
+.setup-item-status-ready {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.setup-item-status-error {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.setup-item-status-blocked {
+  opacity: 0.6;
+}
+
+.setup-item-icon-container {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.setup-item-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.setup-item-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.setup-item-name {
+  font-weight: 500;
+  font-size: 14px;
+  flex: 1;
+}
+
+.setup-item-action {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-item-info {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.setup-item-blocked-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.setup-item-progress-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.setup-item-error-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.setup-item-error-text {
+  font-size: 12px;
+  color: var(--error);
+  max-width: 180px;
+}
+
+.setup-item-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+}
+
+.setup-item-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.setup-item-btn-install,
+.setup-item-btn-connect {
+  background: var(--accent);
+  color: white;
+}
+
+.setup-item-btn-install:hover:not(:disabled),
+.setup-item-btn-connect:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.setup-item-btn-retry {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.setup-item-btn-retry:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+/* ============ Progress Bar ============ */
+
+.onboarding-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.onboarding-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.onboarding-progress-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.onboarding-progress-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ============ Celebration Screen ============ */
+
+.celebration-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px 24px;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.celebration-screen.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.celebration-content {
+  text-align: center;
+}
+
+.celebration-icon {
+  margin-bottom: 24px;
+  animation: pop 0.5s ease;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.celebration-title {
+  font-size: 32px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.celebration-subtitle {
+  color: var(--text-secondary);
+  font-size: 16px;
+  margin-bottom: 32px;
+}
+
+.celebration-btn {
+  padding: 12px 32px;
+  font-size: 15px;
+}
+
+/* ============ Legacy Setup Screen (kept for reference) ============ */
+
 .setup-screen {
   max-width: 600px;
   margin: 0 auto;
@@ -88,4 +375,3 @@
   color: var(--text-secondary);
   margin-bottom: 16px;
 }
-

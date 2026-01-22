@@ -22,6 +22,14 @@ const INSTALL_INSTRUCTIONS: Record<string, { url: string; command?: string }> = 
     url: "https://git-scm.com",
     command: "brew install git",
   },
+  gh: {
+    url: "https://cli.github.com",
+    command: "brew install gh",
+  },
+  vercel: {
+    url: "https://vercel.com/docs/cli",
+    command: "npm install -g vercel",
+  },
   claude: {
     url: "https://docs.anthropic.com/en/docs/claude-code",
     command: "npm install -g @anthropic-ai/claude-code",

@@ -1,6 +1,6 @@
 [package]
 name = "marketingstack"
-version = "0.1.0"
+version = "0.1.1"
 description = "Marketingstack - Launch Claude Code for marketing sites"
 authors = ["Julian Galluzzo"]
 edition = "2021"

@@ -20,6 +20,44 @@ use tauri::{Emitter, Manager};
 /// Counter for generating unique PTY IDs
 static PTY_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
+/// Builds an extended PATH that includes common tool installation locations.
+/// macOS apps launched from Finder don't inherit the user's shell PATH,
+/// so we need to explicitly add Homebrew, npm global, and NVM paths.
+fn get_extended_path() -> String {
+    let current_path = std::env::var("PATH").unwrap_or_default();
+
+    let mut paths: Vec<String> = vec![
+        "/opt/homebrew/bin".to_string(),      // Homebrew (Apple Silicon)
+        "/opt/homebrew/sbin".to_string(),
+        "/usr/local/bin".to_string(),         // Homebrew (Intel) / manual installs
+        "/usr/local/sbin".to_string(),
+    ];
+
+    // Add user-specific paths
+    if let Some(home) = dirs::home_dir() {
+        let home_str = home.to_string_lossy();
+        paths.push(format!("{}/.npm-global/bin", home_str));
+        paths.push(format!("{}/n/bin", home_str));
+
+        // Add NVM current version if it exists
+        let nvm_base = home.join(".nvm/versions/node");
+        if nvm_base.exists() {
+            if let Ok(entries) = std::fs::read_dir(&nvm_base) {
+                for entry in entries.flatten() {
+                    paths.push(format!("{}/bin", entry.path().to_string_lossy()));
+                }
+            }
+        }
+    }
+
+    // Append existing PATH
+    if !current_path.is_empty() {
+        paths.push(current_path);
+    }
+
+    paths.join(":")
+}
+
 /// Result of checking if a prerequisite tool is installed
 #[derive(Serialize)]
 struct PrerequisiteCheck {
@@ -28,17 +66,68 @@ struct PrerequisiteCheck {
     path: Option<String>,
 }
 
-/// Checks if required tools (node, npm, git, claude) are installed.
+/// Finds an executable by checking common installation paths.
+/// This is needed because bundled macOS apps don't inherit the user's shell PATH.
+fn find_executable(cmd: &str) -> Option<std::path::PathBuf> {
+    // First try which (works in dev and if PATH is set)
+    if let Ok(path) = which::which(cmd) {
+        return Some(path);
+    }
+
+    // Check common installation paths for macOS
+    let common_paths = vec![
+        std::path::PathBuf::from("/opt/homebrew/bin").join(cmd),  // Homebrew (Apple Silicon)
+        std::path::PathBuf::from("/usr/local/bin").join(cmd),     // Homebrew (Intel) / manual
+        std::path::PathBuf::from("/usr/bin").join(cmd),           // System
+    ];
+
+    for path in common_paths {
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    // For npm-installed tools (like claude), check additional locations
+    if let Some(home) = dirs::home_dir() {
+        let npm_paths = vec![
+            home.join(".npm-global/bin").join(cmd),
+            home.join("n/bin").join(cmd),  // n version manager
+        ];
+
+        for path in npm_paths {
+            if path.exists() {
+                return Some(path);
+            }
+        }
+
+        // Check NVM installations (glob for any node version)
+        let nvm_base = home.join(".nvm/versions/node");
+        if nvm_base.exists() {
+            if let Ok(entries) = std::fs::read_dir(&nvm_base) {
+                for entry in entries.flatten() {
+                    let bin_path = entry.path().join("bin").join(cmd);
+                    if bin_path.exists() {
+                        return Some(bin_path);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Checks if required tools (node, npm, git, gh, vercel, claude) are installed.
 /// Returns availability and path for each tool.
 #[tauri::command]
 async fn check_prerequisites() -> Vec<PrerequisiteCheck> {
-    let commands = vec!["node", "npm", "git", "claude"];
+    let commands = vec!["node", "npm", "git", "gh", "vercel", "claude"];
     let mut results = Vec::new();
 
     for cmd in commands {
-        let (available, path) = match which::which(cmd) {
-            Ok(p) => (true, Some(p.to_string_lossy().to_string())),
-            Err(_) => (false, None),
+        let (available, path) = match find_executable(cmd) {
+            Some(p) => (true, Some(p.to_string_lossy().to_string())),
+            None => (false, None),
         };
         results.push(PrerequisiteCheck {
             name: cmd.to_string(),
@@ -1294,7 +1383,11 @@ fn find_claude_binary() -> Option<std::path::PathBuf> {
         }
 
         // Check npm prefix
-        if let Ok(output) = Command::new("npm").args(["prefix", "-g"]).output() {
+        if let Ok(output) = Command::new("npm")
+            .args(["prefix", "-g"])
+            .env("PATH", get_extended_path())
+            .output()
+        {
             if output.status.success() {
                 let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let claude_path = std::path::PathBuf::from(&prefix).join("bin/claude");
@@ -1343,11 +1436,12 @@ async fn check_claude_cli_status() -> ClaudeCliStatus {
 
 #[tauri::command]
 async fn install_claude_cli() -> Result<(), String> {
-    // Install Claude Code globally via npm
-    let output = Command::new("npm")
-        .args(["install", "-g", "@anthropic-ai/claude-code"])
+    // Install Claude Code via official installer script
+    let output = Command::new("bash")
+        .args(["-c", "curl -fsSL https://claude.ai/install.sh | bash"])
+        .env("PATH", get_extended_path())
         .output()
-        .map_err(|e| format!("Failed to run npm: {}", e))?;
+        .map_err(|e| format!("Failed to run installer: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1388,7 +1482,11 @@ fn find_vercel_binary() -> Option<std::path::PathBuf> {
         }
 
         // Check npm prefix
-        if let Ok(output) = Command::new("npm").args(["prefix", "-g"]).output() {
+        if let Ok(output) = Command::new("npm")
+            .args(["prefix", "-g"])
+            .env("PATH", get_extended_path())
+            .output()
+        {
             if output.status.success() {
                 let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let vercel_path = std::path::PathBuf::from(&prefix).join("bin/vercel");
@@ -1403,12 +1501,15 @@ fn find_vercel_binary() -> Option<std::path::PathBuf> {
 }
 
 fn get_vercel_command() -> Command {
-    if let Some(path) = find_vercel_binary() {
+    let mut cmd = if let Some(path) = find_vercel_binary() {
         Command::new(path)
     } else {
         // Fallback to system PATH
         Command::new("vercel")
-    }
+    };
+    // Ensure extended PATH is available for any child processes
+    cmd.env("PATH", get_extended_path());
+    cmd
 }
 
 #[tauri::command]
@@ -1416,6 +1517,7 @@ async fn install_vercel_cli() -> Result<(), String> {
     // Install Vercel CLI globally via npm
     let output = Command::new("npm")
         .args(["install", "-g", "vercel"])
+        .env("PATH", get_extended_path())
         .output()
         .map_err(|e| format!("Failed to run npm: {}", e))?;
 
@@ -1900,6 +2002,17 @@ async fn link_to_vercel(options: LinkToVercelOptions) -> Result<String, String> 
 
 // ============ GitHub Integration ============
 
+/// Returns a Command for gh with extended PATH set
+fn get_gh_command() -> Command {
+    let mut cmd = if let Some(path) = find_executable("gh") {
+        Command::new(path)
+    } else {
+        Command::new("gh")
+    };
+    cmd.env("PATH", get_extended_path());
+    cmd
+}
+
 #[derive(Serialize)]
 struct GitHubCliStatus {
     installed: bool,
@@ -1909,7 +2022,7 @@ struct GitHubCliStatus {
 #[tauri::command]
 async fn check_github_cli_status() -> GitHubCliStatus {
     // Check if gh CLI is installed
-    let installed = which::which("gh").is_ok();
+    let installed = find_executable("gh").is_some();
 
     if !installed {
         return GitHubCliStatus {
@@ -1919,7 +2032,7 @@ async fn check_github_cli_status() -> GitHubCliStatus {
     }
 
     // Check if authenticated
-    let authenticated = Command::new("gh")
+    let authenticated = get_gh_command()
         .args(["auth", "status"])
         .output()
         .map(|output| output.status.success())
@@ -1933,7 +2046,7 @@ async fn check_github_cli_status() -> GitHubCliStatus {
 
 #[tauri::command]
 async fn get_github_username() -> Result<String, String> {
-    let output = Command::new("gh")
+    let output = get_gh_command()
         .args(["api", "user", "--jq", ".login"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -1949,7 +2062,7 @@ async fn get_github_username() -> Result<String, String> {
 #[tauri::command]
 async fn get_github_orgs() -> Result<Vec<String>, String> {
     // Get orgs where user can create repos
-    let output = Command::new("gh")
+    let output = get_gh_command()
         .args(["api", "user/orgs", "--jq", ".[].login"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -2033,7 +2146,7 @@ async fn get_project_github_status(project_path: String) -> ProjectGitHubStatus 
     };
 
     // Verify repo exists on GitHub using gh CLI
-    let gh_output = Command::new("gh")
+    let gh_output = get_gh_command()
         .args(["repo", "view", &github_repo, "--json", "url"])
         .current_dir(&project)
         .output();
@@ -2226,7 +2339,7 @@ async fn push_to_github(options: PushToGitHubOptions) -> Result<String, String> 
     }
 
     // Create GitHub repo and push
-    let output = Command::new("gh")
+    let output = get_gh_command()
         .args([
             "repo", "create", repo_name,
             visibility,
@@ -2800,6 +2913,471 @@ async fn kill_port(port: u32) -> Result<(), String> {
     Ok(())
 }
 
+// ============ Setup/Onboarding ============
+
+/// Individual setup item status
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+enum SetupItemStatus {
+    Ready,
+    NotInstalled,
+    NotAuthenticated,
+    Error,
+}
+
+/// Individual setup item
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SetupItemInfo {
+    id: String,
+    friendly_name: String,
+    status: SetupItemStatus,
+    version: Option<String>,
+    username: Option<String>,
+    error_message: Option<String>,
+}
+
+/// Full setup status response
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FullSetupStatus {
+    all_ready: bool,
+    items: Vec<SetupItemInfo>,
+}
+
+/// Check if Homebrew is installed
+fn check_homebrew() -> (bool, Option<String>) {
+    let paths = [
+        std::path::PathBuf::from("/opt/homebrew/bin/brew"),
+        std::path::PathBuf::from("/usr/local/bin/brew"),
+    ];
+
+    for path in paths {
+        if path.exists() {
+            // Get version
+            let version = Command::new(&path)
+                .args(["--version"])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        let out = String::from_utf8_lossy(&o.stdout);
+                        out.lines().next().map(|s| s.trim().to_string())
+                    } else {
+                        None
+                    }
+                });
+            return (true, version);
+        }
+    }
+    (false, None)
+}
+
+/// Get Homebrew command
+fn get_brew_command() -> Option<std::path::PathBuf> {
+    let paths = [
+        std::path::PathBuf::from("/opt/homebrew/bin/brew"),
+        std::path::PathBuf::from("/usr/local/bin/brew"),
+    ];
+    paths.into_iter().find(|p| p.exists())
+}
+
+/// Get full setup status for all items
+#[tauri::command]
+async fn get_full_setup_status() -> FullSetupStatus {
+    let mut items = Vec::new();
+
+    // 1. Homebrew
+    let (brew_installed, brew_version) = check_homebrew();
+    items.push(SetupItemInfo {
+        id: "homebrew".to_string(),
+        friendly_name: "Package Manager".to_string(),
+        status: if brew_installed { SetupItemStatus::Ready } else { SetupItemStatus::NotInstalled },
+        version: brew_version,
+        username: None,
+        error_message: None,
+    });
+
+    // 2. Node.js
+    let node_path = find_executable("node");
+    let node_version = node_path.as_ref().and_then(|p| {
+        Command::new(p).args(["--version"]).output().ok().and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+    });
+    items.push(SetupItemInfo {
+        id: "node".to_string(),
+        friendly_name: "Node.js".to_string(),
+        status: if node_path.is_some() { SetupItemStatus::Ready } else { SetupItemStatus::NotInstalled },
+        version: node_version,
+        username: None,
+        error_message: None,
+    });
+
+    // 3. Git
+    let git_path = find_executable("git");
+    let git_version = git_path.as_ref().and_then(|p| {
+        Command::new(p).args(["--version"]).output().ok().and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+    });
+    items.push(SetupItemInfo {
+        id: "git".to_string(),
+        friendly_name: "Git".to_string(),
+        status: if git_path.is_some() { SetupItemStatus::Ready } else { SetupItemStatus::NotInstalled },
+        version: git_version,
+        username: None,
+        error_message: None,
+    });
+
+    // 4. GitHub CLI
+    let gh_path = find_executable("gh");
+    let gh_version = gh_path.as_ref().and_then(|p| {
+        Command::new(p).args(["--version"]).output().ok().and_then(|o| {
+            if o.status.success() {
+                let out = String::from_utf8_lossy(&o.stdout);
+                out.lines().next().map(|s| s.trim().to_string())
+            } else {
+                None
+            }
+        })
+    });
+    items.push(SetupItemInfo {
+        id: "gh".to_string(),
+        friendly_name: "GitHub CLI".to_string(),
+        status: if gh_path.is_some() { SetupItemStatus::Ready } else { SetupItemStatus::NotInstalled },
+        version: gh_version,
+        username: None,
+        error_message: None,
+    });
+
+    // 5. GitHub Auth
+    let gh_auth = if gh_path.is_some() {
+        get_gh_command()
+            .args(["auth", "status"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    } else {
+        false
+    };
+    let gh_username = if gh_auth {
+        get_gh_command()
+            .args(["api", "user", "--jq", ".login"])
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+    } else {
+        None
+    };
+    items.push(SetupItemInfo {
+        id: "gh_auth".to_string(),
+        friendly_name: "GitHub Account".to_string(),
+        status: if gh_auth {
+            SetupItemStatus::Ready
+        } else if gh_path.is_some() {
+            SetupItemStatus::NotAuthenticated
+        } else {
+            SetupItemStatus::NotInstalled
+        },
+        version: None,
+        username: gh_username,
+        error_message: None,
+    });
+
+    // 6. Claude Code
+    let claude_path = find_claude_binary();
+    let claude_version = claude_path.as_ref().and_then(|p| {
+        Command::new(p).args(["--version"]).output().ok().and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+    });
+    items.push(SetupItemInfo {
+        id: "claude".to_string(),
+        friendly_name: "Claude Code".to_string(),
+        status: if claude_path.is_some() { SetupItemStatus::Ready } else { SetupItemStatus::NotInstalled },
+        version: claude_version,
+        username: None,
+        error_message: None,
+    });
+
+    // 7. Claude Auth - check if claude is authenticated
+    let claude_auth = claude_path.as_ref().map(|p| {
+        Command::new(p)
+            .args(["auth", "status"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }).unwrap_or(false);
+    items.push(SetupItemInfo {
+        id: "claude_auth".to_string(),
+        friendly_name: "Claude Account".to_string(),
+        status: if claude_auth {
+            SetupItemStatus::Ready
+        } else if claude_path.is_some() {
+            SetupItemStatus::NotAuthenticated
+        } else {
+            SetupItemStatus::NotInstalled
+        },
+        version: None,
+        username: None,
+        error_message: None,
+    });
+
+    // 8. Vercel CLI
+    let vercel_path = find_vercel_binary();
+    let vercel_version = vercel_path.as_ref().and_then(|p| {
+        Command::new(p).args(["--version"]).output().ok().and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+    });
+    items.push(SetupItemInfo {
+        id: "vercel".to_string(),
+        friendly_name: "Vercel CLI".to_string(),
+        status: if vercel_path.is_some() { SetupItemStatus::Ready } else { SetupItemStatus::NotInstalled },
+        version: vercel_version,
+        username: None,
+        error_message: None,
+    });
+
+    // 9. Vercel Auth
+    let vercel_auth = if vercel_path.is_some() {
+        get_vercel_command()
+            .args(["whoami"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    } else {
+        false
+    };
+    let vercel_username = if vercel_auth {
+        get_vercel_command()
+            .args(["whoami"])
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+    } else {
+        None
+    };
+    items.push(SetupItemInfo {
+        id: "vercel_auth".to_string(),
+        friendly_name: "Vercel Account".to_string(),
+        status: if vercel_auth {
+            SetupItemStatus::Ready
+        } else if vercel_path.is_some() {
+            SetupItemStatus::NotAuthenticated
+        } else {
+            SetupItemStatus::NotInstalled
+        },
+        version: None,
+        username: vercel_username,
+        error_message: None,
+    });
+
+    let all_ready = items.iter().all(|i| matches!(i.status, SetupItemStatus::Ready));
+
+    FullSetupStatus { all_ready, items }
+}
+
+/// Install Homebrew
+#[tauri::command]
+async fn install_homebrew(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "itemId": "homebrew",
+        "message": "Installing package manager..."
+    }));
+
+    // Run the Homebrew installer
+    let output = Command::new("bash")
+        .args(["-c", "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""])
+        .env("NONINTERACTIVE", "1") // Skip prompts
+        .output()
+        .map_err(|e| format!("Failed to run Homebrew installer: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Homebrew installation failed: {}", stderr));
+    }
+
+    Ok(())
+}
+
+/// Install Node.js via Homebrew
+#[tauri::command]
+async fn install_node_via_brew(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "itemId": "node",
+        "message": "Installing Node.js..."
+    }));
+
+    let brew = get_brew_command().ok_or("Homebrew not found")?;
+
+    let output = Command::new(&brew)
+        .args(["install", "node"])
+        .output()
+        .map_err(|e| format!("Failed to run brew: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to install Node.js: {}", stderr));
+    }
+
+    Ok(())
+}
+
+/// Install Git via Homebrew
+#[tauri::command]
+async fn install_git_via_brew(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "itemId": "git",
+        "message": "Installing Git..."
+    }));
+
+    let brew = get_brew_command().ok_or("Homebrew not found")?;
+
+    let output = Command::new(&brew)
+        .args(["install", "git"])
+        .output()
+        .map_err(|e| format!("Failed to run brew: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to install Git: {}", stderr));
+    }
+
+    Ok(())
+}
+
+/// Install GitHub CLI via Homebrew
+#[tauri::command]
+async fn install_gh_via_brew(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "itemId": "gh",
+        "message": "Installing GitHub CLI..."
+    }));
+
+    let brew = get_brew_command().ok_or("Homebrew not found")?;
+
+    let output = Command::new(&brew)
+        .args(["install", "gh"])
+        .output()
+        .map_err(|e| format!("Failed to run brew: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to install GitHub CLI: {}", stderr));
+    }
+
+    Ok(())
+}
+
+/// Start GitHub authentication (opens browser)
+#[tauri::command]
+async fn start_github_auth(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "itemId": "gh_auth",
+        "message": "Connecting to GitHub..."
+    }));
+
+    // Start gh auth login in the background - it will open the browser
+    let gh_path = find_executable("gh").ok_or("GitHub CLI not installed")?;
+
+    // Use --web to open browser for auth
+    let child = Command::new(&gh_path)
+        .args(["auth", "login", "--web", "--git-protocol", "https"])
+        .spawn()
+        .map_err(|e| format!("Failed to start GitHub auth: {}", e))?;
+
+    // Don't wait for the child - it runs in background and frontend will poll
+    std::mem::forget(child);
+
+    Ok(())
+}
+
+/// Start Claude authentication
+#[tauri::command]
+async fn start_claude_auth(app: tauri::AppHandle) -> Result<u32, String> {
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "itemId": "claude_auth",
+        "message": "Connecting to Claude..."
+    }));
+
+    let claude_path = find_claude_binary().ok_or("Claude Code not installed")?;
+
+    // Spawn the auth process - it will open the browser
+    let child = Command::new(&claude_path)
+        .args(["auth", "login"])
+        .spawn()
+        .map_err(|e| format!("Failed to start Claude auth: {}", e))?;
+
+    let pid = child.id();
+    std::mem::forget(child);
+
+    Ok(pid)
+}
+
+/// Check if Claude is authenticated
+#[tauri::command]
+async fn check_claude_auth_status() -> bool {
+    let claude_path = match find_claude_binary() {
+        Some(p) => p,
+        None => return false,
+    };
+
+    Command::new(&claude_path)
+        .args(["auth", "status"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Start Vercel authentication (opens browser)
+#[tauri::command]
+async fn start_vercel_auth(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "itemId": "vercel_auth",
+        "message": "Connecting to Vercel..."
+    }));
+
+    // Start vercel login - it opens browser for auth
+    let child = get_vercel_command()
+        .arg("login")
+        .spawn()
+        .map_err(|e| format!("Failed to start Vercel auth: {}", e))?;
+
+    std::mem::forget(child);
+
+    Ok(())
+}
+
 // Kill orphaned Claude processes spawned by this app
 fn cleanup_claude_processes() {
     #[cfg(unix)]
@@ -2917,6 +3495,16 @@ pub fn run() {
             reset_to_branch,
             spawn_pty,
             kill_port,
+            // Setup/Onboarding
+            get_full_setup_status,
+            install_homebrew,
+            install_node_via_brew,
+            install_git_via_brew,
+            install_gh_via_brew,
+            start_github_auth,
+            start_claude_auth,
+            check_claude_auth_status,
+            start_vercel_auth,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
