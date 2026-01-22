@@ -3365,9 +3365,11 @@ async fn get_deployment_status(project_path: String) -> Result<Option<Deployment
     let validated_path = validate_project_path(&project_path)?;
 
     // Run vercel ls to get recent deployments (no --json flag available)
+    // Need to set PATH because macOS apps don't inherit shell environment
     let output = Command::new("vercel")
         .args(["ls"])
         .current_dir(&validated_path)
+        .env("PATH", get_extended_path())
         .output()
         .map_err(|e| format!("Failed to run vercel ls: {}", e))?;
 
