@@ -75,7 +75,7 @@ body {
   width: 32px;
   height: 32px;
   border: 3px solid var(--border);
-  border-top-color: var(--accent);
+  border-top-color: var(--text-muted);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -105,7 +105,7 @@ button:hover {
 .btn-primary {
   background: var(--action);
   color: var(--action-text);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .btn-primary:hover {
