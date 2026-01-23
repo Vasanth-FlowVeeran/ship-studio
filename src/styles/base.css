@@ -24,6 +24,9 @@
   --text-muted: #6d6d6d;
   --accent: #ffffff;
   --accent-hover: #e0e0e0;
+  --action: #54E36E;
+  --action-hover: #45c55d;
+  --action-text: #1e1e1e;
   --success: #4ecdc4;
   --error: #f44747;
   --border: #3c3c3c;
@@ -59,7 +62,12 @@ body {
 .app.loading {
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 24px;
+}
+
+.app-logo {
+  height: 48px;
+  width: auto;
 }
 
 /* Spinner */
@@ -95,12 +103,12 @@ button:hover {
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: #1e1e1e;
+  background: var(--action);
+  color: var(--action-text);
   font-weight: 600;
 }
 
 .btn-primary:hover {
-  background: var(--accent-hover);
-  color: #1e1e1e;
+  background: var(--action-hover);
+  color: var(--action-text);
 }

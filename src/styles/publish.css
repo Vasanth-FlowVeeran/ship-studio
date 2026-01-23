@@ -9,10 +9,10 @@
   gap: 6px;
   padding: 6px 12px;
   min-height: 32px;
-  background: #3b82f6;
-  border: 1px solid #2563eb;
+  background: var(--action);
+  border: 1px solid var(--action-hover);
   border-radius: 6px;
-  color: white;
+  color: var(--action-text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -20,7 +20,7 @@
 }
 
 .publish-button:hover {
-  background: #2563eb;
+  background: var(--action-hover);
 }
 
 .publish-button.no-changes {
@@ -115,8 +115,8 @@
 }
 
 .publish-row input[type="checkbox"]:checked {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: var(--action);
+  border-color: var(--action);
 }
 
 .publish-row input[type="checkbox"]:checked::after {
@@ -335,10 +335,10 @@
 
 .publish-submit {
   padding: 8px 16px;
-  background: #3b82f6;
+  background: var(--action);
   border: none;
   border-radius: 6px;
-  color: white;
+  color: var(--action-text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -346,7 +346,7 @@
 }
 
 .publish-submit:hover {
-  background: #2563eb;
+  background: var(--action-hover);
 }
 
 .publish-submit:disabled {

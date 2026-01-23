@@ -814,8 +814,8 @@ function App() {
   if (view === "loading") {
     return (
       <div className="app loading">
+        <img src="/ship_studio_full.svg" alt="Ship Studio" className="app-logo" />
         <div className="spinner" />
-        <p>Loading Ship Studio...</p>
       </div>
     );
   }

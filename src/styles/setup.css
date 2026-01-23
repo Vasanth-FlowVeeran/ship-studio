@@ -33,6 +33,12 @@
   margin-bottom: 40px;
 }
 
+.onboarding-logo {
+  height: 56px;
+  width: auto;
+  margin-bottom: 24px;
+}
+
 .onboarding-header h1 {
   font-size: 28px;
   font-weight: 600;

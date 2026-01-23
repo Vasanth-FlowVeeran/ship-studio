@@ -429,10 +429,10 @@
 
 .branch-selector-submit {
   padding: 10px 20px;
-  background: #3b82f6;
+  background: var(--action);
   border: none;
   border-radius: 6px;
-  color: white;
+  color: var(--action-text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -440,7 +440,7 @@
 }
 
 .branch-selector-submit:hover {
-  background: #2563eb;
+  background: var(--action-hover);
 }
 
 .branch-selector-submit:disabled {
@@ -775,13 +775,13 @@
 }
 
 .branch-card-action.primary {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--action-text);
 }
 
 .branch-card-action.primary:hover {
-  background: #2563eb;
+  background: var(--action-hover);
 }
 
 .branch-card-action.danger {
@@ -916,10 +916,10 @@
 
 .prs-tab-empty-action {
   padding: 10px 20px;
-  background: #3b82f6;
+  background: var(--action);
   border: none;
   border-radius: 6px;
-  color: white;
+  color: var(--action-text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -927,7 +927,7 @@
 }
 
 .prs-tab-empty-action:hover {
-  background: #2563eb;
+  background: var(--action-hover);
   font-size: 13px;
 }
 
@@ -1008,13 +1008,13 @@
 }
 
 .post-merge-btn.primary {
-  background: #3b82f6;
-  border: 1px solid #3b82f6;
-  color: white;
+  background: var(--action);
+  border: 1px solid var(--action);
+  color: var(--action-text);
 }
 
 .post-merge-btn.primary:hover {
-  background: #2563eb;
+  background: var(--action-hover);
 }
 
 .post-merge-btn.danger {
@@ -1407,16 +1407,16 @@ select.submit-review-input {
 }
 
 .unsaved-changes-btn.primary {
-  background: #3b82f6;
-  border: 1px solid #3b82f6;
-  color: white;
+  background: var(--action);
+  border: 1px solid var(--action);
+  color: var(--action-text);
   min-width: 120px;
   text-align: center;
   justify-content: center;
 }
 
 .unsaved-changes-btn.primary:hover {
-  background: #2563eb;
+  background: var(--action-hover);
 }
 
 .unsaved-changes-btn:disabled {
