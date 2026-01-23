@@ -47,9 +47,9 @@
 }
 
 .publish-button.synced {
-  background: var(--action);
-  border-color: var(--action);
-  color: var(--action-text);
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+  color: var(--text-muted);
   cursor: default;
 }
 
@@ -366,7 +366,7 @@
   align-items: center;
   gap: 12px;
   padding: 20px 16px;
-  color: var(--success);
+  color: var(--action);
   font-size: 15px;
   font-weight: 500;
 }
@@ -396,7 +396,7 @@
   align-items: center;
   gap: 12px;
   padding: 20px 16px;
-  color: #3b82f6;
+  color: var(--text-muted);
   font-size: 15px;
   font-weight: 500;
 }
