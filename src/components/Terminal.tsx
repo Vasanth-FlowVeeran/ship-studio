@@ -268,6 +268,22 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           ptyRef.current?.write(data);
         });
 
+        // Handle Shift+Enter to insert newline instead of submitting
+        term.attachCustomKeyEventHandler((event) => {
+          if (event.key === "Enter" && event.shiftKey) {
+            if (event.type === "keydown") {
+              // Send a literal newline character (Ctrl+J / Line Feed)
+              // This tells Claude Code to continue on a new line without submitting
+              ptyRef.current?.write("\n");
+            }
+            // Prevent both keydown and keypress from being processed
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+          }
+          return true; // Allow all other keys
+        });
+
       } catch (err) {
         console.error("Failed to spawn Claude:", err);
 
