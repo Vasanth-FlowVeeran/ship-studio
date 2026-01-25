@@ -140,8 +140,9 @@ jobs:
       - name: Create latest.json
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          REPO="${{ github.repository }}"
           TAG="${{ github.ref_name }}"
+          # Use the public releases repo for download URLs
+          RELEASES_REPO="ship-studio/releases"
 
           # Read signatures
           AARCH64_SIG=$(cat artifacts/updater-darwin-aarch64/signature.txt)
@@ -151,6 +152,7 @@ jobs:
           echo "x86_64 signature: $X86_64_SIG"
 
           # Create the manifest using printf to avoid YAML parsing issues
+          # URLs point to the PUBLIC releases repo so auto-updater can download
           printf '%s\n' '{' \
             "  \"version\": \"${VERSION}\"," \
             '  "notes": "See the release notes on GitHub for details.",' \
@@ -158,11 +160,11 @@ jobs:
             '  "platforms": {' \
             '    "darwin-aarch64": {' \
             "      \"signature\": \"${AARCH64_SIG}\"," \
-            "      \"url\": \"https://github.com/${REPO}/releases/download/${TAG}/ShipStudio_darwin-aarch64.app.tar.gz\"" \
+            "      \"url\": \"https://github.com/${RELEASES_REPO}/releases/download/${TAG}/ShipStudio_darwin-aarch64.app.tar.gz\"" \
             '    },' \
             '    "darwin-x86_64": {' \
             "      \"signature\": \"${X86_64_SIG}\"," \
-            "      \"url\": \"https://github.com/${REPO}/releases/download/${TAG}/ShipStudio_darwin-x86_64.app.tar.gz\"" \
+            "      \"url\": \"https://github.com/${RELEASES_REPO}/releases/download/${TAG}/ShipStudio_darwin-x86_64.app.tar.gz\"" \
             '    }' \
             '  }' \
             '}' > latest.json
@@ -173,7 +175,8 @@ jobs:
           # Validate JSON
           python3 -c "import json; json.load(open('latest.json'))" && echo "JSON is valid"
 
-      - name: Upload updater tarballs to release
+      # Upload to the PRIVATE main repo (for reference/backup)
+      - name: Upload updater tarballs to main repo release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -182,3 +185,21 @@ jobs:
             artifacts/updater-darwin-x86_64/ShipStudio_darwin-x86_64.app.tar.gz
             latest.json
           draft: true
+
+      # Upload to the PUBLIC releases repo (for auto-updater)
+      - name: Create release in public releases repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Create the release in the public repo
+          gh release create "$TAG" \
+            --repo ship-studio/releases \
+            --title "Ship Studio v${VERSION}" \
+            --notes "Auto-updater release for Ship Studio v${VERSION}. See the main repository for full release notes." \
+            --draft \
+            artifacts/updater-darwin-aarch64/ShipStudio_darwin-aarch64.app.tar.gz \
+            artifacts/updater-darwin-x86_64/ShipStudio_darwin-x86_64.app.tar.gz \
+            latest.json
