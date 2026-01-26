@@ -31,6 +31,27 @@ pub fn find_claude_binary() -> Option<std::path::PathBuf> {
             }
         }
 
+        // Check Claude desktop app's bundled CLI (~/Library/Application Support/Claude/claude-code/{version}/claude)
+        let claude_app_base = home.join("Library/Application Support/Claude/claude-code");
+        if claude_app_base.exists() {
+            if let Ok(entries) = std::fs::read_dir(&claude_app_base) {
+                // Find the latest version directory
+                let mut versions: Vec<_> = entries
+                    .flatten()
+                    .filter(|e| e.path().is_dir())
+                    .collect();
+                // Sort by version (descending) to get latest first
+                versions.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+
+                for entry in versions {
+                    let claude_path = entry.path().join("claude");
+                    if claude_path.exists() {
+                        return Some(claude_path);
+                    }
+                }
+            }
+        }
+
         // Check npm prefix
         if let Ok(output) = Command::new("npm")
             .args(["prefix", "-g"])

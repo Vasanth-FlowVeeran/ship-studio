@@ -277,3 +277,33 @@ pub async fn kill_port(port: u32) -> Result<(), String> {
 
     Ok(())
 }
+
+/// Find an available port starting from the preferred port.
+///
+/// Tries the preferred port first, then increments until finding an available one.
+/// Returns the first available port found.
+#[tauri::command]
+pub fn find_available_port(preferred_port: u16) -> Result<u16, String> {
+    use std::net::TcpListener;
+
+    // Try ports starting from preferred, up to preferred + 100
+    for port in preferred_port..preferred_port.saturating_add(100) {
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return Ok(port);
+        }
+    }
+
+    Err(format!(
+        "Could not find available port in range {}-{}",
+        preferred_port,
+        preferred_port.saturating_add(99)
+    ))
+}
+
+/// Get the extended PATH that includes nvm, Homebrew, and other common tool locations.
+///
+/// This is needed for the frontend PTY spawn since macOS apps don't inherit shell PATH.
+#[tauri::command]
+pub fn get_shell_path() -> String {
+    get_extended_path()
+}

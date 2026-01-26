@@ -163,6 +163,8 @@ pub fn run() {
             commands::pty::kill_all_pty,
             commands::pty::cleanup_orphaned_processes,
             commands::pty::kill_port,
+            commands::pty::find_available_port,
+            commands::pty::get_shell_path,
             // Setup/Onboarding
             commands::setup::get_full_setup_status,
             commands::setup::install_homebrew,

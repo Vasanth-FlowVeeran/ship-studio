@@ -21,6 +21,7 @@ pub fn get_extended_path() -> String {
     if let Some(home) = dirs::home_dir() {
         let home_str = home.to_string_lossy();
         paths.push(format!("{}/.npm-global/bin", home_str));
+        paths.push(format!("{}/.local/bin", home_str)); // Official Claude installer location
         paths.push(format!("{}/n/bin", home_str));
 
         // Add NVM current version if it exists
@@ -29,6 +30,18 @@ pub fn get_extended_path() -> String {
             if let Ok(entries) = std::fs::read_dir(&nvm_base) {
                 for entry in entries.flatten() {
                     paths.push(format!("{}/bin", entry.path().to_string_lossy()));
+                }
+            }
+        }
+
+        // Add Claude desktop app's bundled CLI paths
+        let claude_app_base = home.join("Library/Application Support/Claude/claude-code");
+        if claude_app_base.exists() {
+            if let Ok(entries) = std::fs::read_dir(&claude_app_base) {
+                for entry in entries.flatten() {
+                    if entry.path().is_dir() {
+                        paths.push(entry.path().to_string_lossy().to_string());
+                    }
                 }
             }
         }

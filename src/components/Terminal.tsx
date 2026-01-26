@@ -17,6 +17,7 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { spawn, IPty } from "tauri-pty";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { homeDir } from "@tauri-apps/api/path";
 import { loadNerdFonts } from "../lib/fonts";
@@ -217,16 +218,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         // Fit again to ensure correct size
         fitAddon.fit();
 
-        // Build PATH with user-local and system paths for freshly installed tools
+        // Get extended PATH from backend (includes nvm, Claude desktop app, etc.)
         const home = await homeDir();
         const homeNormalized = home.endsWith("/") ? home : `${home}/`;
-        const userPaths = [
-          `${homeNormalized}.npm-global/bin`,
-          `${homeNormalized}.local/bin`,
-          `${homeNormalized}.cargo/bin`,
-        ].join(":");
-        const systemPaths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-        const fullPath = `${userPaths}:${systemPaths}`;
+        const fullPath = await invoke<string>("get_shell_path");
 
         // Spawn PTY using tauri-pty
         // Must pass all essential env vars since env replaces (not merges with) parent environment

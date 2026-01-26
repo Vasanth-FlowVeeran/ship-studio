@@ -140,7 +140,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   // Add shipstudio=1 param so sites can detect they're in Ship Studio preview (e.g., to disable iframe detection)
   const currentUrl = `${devServerUrl}${currentPage === "/" ? "" : currentPage}?_cb=${cacheBuster}&shipstudio=1`;
 
-  // Reset state when project changes
+  // Reset state when project or port changes
   useEffect(() => {
     setIsLoading(true);
     setHasError(false);
@@ -160,7 +160,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     // Delay server check to allow old dev server to terminate
     const timer = setTimeout(() => setRetryCount(0), 1500);
     return () => clearTimeout(timer);
-  }, [projectPath]);
+  }, [projectPath, port]);
 
   // Proxy disabled for now - using dev server directly
   // TODO: Implement capture using Tauri webview script injection instead

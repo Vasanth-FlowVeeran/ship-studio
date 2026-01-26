@@ -88,27 +88,24 @@ export interface DevServerHandle {
  * Spawns `npm run dev` in a PTY and returns a handle for control.
  *
  * @param projectPath - Absolute path to the project directory
+ * @param port - Port number for the dev server (default: 3000)
  * @param onOutput - Optional callback for terminal output
  * @returns Handle with PTY and stop function
  */
 export async function startDevServer(
   projectPath: string,
+  port: number = 3000,
   onOutput?: (data: string) => void
 ): Promise<DevServerHandle> {
   const decoder = new TextDecoder();
 
-  // Build PATH with user-local and system paths for freshly installed tools
+  // Get extended PATH from backend (includes nvm, Homebrew, etc.)
   const home = await homeDir();
   const homeNormalized = home.endsWith("/") ? home : `${home}/`;
-  const userPaths = [
-    `${homeNormalized}.npm-global/bin`,
-    `${homeNormalized}.local/bin`,
-    `${homeNormalized}.cargo/bin`,
-  ].join(":");
-  const systemPaths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-  const fullPath = `${userPaths}:${systemPaths}`;
+  const fullPath = await invoke<string>("get_shell_path");
 
   // Must pass all essential env vars since env replaces (not merges with) parent environment
+  // PORT env var tells Next.js which port to use
   const pty = await spawn("npm", ["run", "dev"], {
     cwd: projectPath,
     cols: 80,
@@ -120,6 +117,7 @@ export async function startDevServer(
       TERM: "xterm-256color",
       LANG: "en_US.UTF-8",
       SHELL: "/bin/zsh",
+      PORT: port.toString(),
     },
   });
 

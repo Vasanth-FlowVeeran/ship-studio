@@ -83,8 +83,8 @@ import "./styles/index.css";
 const SCREENSHOT_INTERVAL_MS = 5 * 60 * 1000;
 /** Delay after page load before capturing screenshot (2 seconds) */
 const SCREENSHOT_DELAY_MS = 2000;
-/** Default port for Next.js dev server */
-const DEV_SERVER_PORT = 3000;
+/** Preferred port for Next.js dev server (will find available port if taken) */
+const PREFERRED_DEV_SERVER_PORT = 3000;
 
 /** Current application view/screen */
 type AppView = "loading" | "onboarding" | "projects" | "project-loading" | "workspace";
@@ -192,6 +192,9 @@ function App() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCropMode, setIsCropMode] = useState(false);
   const [isCropCapturing, setIsCropCapturing] = useState(false);
+
+  // Dev server port (dynamically assigned to avoid conflicts)
+  const [devServerPort, setDevServerPort] = useState(PREFERRED_DEV_SERVER_PORT);
 
   // Env editor modal
   const [showEnvEditor, setShowEnvEditor] = useState(false);
@@ -641,12 +644,12 @@ function App() {
     try {
       await invoke("capture_project_thumbnail", {
         projectPath,
-        url: `http://localhost:${DEV_SERVER_PORT}`,
+        url: `http://localhost:${devServerPort}`,
       });
     } catch (error) {
       console.error("Failed to capture thumbnail:", error);
     }
-  }, []);
+  }, [devServerPort]);
 
   // Handle preview server ready - capture initial screenshot
   const handlePreviewReady = useCallback(() => {
@@ -665,9 +668,9 @@ function App() {
       devServerRef.current = null;
     }
 
-    // Kill any process still listening on dev server port (handles orphaned processes)
+    // Kill any process on our previously used port (handles orphaned processes from this session)
     try {
-      await invoke("kill_port", { port: DEV_SERVER_PORT });
+      await invoke("kill_port", { port: devServerPort });
     } catch {
       // Ignore errors - port may already be free
     }
@@ -679,6 +682,15 @@ function App() {
     } catch {
       // Ignore cleanup errors
     }
+
+    // Find an available port (doesn't kill other apps' processes)
+    let port = PREFERRED_DEV_SERVER_PORT;
+    try {
+      port = await invoke<number>("find_available_port", { preferredPort: PREFERRED_DEV_SERVER_PORT });
+    } catch (error) {
+      console.error("Failed to find available port, using default:", error);
+    }
+    setDevServerPort(port);
 
     // Clear any existing screenshot interval
     if (screenshotIntervalRef.current) {
@@ -722,9 +734,9 @@ function App() {
     // Fetch branch info
     await fetchBranchInfo(project.path);
 
-    // Start dev server in background
+    // Start dev server in background on the available port
     try {
-      devServerRef.current = await startDevServer(project.path);
+      devServerRef.current = await startDevServer(project.path, port);
     } catch (error) {
       console.error("Failed to start dev server:", error);
     }
@@ -796,7 +808,7 @@ function App() {
     try {
       await invoke("kill_all_pty");
       await invoke("cleanup_orphaned_processes");
-      await invoke("kill_port", { port: DEV_SERVER_PORT });
+      await invoke("kill_port", { port: devServerPort });
     } catch {
       // Ignore cleanup errors
     }
@@ -1165,9 +1177,9 @@ function App() {
               {/* Tab content */}
               {workspaceTab === "preview" && (
                 <Preview
-                  key={currentProject?.path || "none"}
+                  key={`${currentProject?.path || "none"}-${devServerPort}`}
                   ref={previewRef}
-                  port={DEV_SERVER_PORT}
+                  port={devServerPort}
                   projectPath={currentProject?.path || ""}
                   onServerReady={handlePreviewReady}
                   onPageChange={setCurrentPreviewPage}
