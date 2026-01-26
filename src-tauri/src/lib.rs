@@ -159,6 +159,9 @@ pub fn run() {
             commands::conflicts::complete_merge,
             // PTY & Terminal
             commands::pty::spawn_pty,
+            commands::pty::kill_pty,
+            commands::pty::kill_all_pty,
+            commands::pty::cleanup_orphaned_processes,
             commands::pty::kill_port,
             // Setup/Onboarding
             commands::setup::get_full_setup_status,

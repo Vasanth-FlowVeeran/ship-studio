@@ -611,6 +611,12 @@ function App() {
     // Don't close if it's the last tab
     if (terminalTabs.length <= 1) return;
 
+    // Kill the PTY process BEFORE removing from state to prevent orphaned processes
+    const ref = terminalRefsMap.current.get(tabId);
+    if (ref) {
+      ref.kill();
+    }
+
     setTerminalTabs(prev => {
       const newTabs = prev.filter(id => id !== tabId);
       // If we're closing the active tab, switch to the previous one or the first
@@ -664,6 +670,14 @@ function App() {
       await invoke("kill_port", { port: DEV_SERVER_PORT });
     } catch {
       // Ignore errors - port may already be free
+    }
+
+    // Clean up any orphaned PTY processes from previous operations
+    try {
+      await invoke("kill_all_pty");
+      await invoke("cleanup_orphaned_processes");
+    } catch {
+      // Ignore cleanup errors
     }
 
     // Clear any existing screenshot interval
@@ -777,6 +791,16 @@ function App() {
       await devServerRef.current.stop();
       devServerRef.current = null;
     }
+
+    // Clean up any orphaned PTY processes
+    try {
+      await invoke("kill_all_pty");
+      await invoke("cleanup_orphaned_processes");
+      await invoke("kill_port", { port: DEV_SERVER_PORT });
+    } catch {
+      // Ignore cleanup errors
+    }
+
     setCurrentProject(null);
     dispatch({ type: 'CLEAR_PROJECT_STATUSES' });
     setView("projects");
