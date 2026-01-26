@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useRef, useCallback, useReducer } from "react";
 import { Terminal, TerminalHandle } from "./components/Terminal";
+import { DevServerLogs } from "./components/DevServerLogs";
 import { Preview, PreviewHandle } from "./components/Preview";
 import { ProjectList } from "./components/ProjectList";
 import { CreateProject } from "./components/CreateProject";
@@ -56,6 +57,7 @@ import {
   EyeIcon,
   PlusIcon,
   ImageIcon,
+  TerminalIcon,
 } from "./components/icons";
 import { startDevServer, Project, DevServerHandle } from "./lib/project";
 import {
@@ -184,6 +186,11 @@ function App() {
   const terminalTabCounterRef = useRef(1);
   const [terminalSessionId, setTerminalSessionId] = useState(1); // Changes when project changes to force remount
   const MAX_TERMINAL_TABS = 5;
+
+  // Dev server logs state
+  const [showDevServerLogs, setShowDevServerLogs] = useState(false);
+  const devServerOutputRef = useRef<string>("");  // Buffer output for when logs tab opens
+  const [devServerOutputVersion, setDevServerOutputVersion] = useState(0);  // Triggers re-render when output changes
 
   // Integration states consolidated via reducer for atomic updates
   const [integrations, dispatch] = useReducer(integrationReducer, initialIntegrationState);
@@ -708,6 +715,7 @@ function App() {
     setTerminalTabs([1]);
     setActiveTerminalTab(1);
     setTerminalSessionId(prev => prev + 1);
+    setShowDevServerLogs(false);
 
     setCurrentProject(project);
     setCurrentPreviewPage("/");
@@ -736,7 +744,19 @@ function App() {
 
     // Start dev server in background on the available port
     try {
-      devServerRef.current = await startDevServer(project.path, port);
+      // Clear previous output buffer
+      devServerOutputRef.current = "";
+      setDevServerOutputVersion(0);
+      devServerRef.current = await startDevServer(project.path, port, (data) => {
+        // Buffer output from the start so it's available when Logs tab opens
+        devServerOutputRef.current += data;
+        // Limit buffer size to prevent memory issues (keep last 100KB)
+        if (devServerOutputRef.current.length > 100000) {
+          devServerOutputRef.current = devServerOutputRef.current.slice(-100000);
+        }
+        // Trigger re-render for DevServerLogs (throttled by React)
+        setDevServerOutputVersion(v => v + 1);
+      });
     } catch (error) {
       console.error("Failed to start dev server:", error);
     }
@@ -797,6 +817,7 @@ function App() {
     setTerminalTabs([1]);
     setActiveTerminalTab(1);
     setTerminalSessionId(prev => prev + 1);
+    setShowDevServerLogs(false);
 
     // Stop dev server if running
     if (devServerRef.current) {
@@ -1072,8 +1093,11 @@ function App() {
                   {terminalTabs.map((tabId, index) => (
                     <button
                       key={tabId}
-                      className={`terminal-tab ${activeTerminalTab === tabId ? 'active' : ''}`}
-                      onClick={() => setActiveTerminalTab(tabId)}
+                      className={`terminal-tab ${!showDevServerLogs && activeTerminalTab === tabId ? 'active' : ''}`}
+                      onClick={() => {
+                        setShowDevServerLogs(false);
+                        setActiveTerminalTab(tabId);
+                      }}
                     >
                       <span className="terminal-tab-number">{index + 1}</span>
                       {terminalTabs.length > 1 && (
@@ -1098,13 +1122,22 @@ function App() {
                     </button>
                   )}
                 </div>
+                <div className="terminal-tabs-divider" />
+                <button
+                  className={`terminal-tab logs-tab ${showDevServerLogs ? 'active' : ''}`}
+                  onClick={() => setShowDevServerLogs(true)}
+                  title="View dev server logs"
+                >
+                  <TerminalIcon size={12} />
+                  <span>Logs</span>
+                </button>
               </div>
               <div className="terminal-content">
                 {terminalTabs.map(tabId => (
                   <div
                     key={`session-${terminalSessionId}-tab-${tabId}`}
                     className="terminal-tab-content"
-                    style={{ display: activeTerminalTab === tabId ? 'block' : 'none' }}
+                    style={{ display: !showDevServerLogs && activeTerminalTab === tabId ? 'block' : 'none' }}
                   >
                     <Terminal
                       ref={(ref) => {
@@ -1117,6 +1150,14 @@ function App() {
                     />
                   </div>
                 ))}
+                {showDevServerLogs && (
+                  <div className="terminal-tab-content" style={{ display: 'block' }}>
+                    <DevServerLogs
+                      output={devServerOutputRef.current}
+                      outputVersion={devServerOutputVersion}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           }

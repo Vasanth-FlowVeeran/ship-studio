@@ -279,3 +279,23 @@
   height: 100%;
 }
 
+.terminal-tabs-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 8px;
+}
+
+.terminal-tab.logs-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.terminal-tab.logs-tab span {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
