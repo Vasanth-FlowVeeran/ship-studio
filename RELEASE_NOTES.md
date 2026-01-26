@@ -6,7 +6,7 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
-## What's New in v0.2.2
+## What's New in v0.2.3
 
 - **Import projects from GitHub** - Import existing repositories directly from your GitHub account or organizations
 - **Ship Studio preview detection** - Sites can now detect when running in Ship Studio preview via `?shipstudio=1` query parameter (useful for disabling iframe detection)
