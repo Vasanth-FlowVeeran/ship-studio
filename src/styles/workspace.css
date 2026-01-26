@@ -186,6 +186,34 @@
   color: var(--text-muted);
 }
 
+/* Open in Browser Button */
+.open-in-browser-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  outline: none;
+  margin-left: auto;
+}
+
+.open-in-browser-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+}
+
+.open-in-browser-btn svg {
+  flex-shrink: 0;
+}
+
 /* Terminal Tabs Bar */
 .terminal-tabs-bar {
   display: flex;

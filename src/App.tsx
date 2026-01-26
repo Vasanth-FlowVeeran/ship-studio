@@ -58,7 +58,9 @@ import {
   PlusIcon,
   ImageIcon,
   TerminalIcon,
+  ExternalLinkIcon,
 } from "./components/icons";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { startDevServer, Project, DevServerHandle } from "./lib/project";
 import {
   checkGitHubCliStatus,
@@ -1194,6 +1196,14 @@ function App() {
                       <span>Preview</span>
                     </button>
                     <button
+                      className="workspace-tab open-in-browser-btn"
+                      onClick={() => openUrl(`http://localhost:${devServerPort}`)}
+                      title="Open in Browser"
+                    >
+                      <ExternalLinkIcon size={14} />
+                      <span>Open in Browser</span>
+                    </button>
+                    <button
                       className={`workspace-tab ${workspaceTab === "branches" ? "active" : ""}`}
                       onClick={() => setWorkspaceTab("branches")}
                     >
@@ -1212,6 +1222,14 @@ function App() {
               ) : (
                 <div className="preview-tabs-bar preview-tabs-bar-simple">
                   <span className="preview-label">Preview</span>
+                  <button
+                    className="open-in-browser-btn"
+                    onClick={() => openUrl(`http://localhost:${devServerPort}`)}
+                    title="Open in Browser"
+                  >
+                    <ExternalLinkIcon size={14} />
+                    <span>Open in Browser</span>
+                  </button>
                 </div>
               )}
 
