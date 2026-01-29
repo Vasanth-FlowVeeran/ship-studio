@@ -13,11 +13,7 @@ use tauri::{Manager, Webview, WebviewUrl};
 #[cfg(target_os = "macos")]
 const MACOS_BROWSERS: &[(&str, &str, &str)] = &[
     ("safari", "Safari", "/Applications/Safari.app"),
-    (
-        "chrome",
-        "Google Chrome",
-        "/Applications/Google Chrome.app",
-    ),
+    ("chrome", "Google Chrome", "/Applications/Google Chrome.app"),
     ("firefox", "Firefox", "/Applications/Firefox.app"),
     ("arc", "Arc", "/Applications/Arc.app"),
     ("brave", "Brave", "/Applications/Brave Browser.app"),

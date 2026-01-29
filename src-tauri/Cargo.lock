@@ -3814,7 +3814,7 @@ checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
 
 [[package]]
 name = "ship-studio"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "base64 0.22.1",
  "dirs 5.0.1",

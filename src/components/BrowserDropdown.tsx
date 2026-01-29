@@ -20,11 +20,7 @@ import {
   EdgeIcon,
   GlobeIcon,
 } from './icons';
-import {
-  BrowserInfo,
-  checkBrowserAvailability,
-  openUrlInBrowser,
-} from '../lib/browser';
+import { BrowserInfo, checkBrowserAvailability, openUrlInBrowser } from '../lib/browser';
 import { logger } from '../lib/logger';
 
 interface BrowserDropdownProps {
@@ -82,11 +78,7 @@ export function BrowserDropdown({
   // If no browsers detected, show simple button
   if (browsers.length === 0) {
     return (
-      <button
-        className={buttonClassName}
-        onClick={handleDefaultOpen}
-        title="Open in Browser"
-      >
+      <button className={buttonClassName} onClick={handleDefaultOpen} title="Open in Browser">
         <ExternalLinkIcon size={14} />
         <span>Open in Browser</span>
       </button>

@@ -106,10 +106,7 @@ fn initialize_mock_state() {
                 set.insert(item.to_string());
             }
         }
-        tracing::info!(
-            scenario = scenario,
-            "Mock mode initialized with scenario"
-        );
+        tracing::info!(scenario = scenario, "Mock mode initialized with scenario");
     }
 }
 

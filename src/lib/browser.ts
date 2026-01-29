@@ -31,9 +31,6 @@ export async function checkBrowserAvailability(): Promise<BrowserInfo[]> {
  * @param url - The URL to open
  * @param browserId - The browser identifier (e.g., "chrome", "safari")
  */
-export async function openUrlInBrowser(
-  url: string,
-  browserId: string
-): Promise<void> {
+export async function openUrlInBrowser(url: string, browserId: string): Promise<void> {
   return invoke('open_url_in_browser', { url, browserId });
 }
