@@ -6,6 +6,10 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.15
+
+- **Restart Dev Server** - Added a button to restart the dev server without leaving the project. Shows a loading overlay on the preview while restarting.
+
 ## What's New in v0.3.14
 
 - **Improved preview stability** - Added tolerance for temporary dev server slowdowns during health checks to prevent false crash detection
