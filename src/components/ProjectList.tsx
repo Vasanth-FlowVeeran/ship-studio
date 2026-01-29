@@ -15,7 +15,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { DashboardProject, getDashboardProjects } from '../lib/project';
+import { DashboardProject, getDashboardProjects, setAutoAcceptMode } from '../lib/project';
 import {
   FolderInfo,
   Folder,
@@ -233,6 +233,19 @@ export function ProjectList({
     }
   };
 
+  const handleToggleAutoAccept = async (projectPath: string, enabled: boolean) => {
+    try {
+      await setAutoAcceptMode(projectPath, enabled);
+      // Update local state immediately for responsive UI
+      setProjects((prev) =>
+        prev.map((p) => (p.path === projectPath ? { ...p, auto_accept_mode: enabled } : p))
+      );
+    } catch (error) {
+      console.error('Failed to toggle auto-accept mode:', error);
+      alert('Failed to update auto-accept mode: ' + String(error));
+    }
+  };
+
   const handleCreateFolder = async (name: string) => {
     await createFolder(name);
     await loadFolders();
@@ -402,6 +415,7 @@ export function ProjectList({
               thumbnailData={project.thumbnailData}
               onSelect={() => onSelectProject(project)}
               onDelete={() => setDeleteConfirm(project)}
+              onToggleAutoAccept={(enabled) => void handleToggleAutoAccept(project.path, enabled)}
               onMoveToFolder={() => handleOpenMoveModal(project)}
               onOpenSite={
                 project.production_url

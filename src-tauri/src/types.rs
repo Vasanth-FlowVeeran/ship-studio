@@ -44,6 +44,8 @@ pub struct DashboardProject {
     pub last_deployed: Option<String>,
     /// Deployment state: READY, BUILDING, ERROR, QUEUED, CANCELED
     pub deployment_state: Option<String>,
+    /// Whether to run Claude in auto-accept mode
+    pub auto_accept_mode: Option<bool>,
 }
 
 /// Next.js page route information
@@ -107,6 +109,9 @@ pub struct ProjectMetadata {
     /// Code health check results (tests, lint, typecheck, format)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub health: Option<HealthCheckStatus>,
+    /// Whether to run Claude in auto-accept mode (--dangerously-skip-permissions)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_accept_mode: Option<bool>,
 }
 
 fn default_schema_version() -> u32 {
@@ -123,6 +128,7 @@ impl Default for ProjectMetadata {
             branch_prefix_username: None,
             stash_info: None,
             health: None,
+            auto_accept_mode: None,
         }
     }
 }

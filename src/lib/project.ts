@@ -46,6 +46,8 @@ export interface DashboardProject {
   last_deployed: string | null;
   /** Deployment state: READY, BUILDING, ERROR, QUEUED, CANCELED */
   deployment_state: string | null;
+  /** Whether to run Claude in auto-accept mode */
+  auto_accept_mode: boolean | null;
 }
 
 /** System prerequisite check result */
@@ -147,4 +149,23 @@ export async function startDevServer(
       return Promise.resolve();
     },
   };
+}
+
+/**
+ * Get the auto-accept mode preference for a project.
+ * When enabled, Claude will run with --dangerously-skip-permissions flag.
+ * @param projectPath - Absolute path to the project directory
+ * @returns Whether auto-accept mode is enabled
+ */
+export async function getAutoAcceptMode(projectPath: string): Promise<boolean> {
+  return invoke<boolean>('get_auto_accept_mode', { projectPath });
+}
+
+/**
+ * Set the auto-accept mode preference for a project.
+ * @param projectPath - Absolute path to the project directory
+ * @param enabled - Whether to enable auto-accept mode
+ */
+export async function setAutoAcceptMode(projectPath: string, enabled: boolean): Promise<void> {
+  return invoke<void>('set_auto_accept_mode', { projectPath, enabled });
 }

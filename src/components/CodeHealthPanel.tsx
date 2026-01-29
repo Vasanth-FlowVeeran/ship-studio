@@ -545,6 +545,22 @@ export const CodeHealthPanel = forwardRef<CodeHealthPanelRef, CodeHealthPanelPro
                 <span className="health-count fail">{failingCount} failing</span>
               )}
               {notRunCount > 0 && <span className="health-count idle">{notRunCount} not run</span>}
+              {isAutoRunEnabled && (
+                <span className="health-countdown" title="Auto-run countdown">
+                  <svg
+                    width={10}
+                    height={10}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span>{formatCountdown(autoRunSecondsRemaining)}</span>
+                </span>
+              )}
             </div>
           )}
         </div>

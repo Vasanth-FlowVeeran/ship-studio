@@ -224,14 +224,15 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
             };
 
             let metadata_path = path.join(".shipstudio").join("project.json");
-            let last_opened = if metadata_path.exists() {
+            let metadata = if metadata_path.exists() {
                 std::fs::read_to_string(&metadata_path)
                     .ok()
                     .and_then(|contents| serde_json::from_str::<ProjectMetadata>(&contents).ok())
-                    .and_then(|m| m.last_opened)
             } else {
                 None
             };
+            let last_opened = metadata.as_ref().and_then(|m| m.last_opened);
+            let auto_accept_mode = metadata.as_ref().and_then(|m| m.auto_accept_mode);
 
             // Ensure .shipstudio/ is gitignored
             let _ = ensure_gitignore_has_shipstudio_sync(&path);
@@ -254,6 +255,7 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
                 production_url,
                 last_deployed,
                 deployment_state,
+                auto_accept_mode,
             });
         }
     }
@@ -542,4 +544,54 @@ pub async fn clear_project_cache(project_path: String) -> Result<(), String> {
         tracing::warn!("Some cache directories could not be cleared: {:?}", errors);
         Ok(())
     }
+}
+
+/// Gets the auto-accept mode preference for a project
+#[tauri::command]
+pub async fn get_auto_accept_mode(project_path: String) -> Result<bool, String> {
+    let project = validate_project_path(&project_path)?;
+    let metadata_path = project.join(".shipstudio").join("project.json");
+
+    if !metadata_path.exists() {
+        return Ok(false);
+    }
+
+    let metadata = std::fs::read_to_string(&metadata_path)
+        .ok()
+        .and_then(|contents| serde_json::from_str::<ProjectMetadata>(&contents).ok())
+        .unwrap_or_default();
+
+    Ok(metadata.auto_accept_mode.unwrap_or(false))
+}
+
+/// Sets the auto-accept mode preference for a project
+/// When enabled, Claude will run with --dangerously-skip-permissions flag
+#[tauri::command]
+pub async fn set_auto_accept_mode(project_path: String, enabled: bool) -> Result<(), String> {
+    let project = validate_project_path(&project_path)?;
+    let shipstudio_dir = project.join(".shipstudio");
+    let metadata_path = shipstudio_dir.join("project.json");
+
+    let mut metadata = if metadata_path.exists() {
+        std::fs::read_to_string(&metadata_path)
+            .ok()
+            .and_then(|contents| serde_json::from_str::<ProjectMetadata>(&contents).ok())
+            .unwrap_or_default()
+    } else {
+        ProjectMetadata::default()
+    };
+
+    metadata.auto_accept_mode = Some(enabled);
+
+    if !shipstudio_dir.exists() {
+        std::fs::create_dir_all(&shipstudio_dir)
+            .map_err(|e| format!("Failed to create .shipstudio directory: {}", e))?;
+    }
+
+    let contents = serde_json::to_string_pretty(&metadata)
+        .map_err(|e| format!("Failed to serialize project metadata: {}", e))?;
+    std::fs::write(&metadata_path, contents)
+        .map_err(|e| format!("Failed to write project metadata: {}", e))?;
+
+    Ok(())
 }

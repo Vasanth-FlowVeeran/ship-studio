@@ -67,7 +67,7 @@ import {
   TerminalIcon,
   ResetIcon,
 } from './components/icons';
-import { startDevServer, Project, DevServerHandle } from './lib/project';
+import { startDevServer, Project, DevServerHandle, getAutoAcceptMode } from './lib/project';
 import {
   checkGitHubCliStatus,
   getGitHubUsername,
@@ -201,6 +201,7 @@ function integrationReducer(state: IntegrationState, action: IntegrationAction):
 function App() {
   const [view, setView] = useState<AppView>('loading');
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [autoAcceptMode, setAutoAcceptMode] = useState(false);
   const devServerRef = useRef<DevServerHandle | null>(null);
   const terminalRefsMap = useRef<Map<number, TerminalHandle | null>>(new Map());
   const previewRef = useRef<PreviewHandle | null>(null);
@@ -816,6 +817,14 @@ function App() {
     currentProjectPathRef.current = project.path;
     setView('project-loading');
 
+    // Fetch auto-accept mode preference for this project
+    try {
+      const autoAccept = await getAutoAcceptMode(project.path);
+      setAutoAcceptMode(autoAccept);
+    } catch {
+      setAutoAcceptMode(false);
+    }
+
     // Mark project as opened (for sorting by last opened)
     void invoke('mark_project_opened', { projectPath: project.path }).catch(() => {});
 
@@ -897,9 +906,10 @@ function App() {
     }
     currentProjectPathRef.current = null;
 
-    // Reset publishing and auto-connecting state
+    // Reset publishing, auto-connecting, and auto-accept state
     setIsPublishing(false);
     setIsVercelAutoConnecting(false);
+    setAutoAcceptMode(false);
 
     // Clear branch state
     setCurrentBranch(null);
@@ -1370,6 +1380,7 @@ function App() {
                         }}
                         projectPath={currentProject?.path || ''}
                         onExit={handleTerminalExit}
+                        autoAcceptMode={autoAcceptMode}
                       />
                     </div>
                   ))}

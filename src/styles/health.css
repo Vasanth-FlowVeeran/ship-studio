@@ -261,6 +261,26 @@
   color: #f14c4c;
 }
 
+.health-countdown {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  margin-left: 4px;
+  background: rgba(59, 142, 234, 0.15);
+  border: 1px solid rgba(59, 142, 234, 0.4);
+  border-radius: 6px;
+  color: #3b8eea;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+}
+
+.health-countdown svg {
+  flex-shrink: 0;
+}
+
 /* Status Dot Indicators */
 
 .status-dot {

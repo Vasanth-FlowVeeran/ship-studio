@@ -125,6 +125,8 @@ pub fn run() {
             commands::projects::ensure_gitignore_has_shipstudio,
             commands::projects::delete_project,
             commands::projects::clear_project_cache,
+            commands::projects::get_auto_accept_mode,
+            commands::projects::set_auto_accept_mode,
             // Environment variables
             commands::env::list_env_files,
             commands::env::read_env_file,

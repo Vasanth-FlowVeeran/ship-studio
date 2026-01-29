@@ -29,6 +29,8 @@ interface TerminalProps {
   projectPath: string;
   /** Callback fired when the Claude Code process exits */
   onExit?: (code: number | null) => void;
+  /** Whether to run Claude in auto-accept mode (--dangerously-skip-permissions) */
+  autoAcceptMode?: boolean;
 }
 
 /**
@@ -47,7 +49,7 @@ export interface TerminalHandle {
 }
 
 export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { projectPath, onExit },
+  { projectPath, onExit, autoAcceptMode = false },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -229,8 +231,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
 
         // Spawn PTY using tauri-pty
         // Must pass all essential env vars since env replaces (not merges with) parent environment
+        // When autoAcceptMode is enabled, pass --dangerously-skip-permissions flag
+        const claudeArgs = autoAcceptMode ? ['--dangerously-skip-permissions'] : [];
         // eslint-disable-next-line @typescript-eslint/await-thenable
-        const pty = await spawn('claude', [], {
+        const pty = await spawn('claude', claudeArgs, {
           cwd: projectPath,
           cols: term.cols,
           rows: term.rows,
@@ -319,7 +323,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       resizeObserver.disconnect();
       cleanup();
     };
-  }, [isReady, projectPath, cleanup]);
+  }, [isReady, projectPath, cleanup, autoAcceptMode]);
 
   // Click to focus terminal
   const handleClick = useCallback(() => {
