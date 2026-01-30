@@ -186,6 +186,9 @@ export async function getHideMainBranchWarning(projectPath: string): Promise<boo
  * @param projectPath - Absolute path to the project directory
  * @param hidden - Whether to hide the banner
  */
-export async function setHideMainBranchWarning(projectPath: string, hidden: boolean): Promise<void> {
+export async function setHideMainBranchWarning(
+  projectPath: string,
+  hidden: boolean
+): Promise<void> {
   return invoke<void>('set_hide_main_branch_warning', { projectPath, hidden });
 }
