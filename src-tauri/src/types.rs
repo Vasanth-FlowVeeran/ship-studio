@@ -112,6 +112,9 @@ pub struct ProjectMetadata {
     /// Whether to run Claude in auto-accept mode (--dangerously-skip-permissions)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auto_accept_mode: Option<bool>,
+    /// Whether to hide the main branch warning banner for this project
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hide_main_branch_warning: Option<bool>,
 }
 
 fn default_schema_version() -> u32 {
@@ -129,6 +132,7 @@ impl Default for ProjectMetadata {
             stash_info: None,
             health: None,
             auto_accept_mode: None,
+            hide_main_branch_warning: None,
         }
     }
 }

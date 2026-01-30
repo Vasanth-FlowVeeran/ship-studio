@@ -127,6 +127,8 @@ pub fn run() {
             commands::projects::clear_project_cache,
             commands::projects::get_auto_accept_mode,
             commands::projects::set_auto_accept_mode,
+            commands::projects::get_hide_main_branch_warning,
+            commands::projects::set_hide_main_branch_warning,
             // Environment variables
             commands::env::list_env_files,
             commands::env::read_env_file,

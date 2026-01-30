@@ -169,3 +169,21 @@ export async function getAutoAcceptMode(projectPath: string): Promise<boolean> {
 export async function setAutoAcceptMode(projectPath: string, enabled: boolean): Promise<void> {
   return invoke<void>('set_auto_accept_mode', { projectPath, enabled });
 }
+
+/**
+ * Get whether the main branch warning banner should be hidden for this project.
+ * @param projectPath - Absolute path to the project directory
+ * @returns Whether the banner should be hidden
+ */
+export async function getHideMainBranchWarning(projectPath: string): Promise<boolean> {
+  return invoke<boolean>('get_hide_main_branch_warning', { projectPath });
+}
+
+/**
+ * Set whether the main branch warning banner should be hidden for this project.
+ * @param projectPath - Absolute path to the project directory
+ * @param hidden - Whether to hide the banner
+ */
+export async function setHideMainBranchWarning(projectPath: string, hidden: boolean): Promise<void> {
+  return invoke<void>('set_hide_main_branch_warning', { projectPath, hidden });
+}

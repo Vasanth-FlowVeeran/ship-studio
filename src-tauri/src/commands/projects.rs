@@ -595,3 +595,52 @@ pub async fn set_auto_accept_mode(project_path: String, enabled: bool) -> Result
 
     Ok(())
 }
+
+/// Gets whether the main branch warning banner should be hidden for this project
+#[tauri::command]
+pub async fn get_hide_main_branch_warning(project_path: String) -> Result<bool, String> {
+    let project = validate_project_path(&project_path)?;
+    let metadata_path = project.join(".shipstudio").join("project.json");
+
+    if !metadata_path.exists() {
+        return Ok(false);
+    }
+
+    let metadata = std::fs::read_to_string(&metadata_path)
+        .ok()
+        .and_then(|contents| serde_json::from_str::<ProjectMetadata>(&contents).ok())
+        .unwrap_or_default();
+
+    Ok(metadata.hide_main_branch_warning.unwrap_or(false))
+}
+
+/// Sets whether the main branch warning banner should be hidden for this project
+#[tauri::command]
+pub async fn set_hide_main_branch_warning(project_path: String, hidden: bool) -> Result<(), String> {
+    let project = validate_project_path(&project_path)?;
+    let shipstudio_dir = project.join(".shipstudio");
+    let metadata_path = shipstudio_dir.join("project.json");
+
+    let mut metadata = if metadata_path.exists() {
+        std::fs::read_to_string(&metadata_path)
+            .ok()
+            .and_then(|contents| serde_json::from_str::<ProjectMetadata>(&contents).ok())
+            .unwrap_or_default()
+    } else {
+        ProjectMetadata::default()
+    };
+
+    metadata.hide_main_branch_warning = Some(hidden);
+
+    if !shipstudio_dir.exists() {
+        std::fs::create_dir_all(&shipstudio_dir)
+            .map_err(|e| format!("Failed to create .shipstudio directory: {}", e))?;
+    }
+
+    let contents = serde_json::to_string_pretty(&metadata)
+        .map_err(|e| format!("Failed to serialize project metadata: {}", e))?;
+    std::fs::write(&metadata_path, contents)
+        .map_err(|e| format!("Failed to write project metadata: {}", e))?;
+
+    Ok(())
+}

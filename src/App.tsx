@@ -1286,8 +1286,11 @@ function App() {
           </div>
         </header>
 
-        {(currentBranch === 'main' || currentBranch === 'master') && (
-          <MainBranchBanner onCreateBranch={() => setWorkspaceTab('branches')} />
+        {(currentBranch === 'main' || currentBranch === 'master') && currentProject && (
+          <MainBranchBanner
+            projectPath={currentProject.path}
+            onCreateBranch={() => setWorkspaceTab('branches')}
+          />
         )}
 
         <div className="workspace-content">
