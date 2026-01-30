@@ -6,6 +6,10 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.24
+
+- **Fixed Discard All button** - Replaced window.confirm() with two-click confirmation pattern since native dialogs don't work in Tauri WebView
+
 ## What's New in v0.3.23
 
 - **Paste .env** - Added bulk paste feature to Environment Variables modal for quickly importing multiple variables at once
