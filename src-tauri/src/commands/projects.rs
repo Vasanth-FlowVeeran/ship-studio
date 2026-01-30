@@ -142,10 +142,30 @@ fn scan_nextjs_pages(
             if file_name == "page.tsx" || file_name == "page.js" || file_name == "page.jsx" {
                 let parent = path.parent().unwrap_or(&path);
                 let relative = parent.strip_prefix(base_dir).unwrap_or(parent);
-                let route = if relative.as_os_str().is_empty() {
+
+                // Filter out route group directories (parenthesized like "(dashboard)")
+                // These are for organization only and don't affect the URL path
+                let filtered_components: Vec<_> = relative
+                    .components()
+                    .filter_map(|c| {
+                        if let std::path::Component::Normal(s) = c {
+                            let segment = s.to_string_lossy();
+                            // Skip route groups: directories starting with '(' and ending with ')'
+                            if segment.starts_with('(') && segment.ends_with(')') {
+                                None
+                            } else {
+                                Some(segment.to_string())
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                let route = if filtered_components.is_empty() {
                     "/".to_string()
                 } else {
-                    format!("/{}", relative.to_string_lossy().replace('\\', "/"))
+                    format!("/{}", filtered_components.join("/"))
                 };
 
                 let display_route = route.replace('[', ":").replace(']', "");
