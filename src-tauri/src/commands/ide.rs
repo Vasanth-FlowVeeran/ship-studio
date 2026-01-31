@@ -4,8 +4,10 @@
 
 use crate::types::{BrowserInfo, IdeAvailability};
 use crate::utils::validate_project_path;
+use std::net::TcpStream;
 use std::process::Command;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{Manager, Webview, WebviewUrl};
 
 /// Browser configurations for macOS
@@ -390,6 +392,21 @@ pub async fn capture_project_thumbnail(
     project_path: String,
     url: String,
 ) -> Result<String, String> {
+    // Quick health check: verify the dev server is still responding before launching Playwright.
+    // This reduces (but doesn't eliminate) race conditions where the server dies mid-capture.
+    // Extract port from URL (e.g., "http://localhost:3000" -> 3000)
+    let port: u16 = url
+        .trim_start_matches("http://")
+        .trim_start_matches("https://")
+        .split(':')
+        .last()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(3000);
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    if TcpStream::connect_timeout(&addr, Duration::from_secs(1)).is_err() {
+        return Err("Dev server not responding, skipping thumbnail capture".to_string());
+    }
+
     let project = validate_project_path(&project_path)?;
     let shipstudio_dir = project.join(".shipstudio");
 
