@@ -190,7 +190,7 @@ export function BranchIndicator({
                 className="branch-changes-item branch-changes-item-clickable"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSelectedFile({ path: file.path, status: file.status as ChangeStatus });
+                  setSelectedFile({ path: file.path, status: file.status });
                 }}
               >
                 {getStatusIndicator(file.status)}
@@ -209,7 +209,7 @@ export function BranchIndicator({
             <button
               className={`branch-changes-discard-btn ${confirmDiscard ? 'confirming' : ''}`}
               onClick={(e) => {
-                handleDiscardAll(e);
+                void handleDiscardAll(e);
               }}
               disabled={isDiscarding}
             >
