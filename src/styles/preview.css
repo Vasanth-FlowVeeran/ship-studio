@@ -15,6 +15,13 @@
   overflow: visible;
 }
 
+.preview-toolbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 /* Page Switcher */
 .page-switcher {
   position: relative;

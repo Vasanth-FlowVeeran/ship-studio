@@ -111,6 +111,8 @@ interface PreviewProps {
   isBranchSwitching?: boolean;
   /** Whether the dev server is restarting */
   isDevServerRestarting?: boolean;
+  /** Extra toolbar elements to render in the center */
+  toolbarExtra?: React.ReactNode;
 }
 
 /**
@@ -140,6 +142,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     onCropCancel,
     isBranchSwitching = false,
     isDevServerRestarting = false,
+    toolbarExtra,
   },
   ref
 ) {
@@ -800,6 +803,8 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
         <button className="preview-refresh" onClick={handleRefresh} title="Refresh preview">
           ↻
         </button>
+
+        {toolbarExtra && <div className="preview-toolbar-center">{toolbarExtra}</div>}
 
         {hasSanity && (
           <div className="cms-button-wrapper">

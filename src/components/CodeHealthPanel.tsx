@@ -59,7 +59,7 @@ const CATEGORY_LABELS: Record<ScriptCategory, string> = {
 
 export const CodeHealthPanel = forwardRef<CodeHealthPanelRef, CodeHealthPanelProps>(
   function CodeHealthPanel({ projectPath, onToast, onAskClaude, onHealthOutput }, ref) {
-    const [isExpanded, setIsExpanded] = useState(true);
+    const [isExpanded, setIsExpanded] = useState(false);
     const [detectedScripts, setDetectedScripts] = useState<DetectedScripts | null>(null);
     const [checkStates, setCheckStates] = useState<Record<ScriptCategory, CheckState>>({
       test: { status: 'idle', result: null, scriptName: null },

@@ -52,7 +52,6 @@ import {
 } from './lib/branches';
 import {
   CodeIcon,
-  ChatIcon,
   CameraIcon,
   CropIcon,
   FullPageIcon,
@@ -1458,67 +1457,27 @@ function App() {
             left={
               <div className="terminal-pane">
                 <div className="terminal-toolbar">
-                  <div className="agent-toolbar">
-                    <div className="agent-label">
-                      <ChatIcon size={14} />
-                      <span>Agent</span>
-                    </div>
-                    <button
-                      className="agent-capture-btn"
-                      onClick={() => void handleCaptureForClaude()}
-                      disabled={isCapturing || isCropMode || isFullPageCapturing}
-                      title="Screenshot preview for Claude"
-                    >
-                      {isCapturing ? <div className="capture-spinner" /> : <CameraIcon size={14} />}
-                    </button>
-                    <button
-                      className={`agent-capture-btn ${isCropMode ? 'active' : ''}`}
-                      onClick={() => setIsCropMode(!isCropMode)}
-                      disabled={isCapturing || isCropCapturing || isFullPageCapturing}
-                      title="Crop screenshot for Claude"
-                    >
-                      {isCropCapturing ? (
-                        <div className="capture-spinner" />
-                      ) : (
-                        <CropIcon size={14} />
-                      )}
-                    </button>
-                    <button
-                      className="agent-capture-btn"
-                      onClick={() => void handleCaptureFullPage()}
-                      disabled={isCapturing || isCropCapturing || isFullPageCapturing || isCropMode}
-                      title="Full page screenshot for Claude"
-                    >
-                      {isFullPageCapturing ? (
-                        <div className="capture-spinner" />
-                      ) : (
-                        <FullPageIcon size={14} />
-                      )}
-                    </button>
-                  </div>
-                  <div
-                    style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}
+                  <button
+                    className="show-preview-btn"
+                    onClick={() => void handleRestartDevServer()}
+                    disabled={isRestartingDevServer || !devServerRef.current}
+                    title="Restart dev server"
                   >
-                    {isPreviewHidden && (
+                    {isRestartingDevServer ? (
+                      <div className="capture-spinner" />
+                    ) : (
+                      <ResetIcon size={14} />
+                    )}
+                    <span>Restart Server</span>
+                  </button>
+                  {isPreviewHidden && (
+                    <div
+                      style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}
+                    >
                       <BrowserDropdown
                         url={`http://localhost:${devServerPort}`}
                         buttonClassName="show-preview-btn"
                       />
-                    )}
-                    <button
-                      className="show-preview-btn"
-                      onClick={() => void handleRestartDevServer()}
-                      disabled={isRestartingDevServer || !devServerRef.current}
-                      title="Restart dev server"
-                    >
-                      {isRestartingDevServer ? (
-                        <div className="capture-spinner" />
-                      ) : (
-                        <ResetIcon size={14} />
-                      )}
-                      <span>Restart Server</span>
-                    </button>
-                    {isPreviewHidden ? (
                       <button
                         className="show-preview-btn"
                         onClick={() => setIsPreviewHidden(false)}
@@ -1527,17 +1486,8 @@ function App() {
                         <PanelRightIcon size={14} />
                         <span>Show Preview</span>
                       </button>
-                    ) : (
-                      <button
-                        className="show-preview-btn"
-                        onClick={() => setIsPreviewHidden(true)}
-                        title="Hide Preview"
-                      >
-                        <PanelRightIcon size={14} />
-                        <span>Hide Preview</span>
-                      </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
                 <CodeHealthPanel
                   ref={healthPanelRef}
@@ -1551,9 +1501,10 @@ function App() {
                     {terminalTabs.map((tabId, index) => (
                       <button
                         key={tabId}
-                        className={`terminal-tab ${!showDevServerLogs && activeTerminalTab === tabId ? 'active' : ''}`}
+                        className={`workspace-tab ${!showDevServerLogs && activeTerminalTab === tabId ? 'active' : ''}`}
                         onClick={() => {
                           setShowDevServerLogs(false);
+                          setShowHealthLogs(false);
                           setActiveTerminalTab(tabId);
                         }}
                       >
@@ -1577,38 +1528,39 @@ function App() {
                       </button>
                     )}
                   </div>
-                  <div className="terminal-tabs-divider" />
-                  <button
-                    className={`terminal-tab logs-tab ${showDevServerLogs && !showHealthLogs ? 'active' : ''}`}
-                    onClick={() => {
-                      setShowDevServerLogs(true);
-                      setShowHealthLogs(false);
-                    }}
-                    title="View dev server logs"
-                  >
-                    <TerminalIcon size={12} />
-                    <span>Server</span>
-                  </button>
-                  <button
-                    className={`terminal-tab logs-tab ${showHealthLogs ? 'active' : ''}`}
-                    onClick={() => {
-                      setShowDevServerLogs(true);
-                      setShowHealthLogs(true);
-                    }}
-                    title="View health check logs"
-                  >
-                    <svg
-                      width={12}
-                      height={12}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
+                  <div className="terminal-logs-tabs">
+                    <button
+                      className={`workspace-tab ${showDevServerLogs && !showHealthLogs ? 'active' : ''}`}
+                      onClick={() => {
+                        setShowDevServerLogs(true);
+                        setShowHealthLogs(false);
+                      }}
+                      title="View dev server logs"
                     >
-                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                    </svg>
-                    <span>Health</span>
-                  </button>
+                      <TerminalIcon size={12} />
+                      <span>Server</span>
+                    </button>
+                    <button
+                      className={`workspace-tab ${showHealthLogs ? 'active' : ''}`}
+                      onClick={() => {
+                        setShowDevServerLogs(true);
+                        setShowHealthLogs(true);
+                      }}
+                      title="View health check logs"
+                    >
+                      <svg
+                        width={12}
+                        height={12}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                      </svg>
+                      <span>Health</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="terminal-content">
                   {terminalTabs.map((tabId) => (
@@ -1734,10 +1686,53 @@ function App() {
                     onCropCancel={handleCropCancel}
                     isBranchSwitching={isBranchSwitching}
                     isDevServerRestarting={isRestartingDevServer}
+                    toolbarExtra={
+                      <div className="agent-toolbar">
+                        <button
+                          className="agent-capture-btn"
+                          onClick={() => void handleCaptureForClaude()}
+                          disabled={isCapturing || isCropMode || isFullPageCapturing}
+                          title="Screenshot preview for Claude"
+                        >
+                          {isCapturing ? (
+                            <div className="capture-spinner" />
+                          ) : (
+                            <CameraIcon size={14} />
+                          )}
+                        </button>
+                        <button
+                          className={`agent-capture-btn ${isCropMode ? 'active' : ''}`}
+                          onClick={() => setIsCropMode(!isCropMode)}
+                          disabled={isCapturing || isCropCapturing || isFullPageCapturing}
+                          title="Crop screenshot for Claude"
+                        >
+                          {isCropCapturing ? (
+                            <div className="capture-spinner" />
+                          ) : (
+                            <CropIcon size={14} />
+                          )}
+                        </button>
+                        <button
+                          className="agent-capture-btn"
+                          onClick={() => void handleCaptureFullPage()}
+                          disabled={
+                            isCapturing || isCropCapturing || isFullPageCapturing || isCropMode
+                          }
+                          title="Full page screenshot for Claude"
+                        >
+                          {isFullPageCapturing ? (
+                            <div className="capture-spinner" />
+                          ) : (
+                            <FullPageIcon size={14} />
+                          )}
+                        </button>
+                      </div>
+                    }
                   />
                 )}
-                {workspaceTab === 'branches' && currentProject && (
-                  integrations.github.cliStatus.authenticated &&
+                {workspaceTab === 'branches' &&
+                  currentProject &&
+                  (integrations.github.cliStatus.authenticated &&
                   integrations.projectGithub?.status === 'connected' ? (
                     <BranchesTab
                       branches={branches}
@@ -1759,10 +1754,10 @@ function App() {
                         onConnect={() => void handleGitHubConnectFromOverlay()}
                       />
                     </div>
-                  )
-                )}
-                {workspaceTab === 'prs' && currentProject && (
-                  integrations.github.cliStatus.authenticated &&
+                  ))}
+                {workspaceTab === 'prs' &&
+                  currentProject &&
+                  (integrations.github.cliStatus.authenticated &&
                   integrations.projectGithub?.status === 'connected' ? (
                     <PullRequestsTab
                       projectPath={currentProject.path}
@@ -1784,8 +1779,7 @@ function App() {
                         onConnect={() => void handleGitHubConnectFromOverlay()}
                       />
                     </div>
-                  )
-                )}
+                  ))}
               </div>
             }
           />
