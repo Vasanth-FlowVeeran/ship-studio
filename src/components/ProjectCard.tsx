@@ -32,6 +32,8 @@ interface ProjectCardProps {
   onOpenIde?: () => void;
   /** Callback to move project to a folder */
   onMoveToFolder?: () => void;
+  /** Callback to export project as a template zip */
+  onExportAsTemplate?: () => void;
 }
 
 export function ProjectCard({
@@ -44,6 +46,7 @@ export function ProjectCard({
   onOpenSite,
   onOpenIde,
   onMoveToFolder,
+  onExportAsTemplate,
 }: ProjectCardProps) {
   const hasChanges = project.uncommitted_count !== null && project.uncommitted_count > 0;
   const autoAcceptMode = project.auto_accept_mode === true;
@@ -142,6 +145,7 @@ export function ProjectCard({
           hideMainBranchWarning={hideMainBranchWarning}
           onToggleMainBranchWarning={onToggleMainBranchWarning}
           onMoveToFolder={onMoveToFolder}
+          onExportAsTemplate={onExportAsTemplate}
           onDelete={onDelete}
         />
       </div>

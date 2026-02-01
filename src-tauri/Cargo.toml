@@ -37,6 +37,8 @@ tracing-appender = "0.2"
 once_cell = "1.19"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 zip = "2"
+tauri-plugin-dialog = "2"
+walkdir = "2"
 
 # macOS-specific dependencies for WebKit JavaScript evaluation
 [target.'cfg(target_os = "macos")'.dependencies]

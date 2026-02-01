@@ -278,6 +278,21 @@ export function ProjectList({
     }
   };
 
+  const handleExportAsTemplate = async (projectPath: string) => {
+    try {
+      const result = await invoke<string | null>('export_project_as_template', {
+        projectPath,
+      });
+      if (result) {
+        alert(`Template exported to:\n${result}`);
+      }
+      // If result is null, user cancelled the dialog - no action needed
+    } catch (error) {
+      console.error('Failed to export template:', error);
+      alert('Failed to export template: ' + String(error));
+    }
+  };
+
   const handleCreateFolder = async (name: string) => {
     await createFolder(name);
     await loadFolders();
@@ -454,6 +469,7 @@ export function ProjectList({
                 void handleToggleMainBranchWarning(project.path, hidden)
               }
               onMoveToFolder={() => void handleOpenMoveModal(project)}
+              onExportAsTemplate={() => void handleExportAsTemplate(project.path)}
               onOpenSite={
                 project.production_url
                   ? () => {

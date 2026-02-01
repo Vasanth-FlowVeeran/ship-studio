@@ -9,6 +9,10 @@ use crate::types::{
 use crate::utils::validate_project_path;
 use std::io::{Read, Write};
 use std::process::Command;
+use tauri::AppHandle;
+use tauri_plugin_dialog::DialogExt;
+use walkdir::WalkDir;
+use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::ZipArchive;
 
 // ============ Helper Functions ============
@@ -967,4 +971,123 @@ pub async fn extract_template_zip(
     }
 
     Ok(project_path.to_string_lossy().to_string())
+}
+
+/// Directories to exclude when exporting a project as a template
+const EXPORT_EXCLUDED_DIRS: &[&str] = &[
+    "node_modules",
+    ".git",
+    ".shipstudio",
+    ".next",
+    ".vercel",
+    "dist",
+    "build",
+    ".turbo",
+    ".cache",
+    ".svelte-kit",
+    ".nuxt",
+    ".output",
+    "out",
+];
+
+/// Exports a project as a zip template file.
+/// Opens a save dialog for the user to choose the destination.
+/// Returns the path to the saved file, or None if cancelled.
+#[tauri::command]
+pub async fn export_project_as_template(
+    app: AppHandle,
+    project_path: String,
+) -> Result<Option<String>, String> {
+    let project = std::path::PathBuf::from(&project_path);
+
+    // Validate project exists
+    if !project.exists() {
+        return Err("Project does not exist".to_string());
+    }
+
+    // Get project name for default filename
+    let project_name = project
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("project");
+    let default_filename = format!("{}-template.zip", project_name);
+
+    // Open save dialog
+    let file_path = app
+        .dialog()
+        .file()
+        .set_file_name(&default_filename)
+        .add_filter("Zip Archive", &["zip"])
+        .blocking_save_file();
+
+    let save_path = match file_path {
+        Some(path) => path
+            .into_path()
+            .map_err(|e| format!("Invalid file path: {}", e))?,
+        None => return Ok(None), // User cancelled
+    };
+
+    // Create the zip file
+    let file = std::fs::File::create(&save_path)
+        .map_err(|e| format!("Failed to create zip file: {}", e))?;
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o644);
+
+    // Walk the project directory
+    for entry in WalkDir::new(&project) {
+        let entry = entry.map_err(|e| format!("Failed to read directory: {}", e))?;
+        let path = entry.path();
+
+        // Get relative path from project root
+        let relative_path = path
+            .strip_prefix(&project)
+            .map_err(|e| format!("Failed to get relative path: {}", e))?;
+
+        // Skip if empty path (the root itself)
+        if relative_path.as_os_str().is_empty() {
+            continue;
+        }
+
+        // Check if this path should be excluded
+        let should_exclude = relative_path.components().any(|component| {
+            if let std::path::Component::Normal(name) = component {
+                if let Some(name_str) = name.to_str() {
+                    return EXPORT_EXCLUDED_DIRS.contains(&name_str);
+                }
+            }
+            false
+        });
+
+        if should_exclude {
+            continue;
+        }
+
+        let relative_path_str = relative_path.to_string_lossy();
+
+        if path.is_dir() {
+            // Add directory entry
+            zip.add_directory(&format!("{}/", relative_path_str), options)
+                .map_err(|e| format!("Failed to add directory to zip: {}", e))?;
+        } else {
+            // Add file entry
+            zip.start_file(&relative_path_str, options)
+                .map_err(|e| format!("Failed to start file in zip: {}", e))?;
+
+            let mut file_content = Vec::new();
+            std::fs::File::open(path)
+                .map_err(|e| format!("Failed to open file: {}", e))?
+                .read_to_end(&mut file_content)
+                .map_err(|e| format!("Failed to read file: {}", e))?;
+
+            zip.write_all(&file_content)
+                .map_err(|e| format!("Failed to write file to zip: {}", e))?;
+        }
+    }
+
+    zip.finish()
+        .map_err(|e| format!("Failed to finalize zip file: {}", e))?;
+
+    Ok(Some(save_path.to_string_lossy().to_string()))
 }

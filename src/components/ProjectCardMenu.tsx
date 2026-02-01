@@ -11,7 +11,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
-import { ZapIcon, TrashIcon, FolderIcon, WarningIcon } from './icons';
+import { ZapIcon, TrashIcon, FolderIcon, WarningIcon, DownloadIcon } from './icons';
 import { useClickOutside } from '../hooks/useClickOutside';
 
 /** Local storage key for tracking if user has seen the auto-accept warning */
@@ -28,6 +28,8 @@ interface ProjectCardMenuProps {
   onToggleMainBranchWarning: (hidden: boolean) => void;
   /** Callback to move project to a folder */
   onMoveToFolder?: () => void;
+  /** Callback to export project as a template zip */
+  onExportAsTemplate?: () => void;
   /** Callback when delete is clicked */
   onDelete: () => void;
 }
@@ -38,6 +40,7 @@ export function ProjectCardMenu({
   hideMainBranchWarning,
   onToggleMainBranchWarning,
   onMoveToFolder,
+  onExportAsTemplate,
   onDelete,
 }: ProjectCardMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -92,6 +95,12 @@ export function ProjectCardMenu({
     setIsOpen(false);
   };
 
+  const handleExportAsTemplateClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen(false);
+    onExportAsTemplate?.();
+  };
+
   const handleMenuButtonClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsOpen(!isOpen);
@@ -134,6 +143,12 @@ export function ProjectCardMenu({
               <button className="project-card-dropdown-item" onClick={handleMoveToFolderClick}>
                 <FolderIcon size={14} />
                 <span>Move to folder</span>
+              </button>
+            )}
+            {onExportAsTemplate && (
+              <button className="project-card-dropdown-item" onClick={handleExportAsTemplateClick}>
+                <DownloadIcon size={14} />
+                <span>Export as template</span>
               </button>
             )}
             <div className="project-card-dropdown-divider" />

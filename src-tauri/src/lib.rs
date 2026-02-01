@@ -83,6 +83,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_dialog::init())
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 cleanup_claude_processes();
@@ -131,6 +132,7 @@ pub fn run() {
             commands::projects::get_hide_main_branch_warning,
             commands::projects::set_hide_main_branch_warning,
             commands::projects::extract_template_zip,
+            commands::projects::export_project_as_template,
             // Environment variables
             commands::env::list_env_files,
             commands::env::read_env_file,
