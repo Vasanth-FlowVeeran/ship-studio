@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useReducer } from 'react';
-import { Terminal, TerminalHandle } from './components/Terminal';
+import { Terminal, TerminalHandle, ClaudeStatus } from './components/Terminal';
 import { DevServerLogs } from './components/DevServerLogs';
 import { Preview, PreviewHandle } from './components/Preview';
 import { ProjectList } from './components/ProjectList';
@@ -42,6 +42,14 @@ import { BrowserDropdown } from './components/BrowserDropdown';
 import { ConnectOverlay } from './components/ConnectOverlay';
 import { CodeHealthPanel, CodeHealthPanelRef } from './components/CodeHealthPanel';
 import { ScreenshotToast, ScreenshotPreviewModal } from './components/ScreenshotPreview';
+import { NotificationSettingsModal } from './components/NotificationSettingsModal';
+import {
+  NotificationSettings,
+  loadNotificationSettings,
+  saveNotificationSettings,
+  playSound,
+} from './lib/sounds';
+import './styles/notifications.css';
 import {
   BranchInfo,
   PullRequestInfo,
@@ -260,6 +268,11 @@ function App() {
   const healthOutputRef = useRef<string>(''); // Buffer health check output
   const [healthOutputVersion, setHealthOutputVersion] = useState(0); // Triggers re-render when output changes
   const healthPanelRef = useRef<CodeHealthPanelRef>(null);
+
+  // Notification settings state
+  const [notificationSettings, setNotificationSettings] =
+    useState<NotificationSettings>(loadNotificationSettings);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
 
   // Integration states consolidated via reducer for atomic updates
   const [integrations, dispatch] = useReducer(integrationReducer, initialIntegrationState);
@@ -930,6 +943,34 @@ function App() {
   // Handle terminal exit (memoized to prevent re-spawning Claude on every render)
   const handleTerminalExit = useCallback((code: number | null) => {
     logger.info('Terminal exited', { code });
+  }, []);
+
+  // Track previous Claude status to detect transitions
+  const prevClaudeStatusRef = useRef<ClaudeStatus>('idle');
+
+  // Use ref for notification settings to avoid re-creating callback
+  const notificationSettingsRef = useRef(notificationSettings);
+  useEffect(() => {
+    notificationSettingsRef.current = notificationSettings;
+  }, [notificationSettings]);
+
+  // Handle Claude status changes - play sounds based on settings
+  const handleClaudeStatusChange = useCallback((status: ClaudeStatus, _title: string) => {
+    const settings = notificationSettingsRef.current;
+    const wasThinking = prevClaudeStatusRef.current === 'thinking';
+
+    // When Claude transitions from thinking to waiting (finished processing)
+    if (wasThinking && status === 'waiting' && settings.enabled) {
+      void playSound(settings.sound);
+    }
+
+    prevClaudeStatusRef.current = status;
+  }, []);
+
+  // Save notification settings when they change
+  const handleSaveNotificationSettings = useCallback((settings: NotificationSettings) => {
+    setNotificationSettings(settings);
+    saveNotificationSettings(settings);
   }, []);
 
   // Capture project screenshot in background (only if dev server is ready)
@@ -1708,6 +1749,23 @@ function App() {
                         </svg>
                         <span>Health</span>
                       </button>
+                      <button
+                        className={`workspace-tab icon-only ${notificationSettings.enabled ? 'active' : ''}`}
+                        onClick={() => setShowNotificationSettings(true)}
+                        title="Notification sounds"
+                      >
+                        <svg
+                          width={12}
+                          height={12}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                      </button>
                     </div>
 
                     {/* Compact mode controls - visible only at narrow widths via CSS */}
@@ -1747,6 +1805,7 @@ function App() {
                           projectPath={currentProject?.path || ''}
                           onExit={handleTerminalExit}
                           autoAcceptMode={autoAcceptMode}
+                          onStatusChange={handleClaudeStatusChange}
                         />
                       </div>
                     ))}
@@ -2118,6 +2177,15 @@ function App() {
               setShowScreenshotModal(false);
               setScreenshotPreviewPath(null);
             }}
+          />
+        )}
+
+        {/* Notification Settings Modal */}
+        {showNotificationSettings && (
+          <NotificationSettingsModal
+            settings={notificationSettings}
+            onSave={handleSaveNotificationSettings}
+            onClose={() => setShowNotificationSettings(false)}
           />
         )}
 

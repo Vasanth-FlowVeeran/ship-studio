@@ -23,6 +23,9 @@ import { homeDir } from '@tauri-apps/api/path';
 import { loadNerdFonts } from '../lib/fonts';
 import '@xterm/xterm/css/xterm.css';
 
+/** Claude Code status based on terminal title */
+export type ClaudeStatus = 'thinking' | 'waiting' | 'idle';
+
 /** Props for the Terminal component */
 interface TerminalProps {
   /** Absolute path to the project directory where Claude Code will run */
@@ -31,6 +34,8 @@ interface TerminalProps {
   onExit?: (code: number | null) => void;
   /** Whether to run Claude in auto-accept mode (--dangerously-skip-permissions) */
   autoAcceptMode?: boolean;
+  /** Callback fired when Claude's status changes (thinking, waiting for input, idle) */
+  onStatusChange?: (status: ClaudeStatus, title: string) => void;
 }
 
 /**
@@ -49,7 +54,7 @@ export interface TerminalHandle {
 }
 
 export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { projectPath, onExit, autoAcceptMode = false },
+  { projectPath, onExit, autoAcceptMode = false, onStatusChange },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,11 +64,14 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const [isReady, setIsReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false); // Start unfocused to show overlay until user clicks
 
-  // Use ref for onExit to prevent effect re-runs when callback reference changes
+  // Use refs for callbacks to prevent effect re-runs when callback references change
   const onExitRef = useRef(onExit);
+  const onStatusChangeRef = useRef(onStatusChange);
+  const lastStatusRef = useRef<ClaudeStatus>('idle');
   useEffect(() => {
     onExitRef.current = onExit;
-  }, [onExit]);
+    onStatusChangeRef.current = onStatusChange;
+  }, [onExit, onStatusChange]);
 
   const cleanup = useCallback(() => {
     if (ptyRef.current) {
@@ -218,6 +226,44 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       textarea.addEventListener('focus', () => setIsFocused(true));
       textarea.addEventListener('blur', () => setIsFocused(false));
     }
+
+    // Listen for terminal title changes to detect Claude's status
+    // Claude Code updates the terminal title with icons:
+    // - Dot (· char ~10242/10256) when thinking/processing
+    // - Star (* char ~10035) when done/waiting for input
+    term.onTitleChange((title) => {
+      let status: ClaudeStatus = 'idle';
+
+      // Check first character code to detect status
+      const firstCharCode = title.charCodeAt(0);
+
+      // Dot variants (thinking/processing) - char codes around 10242, 10256, or literal dot
+      if (
+        firstCharCode === 10242 ||
+        firstCharCode === 10256 ||
+        firstCharCode === 183 ||
+        title.startsWith('·') ||
+        title.startsWith('•')
+      ) {
+        status = 'thinking';
+      }
+      // Star variants (done/waiting) - char code 10035 or asterisk-like
+      else if (
+        firstCharCode === 10035 ||
+        title.startsWith('*') ||
+        title.startsWith('✳') ||
+        title.startsWith('✱') ||
+        title.startsWith('✲')
+      ) {
+        status = 'waiting';
+      }
+
+      // Only fire callback if status actually changed
+      if (status !== lastStatusRef.current) {
+        lastStatusRef.current = status;
+        onStatusChangeRef.current?.(status, title);
+      }
+    });
 
     // Track if this effect instance is still mounted (handles StrictMode/HMR)
     let mounted = true;
