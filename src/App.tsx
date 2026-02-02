@@ -1693,6 +1693,7 @@ function App() {
                       </button>
                     </div>
                   )}
+                  <div style={{ flex: 1 }} />
                   <div className="preview-tabs-divider" />
                   <div className="preview-actions">
                     <BrowserDropdown
