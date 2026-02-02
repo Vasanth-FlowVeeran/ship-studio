@@ -6,6 +6,14 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.37
+
+- **Terminal Focus Indicator** - Terminal now dims and goes grayscale when unfocused for clearer visual feedback
+- **Notification Sounds** - Play sounds when Claude finishes and needs your input, with 5 presets or custom sound upload
+- **Error Recovery** - App-wide error boundary with restart button for crash recovery
+- **Responsive UI** - Fixed main branch banner and notification modal on narrow windows
+
+
 ## What's New in v0.3.36
 
 - **Responsive breakpoints** - Breakpoint options now hide when they don't fit in the preview viewport
