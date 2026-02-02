@@ -1668,29 +1668,31 @@ function App() {
                       onSave={() => setForcePublishOpen(true)}
                     />
                   )}
-                  <div className="workspace-tabs">
-                    <button
-                      className={`workspace-tab ${workspaceTab === 'preview' ? 'active' : ''}`}
-                      onClick={() => setWorkspaceTab('preview')}
-                    >
-                      <EyeIcon size={14} />
-                      <span>Preview</span>
-                    </button>
-                    <button
-                      className={`workspace-tab ${workspaceTab === 'branches' ? 'active' : ''}`}
-                      onClick={() => setWorkspaceTab('branches')}
-                    >
-                      <BranchIcon size={14} />
-                      <span>Branches</span>
-                    </button>
-                    <button
-                      className={`workspace-tab ${workspaceTab === 'prs' ? 'active' : ''}`}
-                      onClick={() => setWorkspaceTab('prs')}
-                    >
-                      <PullRequestIcon size={14} />
-                      <span>PRs</span>
-                    </button>
-                  </div>
+                  {integrations.projectGithub?.status === 'connected' && (
+                    <div className="workspace-tabs">
+                      <button
+                        className={`workspace-tab ${workspaceTab === 'preview' ? 'active' : ''}`}
+                        onClick={() => setWorkspaceTab('preview')}
+                      >
+                        <EyeIcon size={14} />
+                        <span>Preview</span>
+                      </button>
+                      <button
+                        className={`workspace-tab ${workspaceTab === 'branches' ? 'active' : ''}`}
+                        onClick={() => setWorkspaceTab('branches')}
+                      >
+                        <BranchIcon size={14} />
+                        <span>Branches</span>
+                      </button>
+                      <button
+                        className={`workspace-tab ${workspaceTab === 'prs' ? 'active' : ''}`}
+                        onClick={() => setWorkspaceTab('prs')}
+                      >
+                        <PullRequestIcon size={14} />
+                        <span>PRs</span>
+                      </button>
+                    </div>
+                  )}
                   <div className="preview-tabs-divider" />
                   <div className="preview-actions">
                     <BrowserDropdown
