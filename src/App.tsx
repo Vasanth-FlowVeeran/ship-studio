@@ -1668,6 +1668,7 @@ function App() {
                       onSave={() => setForcePublishOpen(true)}
                     />
                   )}
+                  <div style={{ flex: 1 }} />
                   {integrations.projectGithub?.status === 'connected' && (
                     <div className="workspace-tabs">
                       <button
@@ -1693,7 +1694,6 @@ function App() {
                       </button>
                     </div>
                   )}
-                  <div style={{ flex: 1 }} />
                   <div className="preview-tabs-divider" />
                   <div className="preview-actions">
                     <BrowserDropdown
