@@ -135,6 +135,11 @@ const SCREENSHOT_RETRY_DELAY_MS = 3000;
 /** Preferred port for Next.js dev server (will find available port if taken) */
 const PREFERRED_DEV_SERVER_PORT = 3000;
 
+/** Fallback GitHub status when the check fails or times out (shows "Create Repo" instead of stuck "Checking...") */
+const GITHUB_STATUS_FALLBACK: ProjectGitHubStatus = { status: 'no-remote', github_repo: null, github_url: null };
+/** Fallback Vercel status when the check fails or times out (shows "Connect" instead of stuck "Checking...") */
+const VERCEL_STATUS_FALLBACK: ProjectVercelStatus = { status: 'not-linked', project_name: null, vercel_org: null, production_url: null, staging_url: null };
+
 /** Current application view/screen */
 type AppView = 'loading' | 'onboarding' | 'projects' | 'project-loading' | 'workspace';
 
@@ -614,17 +619,14 @@ function App({ initialProjectPath }: AppProps) {
           setView('workspace');
 
           // Refresh branch info and statuses in background
+          // Dispatch each independently so fast results aren't blocked by slow ones
           void fetchBranchInfo(storedProjectPath);
-          void (async () => {
-            const [ghStatus, vcStatus] = await Promise.all([
-              getProjectGitHubStatus(storedProjectPath).catch(() => null),
-              getProjectVercelStatus(storedProjectPath).catch(() => null),
-            ]);
-            dispatch({
-              type: 'SET_PROJECT_STATUSES',
-              payload: { github: ghStatus, vercel: vcStatus },
-            });
-          })();
+          void getProjectGitHubStatus(storedProjectPath)
+            .catch(() => GITHUB_STATUS_FALLBACK)
+            .then((status) => dispatch({ type: 'SET_PROJECT_GITHUB', payload: status }));
+          void getProjectVercelStatus(storedProjectPath)
+            .catch(() => VERCEL_STATUS_FALLBACK)
+            .then((status) => dispatch({ type: 'SET_PROJECT_VERCEL', payload: status }));
         }
       } catch {
         // If backend check fails, let normal flow continue
@@ -1436,33 +1438,24 @@ function App({ initialProjectPath }: AppProps) {
     logger.info(`[OpenProject] Complete - Total: ${Math.round(performance.now() - totalStart)}ms`);
 
     // Fetch GitHub and Vercel status in background (non-blocking for faster perceived load)
-    void (async () => {
-      const bgStart = performance.now();
-      try {
-        const [ghStatus, vcStatus] = await Promise.all([
-          getProjectGitHubStatus(project.path).catch(() => null),
-          getProjectVercelStatus(project.path).catch(() => null),
-        ]);
-        // Log Vercel status for debugging domain display issues
-        if (vcStatus) {
-          logger.info('[OpenProject] Vercel status received', {
-            project: project.name,
-            status: vcStatus.status,
-            project_name: vcStatus.project_name,
-            production_url: vcStatus.production_url,
-            staging_url: vcStatus.staging_url,
-          });
-        } else {
-          logger.info('[OpenProject] No Vercel status for project', { project: project.name });
-        }
-        dispatch({ type: 'SET_PROJECT_STATUSES', payload: { github: ghStatus, vercel: vcStatus } });
-      } catch {
-        dispatch({ type: 'CLEAR_PROJECT_STATUSES' });
-      }
-      logger.info(
-        `[OpenProject] Background: Fetch GitHub and Vercel status - ${Math.round(performance.now() - bgStart)}ms`
-      );
-    })();
+    // Dispatch each independently so fast results (e.g. GitHub ~300ms) aren't blocked by slow ones (e.g. Vercel ~30s+)
+    void getProjectGitHubStatus(project.path)
+      .catch(() => GITHUB_STATUS_FALLBACK)
+      .then((ghStatus) => {
+        dispatch({ type: 'SET_PROJECT_GITHUB', payload: ghStatus });
+      });
+    void getProjectVercelStatus(project.path)
+      .catch(() => VERCEL_STATUS_FALLBACK)
+      .then((vcStatus) => {
+        logger.info('[OpenProject] Vercel status received', {
+          project: project.name,
+          status: vcStatus.status,
+          project_name: vcStatus.project_name,
+          production_url: vcStatus.production_url,
+          staging_url: vcStatus.staging_url,
+        });
+        dispatch({ type: 'SET_PROJECT_VERCEL', payload: vcStatus });
+      });
 
     // Capture screenshots periodically - check ref to avoid stale closure
     const projectPath = project.path;
@@ -1701,7 +1694,7 @@ function App({ initialProjectPath }: AppProps) {
       // If we have a vercel deployed URL, optimistically set Vercel as connected
       // This avoids race conditions where the status check runs before Vercel's state propagates
       if (vercelDeployedUrl) {
-        const ghStatus = await getProjectGitHubStatus(currentProject.path).catch(() => null);
+        const ghStatus = await getProjectGitHubStatus(currentProject.path).catch(() => GITHUB_STATUS_FALLBACK);
         dispatch({
           type: 'SET_PROJECT_STATUSES',
           payload: {
@@ -1718,11 +1711,13 @@ function App({ initialProjectPath }: AppProps) {
         return;
       }
 
-      const [ghStatus, vcStatus] = await Promise.all([
-        getProjectGitHubStatus(currentProject.path).catch(() => null),
-        getProjectVercelStatus(currentProject.path).catch(() => null),
-      ]);
-      dispatch({ type: 'SET_PROJECT_STATUSES', payload: { github: ghStatus, vercel: vcStatus } });
+      // Dispatch each independently so fast results aren't blocked by slow ones
+      void getProjectGitHubStatus(currentProject.path)
+        .catch(() => GITHUB_STATUS_FALLBACK)
+        .then((status) => dispatch({ type: 'SET_PROJECT_GITHUB', payload: status }));
+      void getProjectVercelStatus(currentProject.path)
+        .catch(() => VERCEL_STATUS_FALLBACK)
+        .then((status) => dispatch({ type: 'SET_PROJECT_VERCEL', payload: status }));
     }
   };
 
@@ -1743,7 +1738,7 @@ function App({ initialProjectPath }: AppProps) {
     }
     // Otherwise refresh project Vercel status
     if (currentProject) {
-      const status = await getProjectVercelStatus(currentProject.path).catch(() => null);
+      const status = await getProjectVercelStatus(currentProject.path).catch(() => VERCEL_STATUS_FALLBACK);
       dispatch({ type: 'SET_PROJECT_VERCEL', payload: status });
     }
   };

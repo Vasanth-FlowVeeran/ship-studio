@@ -130,12 +130,20 @@ pub async fn check_vercel_cli_status() -> VercelCliStatus {
         };
     }
 
-    // Check if authenticated by running `vercel whoami`
-    let authenticated = get_vercel_command()
-        .args(["whoami"])
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false);
+    // Check if authenticated by running `vercel whoami` (with timeout to prevent hanging)
+    let start = std::time::Instant::now();
+    let mut whoami_cmd = get_vercel_command();
+    whoami_cmd.args(["whoami"]);
+    let authenticated = match run_command_with_timeout(whoami_cmd, VERCEL_CLI_TIMEOUT_SECS).await {
+        Ok(output) => {
+            info!(elapsed_ms = start.elapsed().as_millis() as u64, success = output.status.success(), "vercel whoami completed");
+            output.status.success()
+        }
+        Err(e) => {
+            warn!(elapsed_ms = start.elapsed().as_millis() as u64, error = %e, "vercel whoami failed/timed out");
+            false
+        }
+    };
 
     VercelCliStatus {
         installed,
@@ -533,20 +541,35 @@ pub async fn get_project_vercel_status(project_path: String) -> ProjectVercelSta
         org_str != "personal" && !org_str.is_empty()
     });
 
+    let total_start = std::time::Instant::now();
     info!(
         project_name = %project_name_str,
         org_id = ?org_id,
         valid_org_id = ?valid_org_id,
-        "Fetching Vercel project URLs"
+        "get_project_vercel_status: starting"
     );
 
-    // Get URLs from `vercel alias ls`
+    // Get URLs from `vercel alias ls` (with timeout to prevent hanging)
+    // If this times out, we skip the fallback `vercel list` calls entirely since the CLI is unreachable
+    let step_start = std::time::Instant::now();
     let mut alias_cmd = get_vercel_command();
     alias_cmd.args(["alias", "ls"]);
     if let Some(ref org) = valid_org_id {
         alias_cmd.args(["--scope", org]);
     }
-    let alias_output = alias_cmd.current_dir(&project).output().ok();
+    alias_cmd.current_dir(&project);
+    let mut vercel_cli_reachable = true;
+    let alias_output = match run_command_with_timeout(alias_cmd, VERCEL_CLI_TIMEOUT_SECS).await {
+        Ok(output) => {
+            info!(elapsed_ms = step_start.elapsed().as_millis() as u64, success = output.status.success(), "vercel alias ls completed");
+            Some(output)
+        }
+        Err(e) => {
+            warn!(elapsed_ms = step_start.elapsed().as_millis() as u64, error = %e, "vercel alias ls failed/timed out — skipping further Vercel CLI calls");
+            vercel_cli_reachable = false;
+            None
+        }
+    };
 
     let mut vercel_org: Option<String> = None;
     let mut staging_url: Option<String> = None;
@@ -648,18 +671,30 @@ pub async fn get_project_vercel_status(project_path: String) -> ProjectVercelSta
     }
 
     // If no staging URL from aliases, check vercel list for Preview deployments
-    if staging_url.is_none() {
-        debug!(
+    // Skip if the CLI already timed out (no point waiting another 30s)
+    if staging_url.is_none() && vercel_cli_reachable {
+        info!(
             project_name = %project_name_str,
             "No staging URL from aliases, checking vercel list for Preview deployments"
         );
 
+        let step_start = std::time::Instant::now();
         let mut list_cmd = get_vercel_command();
         list_cmd.args(["list"]);
-        if let Some(ref org) = org_id {
+        if let Some(ref org) = valid_org_id {
             list_cmd.args(["--scope", org]);
         }
-        let list_output = list_cmd.current_dir(&project).output().ok();
+        list_cmd.current_dir(&project);
+        let list_output = match run_command_with_timeout(list_cmd, VERCEL_CLI_TIMEOUT_SECS).await {
+            Ok(output) => {
+                info!(elapsed_ms = step_start.elapsed().as_millis() as u64, success = output.status.success(), "vercel list (staging) completed");
+                Some(output)
+            }
+            Err(e) => {
+                warn!(elapsed_ms = step_start.elapsed().as_millis() as u64, error = %e, "vercel list (staging) failed/timed out");
+                None
+            }
+        };
 
         if let Some(output) = list_output {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -696,18 +731,30 @@ pub async fn get_project_vercel_status(project_path: String) -> ProjectVercelSta
     }
 
     // If still no production URL, try to get it from vercel list (for Production deployments)
-    if production_url.is_none() {
-        debug!(
+    // Skip if the CLI already timed out
+    if production_url.is_none() && vercel_cli_reachable {
+        info!(
             project_name = %project_name_str,
             "No production URL from aliases, checking vercel list for Production deployments"
         );
 
+        let step_start = std::time::Instant::now();
         let mut list_cmd = get_vercel_command();
         list_cmd.args(["list"]);
-        if let Some(ref org) = org_id {
+        if let Some(ref org) = valid_org_id {
             list_cmd.args(["--scope", org]);
         }
-        let list_output = list_cmd.current_dir(&project).output().ok();
+        list_cmd.current_dir(&project);
+        let list_output = match run_command_with_timeout(list_cmd, VERCEL_CLI_TIMEOUT_SECS).await {
+            Ok(output) => {
+                info!(elapsed_ms = step_start.elapsed().as_millis() as u64, success = output.status.success(), "vercel list (production) completed");
+                Some(output)
+            }
+            Err(e) => {
+                warn!(elapsed_ms = step_start.elapsed().as_millis() as u64, error = %e, "vercel list (production) failed/timed out");
+                None
+            }
+        };
 
         if let Some(output) = list_output {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -779,11 +826,12 @@ pub async fn get_project_vercel_status(project_path: String) -> ProjectVercelSta
     }
 
     info!(
+        total_elapsed_ms = total_start.elapsed().as_millis() as u64,
         project_name = ?project_name,
         vercel_org = ?vercel_org,
         production_url = ?production_url,
         staging_url = ?staging_url,
-        "Returning Vercel status for project"
+        "get_project_vercel_status: done"
     );
 
     ProjectVercelStatus {
