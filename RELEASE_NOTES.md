@@ -6,6 +6,14 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.42
+
+- **Skills Manager** - Install and manage Claude skills directly from Ship Studio. Click the lightning bolt icon to browse installed skills, search for new ones, and install/remove them with one click.
+- **Help & Commands** - New help modal showing all Claude slash commands, your installed skills, keyboard shortcuts, and example prompts. Click the question mark icon in the terminal header.
+- **Improved Terminal Header** - Server, Health, and Notification buttons are now icon-only for a cleaner look. Hover for tooltips.
+- **Better Integration Status** - GitHub and Vercel CLI status checks now have timeout handling with graceful fallbacks
+- **UI Polish** - Compact mode publish button improvements, card-based styling in Help modal, click-to-expand skills with +/- indicators
+
 ## What's New in v0.3.41
 
 - **Education Mode** - Click the graduation cap button to learn what each UI element does. Hover over any part of the app to see beginner-friendly tooltips explaining its purpose.

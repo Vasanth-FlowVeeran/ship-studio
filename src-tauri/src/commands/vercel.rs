@@ -136,7 +136,11 @@ pub async fn check_vercel_cli_status() -> VercelCliStatus {
     whoami_cmd.args(["whoami"]);
     let authenticated = match run_command_with_timeout(whoami_cmd, VERCEL_CLI_TIMEOUT_SECS).await {
         Ok(output) => {
-            info!(elapsed_ms = start.elapsed().as_millis() as u64, success = output.status.success(), "vercel whoami completed");
+            info!(
+                elapsed_ms = start.elapsed().as_millis() as u64,
+                success = output.status.success(),
+                "vercel whoami completed"
+            );
             output.status.success()
         }
         Err(e) => {
@@ -561,7 +565,11 @@ pub async fn get_project_vercel_status(project_path: String) -> ProjectVercelSta
     let mut vercel_cli_reachable = true;
     let alias_output = match run_command_with_timeout(alias_cmd, VERCEL_CLI_TIMEOUT_SECS).await {
         Ok(output) => {
-            info!(elapsed_ms = step_start.elapsed().as_millis() as u64, success = output.status.success(), "vercel alias ls completed");
+            info!(
+                elapsed_ms = step_start.elapsed().as_millis() as u64,
+                success = output.status.success(),
+                "vercel alias ls completed"
+            );
             Some(output)
         }
         Err(e) => {
@@ -687,7 +695,11 @@ pub async fn get_project_vercel_status(project_path: String) -> ProjectVercelSta
         list_cmd.current_dir(&project);
         let list_output = match run_command_with_timeout(list_cmd, VERCEL_CLI_TIMEOUT_SECS).await {
             Ok(output) => {
-                info!(elapsed_ms = step_start.elapsed().as_millis() as u64, success = output.status.success(), "vercel list (staging) completed");
+                info!(
+                    elapsed_ms = step_start.elapsed().as_millis() as u64,
+                    success = output.status.success(),
+                    "vercel list (staging) completed"
+                );
                 Some(output)
             }
             Err(e) => {
@@ -747,7 +759,11 @@ pub async fn get_project_vercel_status(project_path: String) -> ProjectVercelSta
         list_cmd.current_dir(&project);
         let list_output = match run_command_with_timeout(list_cmd, VERCEL_CLI_TIMEOUT_SECS).await {
             Ok(output) => {
-                info!(elapsed_ms = step_start.elapsed().as_millis() as u64, success = output.status.success(), "vercel list (production) completed");
+                info!(
+                    elapsed_ms = step_start.elapsed().as_millis() as u64,
+                    success = output.status.success(),
+                    "vercel list (production) completed"
+                );
                 Some(output)
             }
             Err(e) => {

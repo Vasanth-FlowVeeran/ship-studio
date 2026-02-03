@@ -78,7 +78,11 @@ pub async fn check_github_cli_status() -> GitHubCliStatus {
     auth_cmd.args(["auth", "status"]);
     let authenticated = match run_command_with_timeout(auth_cmd, GITHUB_CLI_TIMEOUT_SECS).await {
         Ok(output) => {
-            info!(elapsed_ms = start.elapsed().as_millis() as u64, success = output.status.success(), "gh auth status completed");
+            info!(
+                elapsed_ms = start.elapsed().as_millis() as u64,
+                success = output.status.success(),
+                "gh auth status completed"
+            );
             output.status.success()
         }
         Err(e) => {
