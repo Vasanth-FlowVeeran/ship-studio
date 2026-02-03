@@ -1965,6 +1965,14 @@ function App({ initialProjectPath }: AppProps) {
                   toolbarRight={
                     isPreviewHidden ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button
+                          className="show-preview-btn"
+                          onClick={() => void handleEnterCompactMode()}
+                          title="Enter Compact Mode"
+                        >
+                          <CompactIcon size={14} />
+                          <span>Compact</span>
+                        </button>
                         <BrowserDropdown
                           url={`http://localhost:${devServerPort}`}
                           buttonClassName="show-preview-btn"
@@ -2259,6 +2267,14 @@ function App({ initialProjectPath }: AppProps) {
                   )}
                   <div className="preview-tabs-divider" />
                   <div className="preview-actions">
+                    <button
+                      className="preview-action-btn"
+                      onClick={() => void handleEnterCompactMode()}
+                      title="Enter Compact Mode"
+                    >
+                      <CompactIcon size={14} />
+                      <span>Compact</span>
+                    </button>
                     <BrowserDropdown
                       url={`http://localhost:${devServerPort}`}
                       buttonClassName="preview-action-btn"
@@ -2270,14 +2286,6 @@ function App({ initialProjectPath }: AppProps) {
                     >
                       <PanelRightIcon size={14} />
                       <span>Hide Preview</span>
-                    </button>
-                    <button
-                      className="preview-action-btn"
-                      onClick={() => void handleEnterCompactMode()}
-                      title="Enter Compact Mode"
-                    >
-                      <CompactIcon size={14} />
-                      <span>Compact</span>
                     </button>
                   </div>
                 </div>
