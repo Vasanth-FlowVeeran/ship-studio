@@ -60,13 +60,7 @@ fn parse_skill_md(content: &str) -> Option<(String, String)> {
         if line.starts_with("name:") {
             name = Some(line[5..].trim().to_string());
         } else if line.starts_with("description:") {
-            let desc = line[12..].trim().to_string();
-            // Truncate long descriptions
-            description = Some(if desc.len() > 80 {
-                format!("{}...", &desc[..77])
-            } else {
-                desc
-            });
+            description = Some(line[12..].trim().to_string());
         }
     }
 
@@ -228,13 +222,12 @@ name: my-skill
     fn test_parse_skill_md_long_description() {
         let content = r#"---
 name: verbose-skill
-description: This is a very long description that should be truncated because it exceeds the maximum allowed length of eighty characters.
+description: This is a very long description that should not be truncated because the frontend handles display truncation via CSS.
 ---
 "#;
         let result = parse_skill_md(content);
         assert!(result.is_some());
         let (_, desc) = result.unwrap();
-        assert!(desc.ends_with("..."));
-        assert!(desc.len() <= 83);
+        assert_eq!(desc, "This is a very long description that should not be truncated because the frontend handles display truncation via CSS.");
     }
 }

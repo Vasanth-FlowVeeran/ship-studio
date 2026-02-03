@@ -2,19 +2,19 @@
 
 .help-modal {
   width: 90%;
-  max-width: 520px;
+  max-width: 640px;
   max-height: 85vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding: 0;
 }
 
 .help-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 20px 24px 16px;
 }
 
 .help-modal-header h3 {
@@ -43,13 +43,32 @@
 }
 
 .help-modal-body {
-  padding: 20px;
+  padding: 0 24px 24px;
   overflow-y: auto;
   flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.help-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.help-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.help-modal-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.help-modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .help-section {
-  margin-bottom: 24px;
+  margin-bottom: 6px;
 }
 
 .help-section:last-child {
@@ -62,52 +81,79 @@
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
+  padding: 0 10px;
 }
 
 .help-command-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 1px;
 }
 
 .help-command {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 16px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+
+.help-command:hover {
+  background: var(--bg-tertiary);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.help-command:hover .help-command-desc {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  color: var(--text-primary);
 }
 
 .help-command-name {
   font-family: 'SF Mono', Monaco, 'Courier New', monospace;
   font-size: 12px;
   color: var(--accent);
-  min-width: 80px;
+  min-width: 110px;
   flex-shrink: 0;
 }
 
 .help-command-desc {
   font-size: 13px;
   color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 
 .help-tip-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 2px;
 }
 
 .help-tip {
   font-size: 13px;
   color: var(--text-secondary);
-  padding-left: 16px;
+  padding: 6px 10px 6px 26px;
   position: relative;
   line-height: 1.4;
+  border-radius: 6px;
+  transition: background-color 0.1s;
+}
+
+.help-tip:hover {
+  background: var(--bg-tertiary);
 }
 
 .help-tip::before {
   content: '\2022';
   position: absolute;
-  left: 0;
+  left: 10px;
   color: var(--text-muted);
 }
 
@@ -127,7 +173,20 @@
 .help-example-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
+  padding: 0 2px;
+}
+
+.help-example-category {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 0 12px;
+  margin-top: 8px;
+}
+
+.help-example-category:first-child {
+  margin-top: 0;
 }
 
 .help-example {
@@ -138,21 +197,27 @@
   border-radius: 6px;
   font-family: 'SF Mono', Monaco, 'Courier New', monospace;
   border: 1px solid var(--border);
+  transition: border-color 0.15s;
+}
+
+.help-example:hover {
+  border-color: var(--text-muted);
 }
 
 .help-divider {
   height: 1px;
   background: var(--border);
-  margin: 20px 0;
+  margin: 10px 10px;
+  opacity: 0.5;
 }
 
 .help-footer {
-  padding: 12px 20px;
+  padding: 12px 24px;
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--bg-tertiary);
+  border-radius: 0 0 12px 12px;
 }
 
 .help-footer-hint {
@@ -178,4 +243,5 @@
   font-size: 13px;
   color: var(--text-muted);
   font-style: italic;
+  padding: 0 10px;
 }

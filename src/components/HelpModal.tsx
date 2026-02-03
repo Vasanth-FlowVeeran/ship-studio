@@ -233,9 +233,25 @@ export function HelpModal({ isOpen, onClose, projectPath }: HelpModalProps) {
           <div className="help-section">
             <div className="help-section-title">Example Prompts</div>
             <div className="help-example-list">
-              <div className="help-example">"Fix the TypeScript errors in this file"</div>
-              <div className="help-example">"Add tests for the authentication flow"</div>
-              <div className="help-example">"Refactor this component to use hooks"</div>
+              <div className="help-example-category">Fix & Improve</div>
+              <div className="help-example">"The contact form isn't sending emails, can you fix it?"</div>
+              <div className="help-example">"The page is loading really slowly, can you speed it up?"</div>
+              <div className="help-example">"The images look blurry on mobile, can you fix that?"</div>
+
+              <div className="help-example-category">Design & Content</div>
+              <div className="help-example">"Change the hero section background color to dark blue"</div>
+              <div className="help-example">"Make the website look good on phones and tablets"</div>
+              <div className="help-example">"Add a new testimonials section below the pricing page"</div>
+
+              <div className="help-example-category">Add Features</div>
+              <div className="help-example">"Add a newsletter signup form to the footer"</div>
+              <div className="help-example">"Create a FAQ accordion section for the homepage"</div>
+              <div className="help-example">"Add a search bar that filters the blog posts"</div>
+
+              <div className="help-example-category">Understand Your Project</div>
+              <div className="help-example">"What pages does this website have?"</div>
+              <div className="help-example">"Where do I change the company logo?"</div>
+              <div className="help-example">"How do I add a new blog post?"</div>
             </div>
           </div>
         </div>
