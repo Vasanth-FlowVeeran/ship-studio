@@ -166,6 +166,7 @@ export function BranchIndicator({
       className="branch-indicator"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      data-education-id="branch-indicator"
     >
       <button
         className={`branch-indicator-button ${isMainBranch ? 'main-branch' : ''}`}

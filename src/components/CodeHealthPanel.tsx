@@ -403,6 +403,7 @@ export const CodeHealthPanel = forwardRef<CodeHealthPanelRef, CodeHealthPanelPro
                 className="health-toggle"
                 onClick={() => setIsExpanded(!isExpanded)}
                 title={isExpanded ? 'Collapse health panel' : 'Expand health panel'}
+                data-education-id="health-panel"
               >
                 {isExpanded ? <ChevronIcon size={10} /> : <ChevronRightIcon size={10} />}
                 <span className="health-label">Health</span>

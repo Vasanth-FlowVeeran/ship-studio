@@ -906,7 +906,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     <div className="preview-container">
       <div className="preview-toolbar">
         {/* Page Switcher */}
-        <div className="page-switcher" ref={dropdownRef}>
+        <div className="page-switcher" ref={dropdownRef} data-education-id="page-switcher">
           <button
             className="page-switcher-btn"
             onClick={() => setShowPageDropdown(!showPageDropdown)}
@@ -965,7 +965,12 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           )}
         </div>
 
-        <button className="preview-refresh" onClick={handleRefresh} title="Refresh preview">
+        <button
+          className="preview-refresh"
+          onClick={handleRefresh}
+          title="Refresh preview"
+          data-education-id="preview-refresh"
+        >
           ↻
         </button>
 
@@ -1014,7 +1019,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           </div>
         )}
 
-        <div className="preview-breakpoints">
+        <div className="preview-breakpoints" data-education-id="breakpoints">
           {(Object.keys(BREAKPOINTS) as Breakpoint[]).map((bp) => {
             // Always show 'full' - it adapts to any size
             // Hide other breakpoints if they won't fit in the viewport
@@ -1037,7 +1042,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           })}
         </div>
       </div>
-      <div className="preview-viewport" ref={setViewportRefs}>
+      <div className="preview-viewport" ref={setViewportRefs} data-education-id="preview-viewport">
         {/* Overlay to capture mouse events during resize */}
         {isResizing && <div className="preview-resize-overlay" />}
         <div

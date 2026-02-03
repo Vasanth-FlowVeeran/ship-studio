@@ -43,6 +43,7 @@ import { ConnectOverlay } from './components/ConnectOverlay';
 import { CodeHealthPanel, CodeHealthPanelRef } from './components/CodeHealthPanel';
 import { ScreenshotToast, ScreenshotPreviewModal } from './components/ScreenshotPreview';
 import { NotificationSettingsModal } from './components/NotificationSettingsModal';
+import { EducationOverlay } from './components/EducationOverlay';
 import {
   NotificationSettings,
   loadNotificationSettings,
@@ -81,6 +82,7 @@ import {
   PinIcon,
   ExpandIcon,
   ArrowLeftIcon,
+  GraduationCapIcon,
 } from './components/icons';
 import { startDevServer, Project, DevServerHandle, getAutoAcceptMode } from './lib/project';
 import {
@@ -343,6 +345,9 @@ function App({ initialProjectPath }: AppProps) {
 
   // Assets panel modal
   const [showAssetsPanel, setShowAssetsPanel] = useState(false);
+
+  // Education mode
+  const [isEducationMode, setIsEducationMode] = useState(false);
 
   // Create project modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -1612,6 +1617,9 @@ function App({ initialProjectPath }: AppProps) {
   // Compact mode handler - resizes window, opens browser, enables always-on-top
   // The UI adapts to narrow width via responsive CSS
   const handleEnterCompactMode = async () => {
+    // Exit education mode since it doesn't work in compact mode
+    setIsEducationMode(false);
+
     try {
       // Resize window to compact dimensions + enable always-on-top
       await enterCompactMode();
@@ -1829,9 +1837,21 @@ function App({ initialProjectPath }: AppProps) {
 
           <div className="workspace-header-actions">
             <button
+              className={`education-button ${isEducationMode ? 'active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEducationMode(!isEducationMode);
+              }}
+              title="Education Mode"
+              data-education-id="education-button"
+            >
+              <GraduationCapIcon size={14} />
+            </button>
+            <button
               className="assets-button"
               onClick={() => setShowAssetsPanel(true)}
               title="Manage Assets"
+              data-education-id="assets-button"
             >
               <ImageIcon size={14} />
               Assets
@@ -1840,6 +1860,7 @@ function App({ initialProjectPath }: AppProps) {
               className="ide-dropdown-container"
               onMouseEnter={() => setShowIdeDropdown(true)}
               onMouseLeave={() => setShowIdeDropdown(false)}
+              data-education-id="ide-button"
             >
               <button className="ide-button" title="Open in IDE">
                 <CodeIcon size={14} />
@@ -1876,35 +1897,40 @@ function App({ initialProjectPath }: AppProps) {
               className="env-button"
               onClick={() => setShowEnvEditor(true)}
               title="Environment Variables"
+              data-education-id="env-button"
             >
               <span className="env-button-icon">$</span>
               .env
             </button>
-            <GitHubButton
-              githubState={integrations.github}
-              vercelState={integrations.vercel}
-              projectStatus={integrations.projectGithub}
-              projectPath={currentProject?.path || ''}
-              projectName={currentProject?.name || ''}
-              onStatusChange={handleGitHubStatusChange}
-              onGitHubConnect={handleGitHubConnectFromOverlay}
-              onModalClose={focusTerminal}
-              onToast={showToast}
-              onVercelAutoConnectStart={() => setIsVercelAutoConnecting(true)}
-              onVercelAutoConnectEnd={() => setIsVercelAutoConnecting(false)}
-            />
-            <VercelButton
-              vercelState={integrations.vercel}
-              projectVercelStatus={integrations.projectVercel}
-              projectGithubStatus={integrations.projectGithub}
-              projectPath={currentProject?.path || ''}
-              projectName={currentProject?.name || ''}
-              onStatusChange={(deployedUrl) => void handleVercelStatusChange(deployedUrl)}
-              onVercelConnect={() => void refreshVercelStatus()}
-              onModalClose={focusTerminal}
-              onToast={showToast}
-              isAutoConnecting={isVercelAutoConnecting}
-            />
+            <span data-education-id="github-button">
+              <GitHubButton
+                githubState={integrations.github}
+                vercelState={integrations.vercel}
+                projectStatus={integrations.projectGithub}
+                projectPath={currentProject?.path || ''}
+                projectName={currentProject?.name || ''}
+                onStatusChange={handleGitHubStatusChange}
+                onGitHubConnect={handleGitHubConnectFromOverlay}
+                onModalClose={focusTerminal}
+                onToast={showToast}
+                onVercelAutoConnectStart={() => setIsVercelAutoConnecting(true)}
+                onVercelAutoConnectEnd={() => setIsVercelAutoConnecting(false)}
+              />
+            </span>
+            <span data-education-id="vercel-button">
+              <VercelButton
+                vercelState={integrations.vercel}
+                projectVercelStatus={integrations.projectVercel}
+                projectGithubStatus={integrations.projectGithub}
+                projectPath={currentProject?.path || ''}
+                projectName={currentProject?.name || ''}
+                onStatusChange={(deployedUrl) => void handleVercelStatusChange(deployedUrl)}
+                onVercelConnect={() => void refreshVercelStatus()}
+                onModalClose={focusTerminal}
+                onToast={showToast}
+                isAutoConnecting={isVercelAutoConnecting}
+              />
+            </span>
             <PublishBranchDropdown
               currentBranch={currentBranch || 'main'}
               projectGithubStatus={integrations.projectGithub}
@@ -1953,6 +1979,7 @@ function App({ initialProjectPath }: AppProps) {
                       onClick={() => void handleRestartDevServer()}
                       disabled={isRestartingDevServer || !devServerRef.current}
                       title="Restart dev server"
+                      data-education-id="restart-server"
                     >
                       {isRestartingDevServer ? (
                         <div className="capture-spinner" />
@@ -1969,14 +1996,17 @@ function App({ initialProjectPath }: AppProps) {
                           className="show-preview-btn"
                           onClick={() => void handleEnterCompactMode()}
                           title="Enter Compact Mode"
+                          data-education-id="compact-button"
                         >
                           <CompactIcon size={14} />
                           <span>Compact</span>
                         </button>
-                        <BrowserDropdown
-                          url={`http://localhost:${devServerPort}`}
-                          buttonClassName="show-preview-btn"
-                        />
+                        <span data-education-id="browser-button">
+                          <BrowserDropdown
+                            url={`http://localhost:${devServerPort}`}
+                            buttonClassName="show-preview-btn"
+                          />
+                        </span>
                         <button
                           className="show-preview-btn"
                           onClick={() => setIsPreviewHidden(false)}
@@ -1994,7 +2024,7 @@ function App({ initialProjectPath }: AppProps) {
                   className={`compact-terminal-view ${compactView !== 'terminal' ? 'compact-hidden' : ''}`}
                 >
                   <div className="terminal-tabs-bar">
-                    <div className="terminal-tabs">
+                    <div className="terminal-tabs" data-education-id="terminal-tabs">
                       {terminalTabs.map((tabId, index) => (
                         <button
                           key={tabId}
@@ -2033,6 +2063,7 @@ function App({ initialProjectPath }: AppProps) {
                           setShowHealthLogs(false);
                         }}
                         title="View dev server logs"
+                        data-education-id="server-logs"
                       >
                         <TerminalIcon size={12} />
                         <span>Server</span>
@@ -2044,6 +2075,7 @@ function App({ initialProjectPath }: AppProps) {
                           setShowHealthLogs(true);
                         }}
                         title="View health check logs"
+                        data-education-id="health-logs"
                       >
                         <svg
                           width={12}
@@ -2094,7 +2126,7 @@ function App({ initialProjectPath }: AppProps) {
                       </button>
                     </div>
                   </div>
-                  <div className="terminal-content">
+                  <div className="terminal-content" data-education-id="claude-terminal">
                     {terminalTabs.map((tabId) => (
                       <div
                         key={`session-${terminalSessionId}-tab-${tabId}`}
@@ -2252,6 +2284,7 @@ function App({ initialProjectPath }: AppProps) {
                       <button
                         className={`workspace-tab ${workspaceTab === 'branches' ? 'active' : ''}`}
                         onClick={() => setWorkspaceTab('branches')}
+                        data-education-id="branches-tab"
                       >
                         <BranchIcon size={14} />
                         <span>Branches</span>
@@ -2259,6 +2292,7 @@ function App({ initialProjectPath }: AppProps) {
                       <button
                         className={`workspace-tab ${workspaceTab === 'prs' ? 'active' : ''}`}
                         onClick={() => setWorkspaceTab('prs')}
+                        data-education-id="prs-tab"
                       >
                         <PullRequestIcon size={14} />
                         <span>PRs</span>
@@ -2271,14 +2305,17 @@ function App({ initialProjectPath }: AppProps) {
                       className="preview-action-btn"
                       onClick={() => void handleEnterCompactMode()}
                       title="Enter Compact Mode"
+                      data-education-id="compact-button"
                     >
                       <CompactIcon size={14} />
                       <span>Compact</span>
                     </button>
-                    <BrowserDropdown
-                      url={`http://localhost:${devServerPort}`}
-                      buttonClassName="preview-action-btn"
-                    />
+                    <span data-education-id="browser-button">
+                      <BrowserDropdown
+                        url={`http://localhost:${devServerPort}`}
+                        buttonClassName="preview-action-btn"
+                      />
+                    </span>
                     <button
                       className="preview-action-btn"
                       onClick={() => setIsPreviewHidden(true)}
@@ -2292,62 +2329,67 @@ function App({ initialProjectPath }: AppProps) {
 
                 {/* Tab content */}
                 {workspaceTab === 'preview' && (
-                  <Preview
-                    key={`${currentProject?.path || 'none'}-${devServerPort}`}
-                    ref={previewRef}
-                    port={devServerPort}
-                    projectPath={currentProject?.path || ''}
-                    onServerReady={handlePreviewReady}
-                    onPageChange={setCurrentPreviewPage}
-                    isCropMode={isCropMode}
-                    onCropStart={handleCropStart}
-                    onCropComplete={handleCropComplete}
-                    onCropCancel={handleCropCancel}
-                    isBranchSwitching={isBranchSwitching}
-                    isDevServerRestarting={isRestartingDevServer}
-                    toolbarExtra={
-                      <div className="agent-toolbar">
-                        <button
-                          className="agent-capture-btn"
-                          onClick={() => void handleCaptureForClaude()}
-                          disabled={isCapturing || isCropMode || isFullPageCapturing}
-                          title="Screenshot preview for Claude"
-                        >
-                          {isCapturing ? (
-                            <div className="capture-spinner" />
-                          ) : (
-                            <CameraIcon size={14} />
-                          )}
-                        </button>
-                        <button
-                          className={`agent-capture-btn ${isCropMode ? 'active' : ''}`}
-                          onClick={() => setIsCropMode(!isCropMode)}
-                          disabled={isCapturing || isCropCapturing || isFullPageCapturing}
-                          title="Crop screenshot for Claude"
-                        >
-                          {isCropCapturing ? (
-                            <div className="capture-spinner" />
-                          ) : (
-                            <CropIcon size={14} />
-                          )}
-                        </button>
-                        <button
-                          className="agent-capture-btn"
-                          onClick={() => void handleCaptureFullPage()}
-                          disabled={
-                            isCapturing || isCropCapturing || isFullPageCapturing || isCropMode
-                          }
-                          title="Full page screenshot for Claude"
-                        >
-                          {isFullPageCapturing ? (
-                            <div className="capture-spinner" />
-                          ) : (
-                            <FullPageIcon size={14} />
-                          )}
-                        </button>
-                      </div>
-                    }
-                  />
+                  <div style={{ flex: 1, display: 'flex' }}>
+                    <Preview
+                      key={`${currentProject?.path || 'none'}-${devServerPort}`}
+                      ref={previewRef}
+                      port={devServerPort}
+                      projectPath={currentProject?.path || ''}
+                      onServerReady={handlePreviewReady}
+                      onPageChange={setCurrentPreviewPage}
+                      isCropMode={isCropMode}
+                      onCropStart={handleCropStart}
+                      onCropComplete={handleCropComplete}
+                      onCropCancel={handleCropCancel}
+                      isBranchSwitching={isBranchSwitching}
+                      isDevServerRestarting={isRestartingDevServer}
+                      toolbarExtra={
+                        <div className="agent-toolbar">
+                          <button
+                            className="agent-capture-btn"
+                            onClick={() => void handleCaptureForClaude()}
+                            disabled={isCapturing || isCropMode || isFullPageCapturing}
+                            title="Screenshot preview for Claude"
+                            data-education-id="screenshot-button"
+                          >
+                            {isCapturing ? (
+                              <div className="capture-spinner" />
+                            ) : (
+                              <CameraIcon size={14} />
+                            )}
+                          </button>
+                          <button
+                            className={`agent-capture-btn ${isCropMode ? 'active' : ''}`}
+                            onClick={() => setIsCropMode(!isCropMode)}
+                            disabled={isCapturing || isCropCapturing || isFullPageCapturing}
+                            title="Crop screenshot for Claude"
+                            data-education-id="crop-button"
+                          >
+                            {isCropCapturing ? (
+                              <div className="capture-spinner" />
+                            ) : (
+                              <CropIcon size={14} />
+                            )}
+                          </button>
+                          <button
+                            className="agent-capture-btn"
+                            onClick={() => void handleCaptureFullPage()}
+                            disabled={
+                              isCapturing || isCropCapturing || isFullPageCapturing || isCropMode
+                            }
+                            title="Full page screenshot for Claude"
+                            data-education-id="fullpage-button"
+                          >
+                            {isFullPageCapturing ? (
+                              <div className="capture-spinner" />
+                            ) : (
+                              <FullPageIcon size={14} />
+                            )}
+                          </button>
+                        </div>
+                      }
+                    />
+                  </div>
                 )}
                 {workspaceTab === 'branches' &&
                   currentProject &&
@@ -2450,6 +2492,9 @@ function App({ initialProjectPath }: AppProps) {
           }}
           onToast={showToast}
         />
+
+        {/* Education Mode Overlay */}
+        {isEducationMode && <EducationOverlay onClose={() => setIsEducationMode(false)} />}
 
         {/* Toast notifications */}
         {toasts.length > 0 && (

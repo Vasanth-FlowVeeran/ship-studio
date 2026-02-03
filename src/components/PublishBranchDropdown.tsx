@@ -355,7 +355,7 @@ export function PublishBranchDropdown({
     : null;
 
   return (
-    <div className="publish-dropdown" ref={dropdownRef}>
+    <div className="publish-dropdown" ref={dropdownRef} data-education-id="publish-button">
       <button
         className={`publish-button ${isPublishing ? 'publishing' : ''} ${!canSync ? 'synced' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
