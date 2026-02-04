@@ -12,6 +12,158 @@ use crate::utils::{format_relative_time, get_extended_path, validate_project_pat
 use std::process::Command;
 use tracing::{debug, info, warn};
 
+// ============ Error Codes and Parsing ============
+
+/// Parses Vercel CLI output and returns a user-friendly error message with error code.
+/// Error codes help users report issues and help us debug.
+fn parse_vercel_error(stdout: &str, stderr: &str, operation: &str) -> String {
+    let combined = format!("{} {}", stdout, stderr).to_lowercase();
+
+    // Authentication errors
+    if combined.contains("not logged in")
+        || combined.contains("please log in")
+        || combined.contains("authentication")
+        || combined.contains("unauthorized")
+        || combined.contains("invalid token")
+        || combined.contains("token expired")
+    {
+        return format!(
+            "[VERCEL_AUTH_001] Not authenticated with Vercel.\n\
+            Run 'vercel login' in your terminal to connect your account."
+        );
+    }
+
+    // Token/credential errors
+    if combined.contains("invalid credentials") || combined.contains("bad credentials") {
+        return format!(
+            "[VERCEL_AUTH_002] Invalid Vercel credentials.\n\
+            Try running 'vercel logout' then 'vercel login' to refresh your authentication."
+        );
+    }
+
+    // Network/connectivity errors
+    if combined.contains("enotfound")
+        || combined.contains("getaddrinfo")
+        || combined.contains("network")
+        || combined.contains("econnrefused")
+        || combined.contains("etimedout")
+        || combined.contains("socket hang up")
+    {
+        return format!(
+            "[VERCEL_NET_001] Network error connecting to Vercel.\n\
+            Please check your internet connection and try again."
+        );
+    }
+
+    // Rate limiting
+    if combined.contains("rate limit") || combined.contains("too many requests") {
+        return format!(
+            "[VERCEL_RATE_001] Vercel API rate limit exceeded.\n\
+            Please wait a few minutes and try again."
+        );
+    }
+
+    // Project not found/not linked
+    if combined.contains("not linked")
+        || combined.contains("no project found")
+        || combined.contains("could not find")
+        || combined.contains("project not found")
+    {
+        return format!(
+            "[VERCEL_PROJECT_001] Project not linked to Vercel.\n\
+            Click the Vercel button to connect this project."
+        );
+    }
+
+    // Permission/access errors
+    if combined.contains("permission denied")
+        || combined.contains("access denied")
+        || combined.contains("forbidden")
+        || combined.contains("not authorized")
+    {
+        return format!(
+            "[VERCEL_PERM_001] Permission denied.\n\
+            You may not have access to this Vercel project or team.\n\
+            Check your Vercel dashboard settings."
+        );
+    }
+
+    // Team/scope errors
+    if combined.contains("team not found")
+        || combined.contains("invalid scope")
+        || combined.contains("scope") && combined.contains("not found")
+    {
+        return format!(
+            "[VERCEL_TEAM_001] Vercel team not found or inaccessible.\n\
+            Make sure you have access to this team in your Vercel account."
+        );
+    }
+
+    // GitHub connection errors
+    if combined.contains("make sure there aren't any typos")
+        || combined.contains("access to the repository")
+        || combined.contains("github") && combined.contains("not found")
+    {
+        return format!(
+            "[VERCEL_GH_001] Cannot connect to GitHub repository.\n\
+            Go to Vercel → Team Settings → Git to authorize GitHub access."
+        );
+    }
+
+    // Build errors
+    if combined.contains("build failed") || combined.contains("build error") {
+        return format!(
+            "[VERCEL_BUILD_001] Build failed on Vercel.\n\
+            Check the Vercel dashboard for detailed build logs."
+        );
+    }
+
+    // Deployment errors
+    if combined.contains("deployment failed") || combined.contains("deploy error") {
+        return format!(
+            "[VERCEL_DEPLOY_001] Deployment failed.\n\
+            Check the Vercel dashboard for deployment logs."
+        );
+    }
+
+    // CLI not installed or not found
+    if combined.contains("command not found")
+        || combined.contains("not recognized")
+        || combined.contains("enoent") && combined.contains("vercel")
+    {
+        return format!(
+            "[VERCEL_CLI_001] Vercel CLI not found.\n\
+            Click 'Install Vercel' to set up the CLI."
+        );
+    }
+
+    // Timeout errors (from our timeout wrapper)
+    if combined.contains("timed out") {
+        return format!(
+            "[VERCEL_TIMEOUT_001] Vercel CLI request timed out.\n\
+            This may be a temporary issue. Please try again."
+        );
+    }
+
+    // Generic error with the original message
+    // Extract first meaningful line from stderr for context
+    let first_error_line = stderr
+        .lines()
+        .find(|line| {
+            let l = line.trim().to_lowercase();
+            !l.is_empty() && !l.starts_with("vercel") && !l.contains("fetching")
+        })
+        .unwrap_or(stderr.lines().next().unwrap_or("Unknown error"));
+
+    format!(
+        "[VERCEL_ERR_001] {} failed: {}\n\
+        If this persists, try running 'vercel {}' in your terminal for more details.",
+        operation,
+        first_error_line.trim(),
+        operation.to_lowercase().replace(" ", "-")
+    )
+}
+
 /// Default timeout for Vercel CLI commands (30 seconds)
 const VERCEL_CLI_TIMEOUT_SECS: u64 = 30;
 
@@ -72,11 +224,31 @@ pub async fn install_vercel_cli() -> Result<(), String> {
         .args(["install", "-g", "vercel"])
         .env("PATH", get_extended_path())
         .output()
-        .map_err(|e| format!("Failed to run npm: {}", e))?;
+        .map_err(|e| format!("[VERCEL_INSTALL_001] Failed to run npm: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to install Vercel CLI: {}", stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        // Parse common npm install errors
+        let combined = format!("{} {}", stdout, stderr).to_lowercase();
+        if combined.contains("eacces") || combined.contains("permission denied") {
+            return Err(
+                "[VERCEL_INSTALL_002] Permission denied installing Vercel CLI.\n\
+                Try running: sudo npm install -g vercel"
+                    .to_string(),
+            );
+        }
+        if combined.contains("npm err!") && combined.contains("network") {
+            return Err("[VERCEL_INSTALL_003] Network error during installation.\n\
+                Please check your internet connection."
+                .to_string());
+        }
+
+        return Err(format!(
+            "[VERCEL_INSTALL_004] Failed to install Vercel CLI: {}",
+            stderr.lines().next().unwrap_or("Unknown error")
+        ));
     }
 
     Ok(())
@@ -124,10 +296,12 @@ pub async fn get_vercel_username() -> Result<String, String> {
     let output = get_vercel_command()
         .args(["whoami"])
         .output()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("[VERCEL_CLI_002] Failed to run Vercel CLI: {}", e))?;
 
     if !output.status.success() {
-        return Err("Failed to get Vercel username".to_string());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(parse_vercel_error(&stdout, &stderr, "Get username"));
     }
 
     let username = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -222,11 +396,12 @@ pub async fn list_vercel_projects(scope: String) -> Result<Vec<VercelProject>, S
 
     let output = cmd
         .output()
-        .map_err(|e| format!("Failed to run vercel project ls: {}", e))?;
+        .map_err(|e| format!("[VERCEL_CLI_006] Failed to run Vercel CLI: {}", e))?;
 
     if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to list projects: {}", stderr));
+        return Err(parse_vercel_error(&stdout, &stderr, "List projects"));
     }
 
     // Parse the output - Vercel CLI outputs a table format to stderr
@@ -338,15 +513,12 @@ pub async fn deploy_to_vercel(options: DeployToVercelOptions) -> Result<String, 
         .args(&link_args)
         .current_dir(&validated_path)
         .output()
-        .map_err(|e| format!("Failed to run vercel link: {}", e))?;
+        .map_err(|e| format!("[VERCEL_CLI_003] Failed to run Vercel CLI: {}", e))?;
 
     if !link_output.status.success() {
         let stderr = String::from_utf8_lossy(&link_output.stderr);
         let stdout = String::from_utf8_lossy(&link_output.stdout);
-        return Err(format!(
-            "Failed to link project to Vercel: {} {}",
-            stderr, stdout
-        ));
+        return Err(parse_vercel_error(&stdout, &stderr, "Link project"));
     }
 
     // Step 2: If GitHub repo is provided, connect it for auto-deploy on future pushes
@@ -411,12 +583,12 @@ pub async fn deploy_to_vercel(options: DeployToVercelOptions) -> Result<String, 
         .args(&deploy_args)
         .current_dir(&validated_path)
         .output()
-        .map_err(|e| format!("Failed to run vercel --prod: {}", e))?;
+        .map_err(|e| format!("[VERCEL_CLI_004] Failed to run Vercel CLI: {}", e))?;
 
     if !deploy_output.status.success() {
         let stderr = String::from_utf8_lossy(&deploy_output.stderr);
         let stdout = String::from_utf8_lossy(&deploy_output.stdout);
-        return Err(format!("Failed to deploy to Vercel: {} {}", stderr, stdout));
+        return Err(parse_vercel_error(&stdout, &stderr, "Deploy"));
     }
 
     // Parse production URL from vercel --prod output
@@ -833,11 +1005,12 @@ pub async fn link_to_vercel(options: LinkToVercelOptions) -> Result<String, Stri
         .args(["link", "--yes"])
         .current_dir(project_path)
         .output()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("[VERCEL_CLI_005] Failed to run Vercel CLI: {}", e))?;
 
     if !link_output.status.success() {
+        let stdout = String::from_utf8_lossy(&link_output.stdout);
         let stderr = String::from_utf8_lossy(&link_output.stderr);
-        return Err(format!("Failed to link project to Vercel: {}", stderr));
+        return Err(parse_vercel_error(&stdout, &stderr, "Link project"));
     }
 
     // Step 2: Connect Vercel project to the GitHub repo
