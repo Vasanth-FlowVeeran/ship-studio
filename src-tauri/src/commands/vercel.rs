@@ -42,44 +42,8 @@ async fn run_command_with_timeout(
 
 /// Finds the Vercel CLI binary by checking common installation paths.
 pub fn find_vercel_binary() -> Option<std::path::PathBuf> {
-    // First try which
-    if let Ok(path) = which::which("vercel") {
-        return Some(path);
-    }
-
-    // Check common npm global bin locations
-    if let Some(home) = dirs::home_dir() {
-        let common_paths = vec![
-            home.join(".npm-global/bin/vercel"),
-            home.join(".nvm/versions/node").join("*").join("bin/vercel"),
-            home.join("n/bin/vercel"),
-            std::path::PathBuf::from("/usr/local/bin/vercel"),
-            std::path::PathBuf::from("/opt/homebrew/bin/vercel"),
-        ];
-
-        for path in common_paths {
-            if path.exists() {
-                return Some(path);
-            }
-        }
-
-        // Check npm prefix
-        if let Ok(output) = Command::new("npm")
-            .args(["prefix", "-g"])
-            .env("PATH", get_extended_path())
-            .output()
-        {
-            if output.status.success() {
-                let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let vercel_path = std::path::PathBuf::from(&prefix).join("bin/vercel");
-                if vercel_path.exists() {
-                    return Some(vercel_path);
-                }
-            }
-        }
-    }
-
-    None
+    // Use the shared find_executable utility which properly handles nvm, homebrew, etc.
+    crate::utils::find_executable("vercel")
 }
 
 /// Returns a Command for vercel with extended PATH set
