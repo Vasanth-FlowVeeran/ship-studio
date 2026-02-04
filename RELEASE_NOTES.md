@@ -6,6 +6,11 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.43
+
+- **Fixed Vercel CLI detection for nvm installations** - Vercel CLI was not being detected for users who installed it via nvm at paths like ~/.nvm/versions/node/v22.x.x/bin/vercel
+
+
 ## What's New in v0.3.42
 
 - **Skills Manager** - Install and manage Claude skills directly from Ship Studio. Click the lightning bolt icon to browse installed skills, search for new ones, and install/remove them with one click.
