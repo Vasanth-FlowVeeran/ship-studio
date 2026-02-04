@@ -6,6 +6,13 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.44
+
+- **Vercel site URLs dropdown** — Hover over the Vercel button to quickly access production and preview URLs
+- **Slack community CTA** — Join our community to suggest features and shape the future of Ship Studio
+- **Compact mode improvements** — Main branch warning banner now fits better in compact mode
+
+
 ## What's New in v0.3.43
 
 - **Fixed Vercel CLI detection for nvm installations** - Vercel CLI was not being detected for users who installed it via nvm at paths like ~/.nvm/versions/node/v22.x.x/bin/vercel
