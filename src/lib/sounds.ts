@@ -4,7 +4,7 @@
  */
 
 /** Available preset sounds */
-export type PresetSound = 'ding' | 'chime' | 'pop' | 'bell' | 'subtle';
+export type PresetSound = 'ding' | 'chime' | 'pop' | 'bell' | 'subtle' | 'bruh';
 
 /** Sound configuration */
 export interface SoundConfig {
@@ -31,16 +31,67 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   sound: { type: 'preset', preset: 'ding' },
 };
 
-/** Preset sound definitions using Web Audio API */
-const PRESET_SOUNDS: Record<
-  PresetSound,
-  { frequency: number; type: OscillatorType; duration: number; attack: number; decay: number }
-> = {
-  ding: { frequency: 880, type: 'sine', duration: 0.15, attack: 0.01, decay: 0.14 },
-  chime: { frequency: 1047, type: 'sine', duration: 0.3, attack: 0.01, decay: 0.29 },
-  pop: { frequency: 600, type: 'sine', duration: 0.08, attack: 0.005, decay: 0.075 },
-  bell: { frequency: 523, type: 'triangle', duration: 0.4, attack: 0.01, decay: 0.39 },
-  subtle: { frequency: 440, type: 'sine', duration: 0.1, attack: 0.02, decay: 0.08 },
+/** Oscillator-based preset sound definitions */
+interface OscillatorPreset {
+  kind: 'oscillator';
+  frequency: number;
+  type: OscillatorType;
+  duration: number;
+  attack: number;
+  decay: number;
+}
+
+/** File-based preset sound definitions */
+interface FilePreset {
+  kind: 'file';
+  path: string;
+}
+
+type PresetConfig = OscillatorPreset | FilePreset;
+
+/** Preset sound definitions */
+const PRESET_SOUNDS: Record<PresetSound, PresetConfig> = {
+  ding: {
+    kind: 'oscillator',
+    frequency: 880,
+    type: 'sine',
+    duration: 0.15,
+    attack: 0.01,
+    decay: 0.14,
+  },
+  chime: {
+    kind: 'oscillator',
+    frequency: 1047,
+    type: 'sine',
+    duration: 0.3,
+    attack: 0.01,
+    decay: 0.29,
+  },
+  pop: {
+    kind: 'oscillator',
+    frequency: 600,
+    type: 'sine',
+    duration: 0.08,
+    attack: 0.005,
+    decay: 0.075,
+  },
+  bell: {
+    kind: 'oscillator',
+    frequency: 523,
+    type: 'triangle',
+    duration: 0.4,
+    attack: 0.01,
+    decay: 0.39,
+  },
+  subtle: {
+    kind: 'oscillator',
+    frequency: 440,
+    type: 'sine',
+    duration: 0.1,
+    attack: 0.02,
+    decay: 0.08,
+  },
+  bruh: { kind: 'file', path: '/sounds/bruh.mp3' },
 };
 
 /** Audio context singleton */
@@ -53,30 +104,46 @@ function getAudioContext(): AudioContext {
   return audioContext;
 }
 
+/** Cache for file-based preset audio elements */
+const presetAudioCache = new Map<string, HTMLAudioElement>();
+
 /**
- * Play a preset sound using Web Audio API
+ * Play a preset sound (oscillator-based or file-based)
  */
 export function playPresetSound(preset: PresetSound): void {
   try {
-    const ctx = getAudioContext();
     const config = PRESET_SOUNDS[preset];
 
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+    if (config.kind === 'file') {
+      // File-based preset
+      let audio = presetAudioCache.get(config.path);
+      if (!audio) {
+        audio = new Audio(config.path);
+        presetAudioCache.set(config.path, audio);
+      }
+      audio.currentTime = 0;
+      void audio.play();
+    } else {
+      // Oscillator-based preset
+      const ctx = getAudioContext();
 
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
 
-    oscillator.frequency.value = config.frequency;
-    oscillator.type = config.type;
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
 
-    // Envelope
-    gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + config.attack);
-    gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + config.duration);
+      oscillator.frequency.value = config.frequency;
+      oscillator.type = config.type;
 
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + config.duration);
+      // Envelope
+      gainNode.gain.setValueAtTime(0, ctx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + config.attack);
+      gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + config.duration);
+
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + config.duration);
+    }
   } catch (err) {
     console.warn('Failed to play preset sound:', err);
   }
@@ -165,9 +232,10 @@ export function getPresetDisplayName(preset: PresetSound): string {
     pop: 'Pop',
     bell: 'Bell',
     subtle: 'Subtle',
+    bruh: 'Bruh',
   };
   return names[preset];
 }
 
 /** All available preset sounds */
-export const ALL_PRESETS: PresetSound[] = ['ding', 'chime', 'pop', 'bell', 'subtle'];
+export const ALL_PRESETS: PresetSound[] = ['ding', 'chime', 'pop', 'bell', 'subtle', 'bruh'];
