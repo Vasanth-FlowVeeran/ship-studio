@@ -18,7 +18,9 @@ const CHANGELOG: ChangelogEntry[] = [
     version: '0.3.48',
     items: [
       'Nuxt/Vue support - new Nuxt Basic template',
+      'Page selector tracks in-iframe navigation',
       'Faster onboarding with batched installs',
+      'Better onboarding error messages',
     ],
   },
   {
