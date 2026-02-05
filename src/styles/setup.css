@@ -273,6 +273,53 @@
   flex-shrink: 0;
 }
 
+/* ============ Slack CTA ============ */
+
+.onboarding-slack-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: rgba(147, 51, 234, 0.08);
+  border: 1px solid rgba(147, 51, 234, 0.2);
+  border-radius: 10px;
+  margin-top: 16px;
+}
+
+.onboarding-slack-cta svg {
+  flex-shrink: 0;
+  color: #e9a7fb;
+}
+
+.onboarding-slack-cta span {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.onboarding-slack-cta strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.onboarding-slack-cta button {
+  padding: 6px 14px;
+  background: rgba(147, 51, 234, 0.2);
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  border-radius: 6px;
+  color: #c4b5fd;
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.onboarding-slack-cta button:hover {
+  background: rgba(147, 51, 234, 0.3);
+  border-color: rgba(147, 51, 234, 0.5);
+  color: #ddd6fe;
+}
+
 /* ============ Celebration Screen ============ */
 
 .celebration-screen {

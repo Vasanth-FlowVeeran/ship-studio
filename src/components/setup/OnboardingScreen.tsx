@@ -27,6 +27,8 @@ import {
 } from '../../lib/setup';
 import { checkGitHubCliStatus } from '../../lib/github';
 import { checkVercelCliStatus } from '../../lib/vercel';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { SlackIcon } from '../icons';
 
 type OnboardingState = 'loading' | 'setup' | 'complete';
 
@@ -349,6 +351,23 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
           <span className="onboarding-progress-text">
             {readyCount} of {totalCount} ready
           </span>
+        </div>
+
+        <div className="onboarding-slack-cta">
+          <SlackIcon size={18} />
+          <span>
+            <strong>Having problems getting set up?</strong> Join the Slack channel and we'll help
+            you out!
+          </span>
+          <button
+            onClick={() =>
+              void openUrl(
+                'https://join.slack.com/t/shipstudiocommunity/shared_invite/zt-3ommmu2w4-jtYZzzc9T~9lsEeKQ4E2AQ'
+              )
+            }
+          >
+            Join Slack
+          </button>
         </div>
       </div>
     </div>
