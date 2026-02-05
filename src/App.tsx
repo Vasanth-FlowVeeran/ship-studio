@@ -96,7 +96,7 @@ import {
   BranchIcon,
   PullRequestIcon,
   EyeIcon,
-  EyeOffIcon,
+  PanelRightIcon,
   PlusIcon,
   ImageIcon,
   TerminalIcon,
@@ -1770,7 +1770,7 @@ function App({ initialProjectPath }: AppProps) {
                           onClick={() => setIsPreviewHidden(false)}
                           title="Show Preview"
                         >
-                          <EyeIcon size={12} />
+                          <PanelRightIcon size={12} />
                         </button>
                       </div>
                     ) : undefined
@@ -2074,7 +2074,7 @@ function App({ initialProjectPath }: AppProps) {
                       onClick={() => setIsPreviewHidden(true)}
                       title="Hide Preview"
                     >
-                      <EyeOffIcon size={12} />
+                      <PanelRightIcon size={12} />
                     </button>
                   </div>
                 </div>
