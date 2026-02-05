@@ -225,12 +225,15 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
         setActiveItemId(null);
       } catch (err) {
         console.warn(`Failed to process ${itemId}:`, err);
-        const errorMessage = err instanceof Error ? err.message : 'Something went wrong';
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        // Show the actual error message so users can troubleshoot
+        // Strip error codes like [VERCEL_INSTALL_002] for cleaner display
+        const cleanedMessage = errorMessage
+          .replace(/\[[\w_]+\]\s*/g, '')
+          .trim();
         updateItemStatus(itemId, {
           status: 'error',
-          errorMessage: errorMessage.includes('internet')
-            ? 'Connection failed. Check your internet and try again.'
-            : 'Something went wrong. Click to try again.',
+          errorMessage: cleanedMessage || 'Something went wrong. Click to try again.',
         });
         setActiveItemId(null);
       }
