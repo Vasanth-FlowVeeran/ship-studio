@@ -4,10 +4,10 @@
 //! Supports multi-window isolation by tracking PTY ownership per window.
 
 use crate::types::SpawnPtyOptions;
-use crate::utils::get_extended_path;
+use crate::utils::{create_command, get_extended_path};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use tauri::Emitter;
@@ -68,7 +68,7 @@ pub async fn spawn_pty(
             #[cfg(not(windows))]
             let (cmd, cmd_args) = (options.command.clone(), options.args.clone());
 
-            let mut child = Command::new(&cmd)
+            let mut child = create_command(&cmd)
                 .args(&cmd_args)
                 .current_dir(&options.cwd)
                 .env("PATH", get_extended_path())
@@ -222,7 +222,7 @@ pub fn unregister_external_pty(pty_id: u32) -> Result<(), String> {
 #[cfg(unix)]
 fn is_process_running(pid: u32) -> bool {
     // kill -0 checks if process exists without actually sending a signal
-    Command::new("kill")
+    create_command("kill")
         .args(["-0", &pid.to_string()])
         .output()
         .map(|output| output.status.success())
@@ -234,7 +234,7 @@ fn kill_process(pid: u32) {
     #[cfg(unix)]
     {
         // Send SIGTERM first for graceful shutdown
-        let _ = Command::new("kill")
+        let _ = create_command("kill")
             .args(["-TERM", &pid.to_string()])
             .output();
 
@@ -255,14 +255,16 @@ fn kill_process(pid: u32) {
 
         // Force kill if still running after grace period
         if is_process_running(pid) {
-            let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+            let _ = create_command("kill")
+                .args(["-9", &pid.to_string()])
+                .output();
         }
     }
 
     #[cfg(windows)]
     {
         // /T kills the entire process tree (cmd.exe + child node.exe, etc.)
-        let _ = Command::new("taskkill")
+        let _ = create_command("taskkill")
             .args(["/F", "/T", "/PID", &pid.to_string()])
             .output();
     }
@@ -320,12 +322,14 @@ pub fn kill_window_pty_sync(window_label: &str) -> u32 {
     for (id, pid) in &pids_to_kill {
         #[cfg(unix)]
         {
-            let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+            let _ = create_command("kill")
+                .args(["-9", &pid.to_string()])
+                .output();
         }
 
         #[cfg(windows)]
         {
-            let _ = Command::new("taskkill")
+            let _ = create_command("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .output();
         }
@@ -364,12 +368,14 @@ pub async fn kill_window_pty(window_label: String) -> Result<u32, String> {
     for (id, pid) in &pids_to_kill {
         #[cfg(unix)]
         {
-            let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+            let _ = create_command("kill")
+                .args(["-9", &pid.to_string()])
+                .output();
         }
 
         #[cfg(windows)]
         {
-            let _ = Command::new("taskkill")
+            let _ = create_command("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .output();
         }
@@ -400,12 +406,14 @@ pub async fn kill_all_pty() -> Result<u32, String> {
     for (_id, pid) in pids {
         #[cfg(unix)]
         {
-            let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+            let _ = create_command("kill")
+                .args(["-9", &pid.to_string()])
+                .output();
         }
 
         #[cfg(windows)]
         {
-            let _ = Command::new("taskkill")
+            let _ = create_command("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .output();
         }
@@ -428,7 +436,7 @@ pub async fn cleanup_orphaned_processes() -> Result<(), String> {
     #[cfg(unix)]
     {
         // Kill orphaned claude processes (parent is init/launchd - PID 1)
-        let _ = Command::new("sh")
+        let _ = create_command("sh")
             .args([
                 "-c",
                 r#"
@@ -443,7 +451,7 @@ pub async fn cleanup_orphaned_processes() -> Result<(), String> {
             .output();
 
         // Also kill orphaned node processes running next-server (from dev server)
-        let _ = Command::new("sh")
+        let _ = create_command("sh")
             .args([
                 "-c",
                 r#"
@@ -467,7 +475,7 @@ pub async fn kill_port(port: u32) -> Result<(), String> {
     #[cfg(unix)]
     {
         // Use lsof to find the PID listening on the port, then kill it
-        let output = Command::new("lsof")
+        let output = create_command("lsof")
             .args(["-ti", &format!(":{port}")])
             .output()
             .map_err(|e| e.to_string())?;
@@ -477,7 +485,7 @@ pub async fn kill_port(port: u32) -> Result<(), String> {
             for pid in pids.lines() {
                 if let Ok(pid_num) = pid.trim().parse::<i32>() {
                     // Kill the process and its children
-                    let _ = Command::new("kill")
+                    let _ = create_command("kill")
                         .args(["-9", &pid_num.to_string()])
                         .output();
                 }
@@ -488,7 +496,7 @@ pub async fn kill_port(port: u32) -> Result<(), String> {
     #[cfg(not(unix))]
     {
         // Windows: use netstat and taskkill
-        let _ = Command::new("cmd")
+        let _ = create_command("cmd")
             .args(["/C", &format!("for /f \"tokens=5\" %a in ('netstat -aon ^| findstr :{} ^| findstr LISTENING') do taskkill /F /PID %a", port)])
             .output();
     }

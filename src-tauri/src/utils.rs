@@ -4,6 +4,18 @@
 
 use std::process::Command;
 
+/// Creates a `Command` that won't spawn a visible console window on Windows.
+/// On non-Windows platforms, this is identical to `Command::new()`.
+pub fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 /// Returns the platform-specific PATH separator (`:` for Unix, `;` for Windows)
 fn get_path_separator() -> &'static str {
     if cfg!(windows) {
@@ -332,7 +344,7 @@ pub fn check_homebrew() -> (bool, Option<String>) {
     for path in paths {
         if path.exists() {
             // Get version
-            let version = Command::new(&path)
+            let version = create_command(&path)
                 .args(["--version"])
                 .output()
                 .ok()
@@ -364,7 +376,7 @@ pub fn get_brew_command() -> Option<std::path::PathBuf> {
 pub fn check_winget() -> (bool, Option<String>) {
     if let Ok(path) = which::which("winget") {
         // Get version
-        let version = Command::new(&path)
+        let version = create_command(&path)
             .args(["--version"])
             .output()
             .ok()

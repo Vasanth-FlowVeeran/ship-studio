@@ -4,8 +4,7 @@
 
 use crate::commands::claude::find_claude_binary;
 use crate::types::GeneratedPR;
-use crate::utils::{get_extended_path, validate_project_path};
-use std::process::Command;
+use crate::utils::{create_command, get_extended_path, validate_project_path};
 use tracing::{debug, error, info, warn};
 
 /// Maximum diff size in bytes to send to Claude (~40KB)
@@ -70,7 +69,7 @@ pub async fn generate_pr_description(
 
     debug!("Calling Claude CLI for PR generation");
 
-    let output = Command::new(&claude_path)
+    let output = create_command(&claude_path)
         .args(["--print", "-p", &prompt])
         .env("PATH", get_extended_path())
         .current_dir(&validated_path)
@@ -90,7 +89,7 @@ pub async fn generate_pr_description(
 }
 
 fn get_branch_name(path: &std::path::Path) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(path)
         .output()
@@ -104,7 +103,7 @@ fn get_branch_name(path: &std::path::Path) -> Result<String, String> {
 }
 
 fn get_commit_messages(path: &std::path::Path, base: &str) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = create_command("git")
         .args([
             "log",
             &format!("{}..HEAD", base),
@@ -120,7 +119,7 @@ fn get_commit_messages(path: &std::path::Path, base: &str) -> Result<String, Str
 }
 
 fn get_diff_stat(path: &std::path::Path, base: &str) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["diff", &format!("{}...HEAD", base), "--stat"])
         .current_dir(path)
         .output()
@@ -130,7 +129,7 @@ fn get_diff_stat(path: &std::path::Path, base: &str) -> Result<String, String> {
 }
 
 fn get_diff(path: &std::path::Path, base: &str) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["diff", &format!("{}...HEAD", base)])
         .current_dir(path)
         .output()

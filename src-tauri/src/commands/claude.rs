@@ -4,8 +4,7 @@
 
 use crate::commands::setup::is_mock_mode;
 use crate::types::ClaudeCliStatus;
-use crate::utils::get_extended_path;
-use std::process::Command;
+use crate::utils::{create_command, get_extended_path};
 
 /// Finds the Claude CLI binary by checking common installation paths.
 pub fn find_claude_binary() -> Option<std::path::PathBuf> {
@@ -58,7 +57,7 @@ pub fn find_claude_binary() -> Option<std::path::PathBuf> {
         }
 
         // Check npm prefix on Windows
-        if let Ok(output) = Command::new("npm")
+        if let Ok(output) = create_command("npm")
             .args(["prefix", "-g"])
             .env("PATH", get_extended_path())
             .output()
@@ -121,7 +120,7 @@ pub fn find_claude_binary() -> Option<std::path::PathBuf> {
             }
 
             // Check npm prefix
-            if let Ok(output) = Command::new("npm")
+            if let Ok(output) = create_command("npm")
                 .args(["prefix", "-g"])
                 .env("PATH", get_extended_path())
                 .output()
@@ -154,7 +153,7 @@ pub async fn check_claude_cli_status() -> ClaudeCliStatus {
     };
 
     // Get version
-    let version = Command::new(&claude_path)
+    let version = create_command(&claude_path)
         .args(["--version"])
         .output()
         .ok()
@@ -192,7 +191,7 @@ pub async fn install_claude_cli() -> Result<(), String> {
     #[cfg(not(windows))]
     {
         // Install Claude Code via official installer script (Unix)
-        let output = Command::new("bash")
+        let output = create_command("bash")
             .args(["-c", "curl -fsSL https://claude.ai/install.sh | bash"])
             .env("PATH", get_extended_path())
             .output()

@@ -12,12 +12,11 @@
  *
  * Legacy plugin-based skills are also supported from ~/.claude/plugins/installed_plugins.json
  */
-use crate::utils::get_extended_path;
+use crate::utils::{create_command, get_extended_path};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
 /// Represents a Claude skill
 #[derive(Debug, Serialize, Clone)]
@@ -262,7 +261,7 @@ pub async fn check_skills_cli() -> bool {
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let output = Command::new("npx")
+    let output = create_command("npx")
         .args(["--yes", "skills", "--version"])
         .env("PATH", get_extended_path())
         .env("HOME", &home)
@@ -284,7 +283,7 @@ pub async fn search_skills(query: String) -> Result<Vec<SkillSearchResult>, Stri
         .unwrap_or_default();
 
     // Use --yes to ensure we always run the latest version
-    let output = Command::new("npx")
+    let output = create_command("npx")
         .args(["--yes", "skills", "find", &query])
         .env("PATH", get_extended_path())
         .env("HOME", &home)
@@ -413,7 +412,7 @@ pub async fn install_skill(
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let mut cmd = Command::new("npx");
+    let mut cmd = create_command("npx");
     cmd.args([
         "--yes",
         "skills",
@@ -462,7 +461,7 @@ pub async fn remove_skill(
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let mut cmd = Command::new("npx");
+    let mut cmd = create_command("npx");
     cmd.args([
         "--yes",
         "skills",

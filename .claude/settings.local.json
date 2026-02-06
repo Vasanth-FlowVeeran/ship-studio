@@ -25,8 +25,13 @@
       "Bash(powershell:*)",
       "Bash(winget:*)",
       "Bash(grep:*)",
+      "Bash(cmd /c:*)",
       "Bash(git -C /Users/tyler/Desktop/Memberstack/repos/ship-studio log --oneline -10)",
-      "Bash(git -C /Users/tyler/Desktop/Memberstack/repos/ship-studio show:*)"
+      "Bash(git -C /Users/tyler/Desktop/Memberstack/repos/ship-studio show:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(tasklist:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

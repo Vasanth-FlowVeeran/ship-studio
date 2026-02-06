@@ -1075,8 +1075,14 @@ function App({ initialProjectPath }: AppProps) {
     } catch (error) {
       logger.error('Failed to find and reserve port, using default', { error });
     }
+    // Kill any orphaned process on the newly reserved port (e.g. from a previous crashed session)
+    try {
+      await invoke('kill_port', { port });
+    } catch {
+      // Ignore - port may already be free
+    }
     logger.info(
-      `[OpenProject] Step 4: Reserved port ${port} - ${Math.round(performance.now() - stepStart)}ms`
+      `[OpenProject] Step 4: Reserved port ${port} (killed orphans) - ${Math.round(performance.now() - stepStart)}ms`
     );
     setDevServerPort(port);
 

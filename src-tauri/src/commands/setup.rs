@@ -8,13 +8,14 @@ use crate::commands::vercel::{find_vercel_binary, get_vercel_command};
 use crate::types::{
     AppState, FullSetupStatus, OptionalAuths, QuickSetupCheck, SetupItemInfo, SetupItemStatus,
 };
-use crate::utils::{check_winget, find_executable, get_brew_command, get_winget_command};
+use crate::utils::{
+    check_winget, create_command, find_executable, get_brew_command, get_winget_command,
+};
 
 #[cfg(not(windows))]
 use crate::utils::check_homebrew;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
@@ -313,7 +314,7 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
     // 2. Node.js
     let node_path = find_executable("node");
     let node_version = node_path.as_ref().and_then(|p| {
-        Command::new(p)
+        create_command(p)
             .args(["--version"])
             .output()
             .ok()
@@ -341,7 +342,7 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
     // 3. Git
     let git_path = find_executable("git");
     let git_version = git_path.as_ref().and_then(|p| {
-        Command::new(p)
+        create_command(p)
             .args(["--version"])
             .output()
             .ok()
@@ -369,7 +370,7 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
     // 4. GitHub CLI
     let gh_path = find_executable("gh");
     let gh_version = gh_path.as_ref().and_then(|p| {
-        Command::new(p)
+        create_command(p)
             .args(["--version"])
             .output()
             .ok()
@@ -438,7 +439,7 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
     // 6. Claude Code
     let claude_path = find_claude_binary();
     let claude_version = claude_path.as_ref().and_then(|p| {
-        Command::new(p)
+        create_command(p)
             .args(["--version"])
             .output()
             .ok()
@@ -499,7 +500,7 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
     // 8. Vercel CLI
     let vercel_path = find_vercel_binary();
     let vercel_version = vercel_path.as_ref().and_then(|p| {
-        Command::new(p)
+        create_command(p)
             .args(["--version"])
             .output()
             .ok()
@@ -704,7 +705,7 @@ pub async fn install_homebrew(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let output = Command::new("bash")
+    let output = create_command("bash")
         .args(["-c", "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""])
         .env("NONINTERACTIVE", "1")
         .output()
@@ -737,7 +738,7 @@ pub async fn install_node_via_brew(app: tauri::AppHandle) -> Result<(), String> 
 
     let brew = get_brew_command().ok_or("Homebrew not found")?;
 
-    let output = Command::new(&brew)
+    let output = create_command(&brew)
         .args(["install", "node"])
         .env("HOMEBREW_NO_AUTO_UPDATE", "1") // Skip auto-update for faster install
         .output()
@@ -770,7 +771,7 @@ pub async fn install_git_via_brew(app: tauri::AppHandle) -> Result<(), String> {
 
     let brew = get_brew_command().ok_or("Homebrew not found")?;
 
-    let output = Command::new(&brew)
+    let output = create_command(&brew)
         .args(["install", "git"])
         .env("HOMEBREW_NO_AUTO_UPDATE", "1") // Skip auto-update for faster install
         .output()
@@ -803,7 +804,7 @@ pub async fn install_gh_via_brew(app: tauri::AppHandle) -> Result<(), String> {
 
     let brew = get_brew_command().ok_or("Homebrew not found")?;
 
-    let output = Command::new(&brew)
+    let output = create_command(&brew)
         .args(["install", "gh"])
         .env("HOMEBREW_NO_AUTO_UPDATE", "1") // Skip auto-update for faster install
         .output()
@@ -871,7 +872,7 @@ pub async fn install_brew_packages(
     let mut args = vec!["install"];
     args.extend(brew_packages.iter().copied());
 
-    let output = Command::new(&brew)
+    let output = create_command(&brew)
         .args(&args)
         // Allow auto-update since it only runs once for all packages
         .output()
@@ -942,7 +943,7 @@ pub async fn install_winget_packages(
 
     // Install packages one at a time (winget doesn't support batch installs well)
     for package in winget_packages {
-        let output = Command::new(&winget)
+        let output = create_command(&winget)
             .args([
                 "install",
                 "--id",
@@ -1004,7 +1005,7 @@ pub async fn start_github_auth(app: tauri::AppHandle) -> Result<String, String> 
 
     let gh_path = find_executable("gh").ok_or("GitHub CLI not installed")?;
 
-    let child = Command::new(&gh_path)
+    let child = create_command(&gh_path)
         .args([
             "auth",
             "login",
@@ -1051,7 +1052,7 @@ pub async fn start_claude_auth(app: tauri::AppHandle) -> Result<String, String> 
 
     let claude_path = find_claude_binary().ok_or("Claude Code not installed")?;
 
-    let child = Command::new(&claude_path)
+    let child = create_command(&claude_path)
         .args(["--print", "hello"])
         .spawn()
         .map_err(|e| format!("Failed to start Claude auth: {}", e))?;
@@ -1155,14 +1156,14 @@ pub fn cleanup_auth_processes_sync() -> u32 {
         #[cfg(unix)]
         {
             // Send SIGTERM for graceful shutdown
-            let _ = Command::new("kill")
+            let _ = create_command("kill")
                 .args(["-TERM", &pid.to_string()])
                 .output();
         }
 
         #[cfg(windows)]
         {
-            let _ = Command::new("taskkill")
+            let _ = create_command("taskkill")
                 .args(["/F", "/PID", &pid.to_string()])
                 .output();
         }

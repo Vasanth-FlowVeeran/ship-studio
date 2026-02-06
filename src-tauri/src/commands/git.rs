@@ -6,15 +6,14 @@ use crate::cache::GIT_CACHE;
 use crate::types::{
     BranchInfo, BranchStatus, ChangedFile, PrerequisiteCheck, RestoreResult, SwitchResult,
 };
-use crate::utils::{find_executable, validate_project_path};
-use std::process::Command;
+use crate::utils::{create_command, find_executable, validate_project_path};
 use tracing::{debug, error, info, instrument, warn};
 
 // ============ Git Helper Functions ============
 
 /// Checks if there are uncommitted changes (staged or unstaged tracked files).
 pub fn git_has_uncommitted_changes(path: &std::path::Path) -> Result<bool, String> {
-    let status = Command::new("git")
+    let status = create_command("git")
         .args(["status", "--porcelain", "-uno"])
         .current_dir(path)
         .output()
@@ -25,7 +24,7 @@ pub fn git_has_uncommitted_changes(path: &std::path::Path) -> Result<bool, Strin
 
 /// Checks if there are any changes (including untracked) in the working directory.
 pub fn git_has_any_changes(path: &std::path::Path) -> Result<bool, String> {
-    let status = Command::new("git")
+    let status = create_command("git")
         .args(["status", "--porcelain"])
         .current_dir(path)
         .output()
@@ -38,7 +37,7 @@ pub fn git_has_any_changes(path: &std::path::Path) -> Result<bool, String> {
 /// Returns true if a commit was made, false if nothing to commit.
 pub fn git_stage_and_commit(path: &std::path::Path, message: &str) -> Result<bool, String> {
     // Stage all changes
-    let add_output = Command::new("git")
+    let add_output = create_command("git")
         .args(["add", "-A"])
         .current_dir(path)
         .output()
@@ -56,7 +55,7 @@ pub fn git_stage_and_commit(path: &std::path::Path, message: &str) -> Result<boo
     }
 
     // Commit
-    let commit_output = Command::new("git")
+    let commit_output = create_command("git")
         .args(["commit", "-m", message])
         .current_dir(path)
         .output()
@@ -71,7 +70,7 @@ pub fn git_stage_and_commit(path: &std::path::Path, message: &str) -> Result<boo
 
 /// Get the current branch name synchronously (for internal use)
 pub fn get_current_branch_sync(path: &std::path::Path) -> Option<String> {
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(path)
         .output()
@@ -91,7 +90,7 @@ pub fn get_current_branch_sync(path: &std::path::Path) -> Option<String> {
 
 /// Calculates how many commits `branch` is ahead/behind compared to `compare_to`.
 pub fn get_ahead_behind(path: &std::path::Path, branch: &str, compare_to: &str) -> (i32, i32) {
-    let output = Command::new("git")
+    let output = create_command("git")
         .args([
             "rev-list",
             "--left-right",
@@ -174,7 +173,7 @@ pub async fn init_git_repo(project_path: String) -> Result<(), String> {
     info!("Initializing git repository");
 
     // Initialize git repo
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["init"])
         .current_dir(&validated_path)
         .output()
@@ -218,7 +217,7 @@ pub async fn check_git_has_changes(project_path: String) -> Result<bool, String>
     }
 
     // Check for unpushed commits
-    let unpushed = Command::new("git")
+    let unpushed = create_command("git")
         .args(["log", "@{u}..", "--oneline"])
         .current_dir(&project)
         .output();
@@ -230,7 +229,7 @@ pub async fn check_git_has_changes(project_path: String) -> Result<bool, String>
         }
         Err(_) => {
             // No upstream set, check if we have commits
-            let commits = Command::new("git")
+            let commits = create_command("git")
                 .args(["log", "--oneline", "-1"])
                 .current_dir(&project)
                 .output()
@@ -265,7 +264,7 @@ pub async fn get_changed_files(project_path: String) -> Result<Vec<ChangedFile>,
     }
 
     // Run git status --porcelain (include untracked files)
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["status", "--porcelain"])
         .current_dir(&project)
         .output()
@@ -323,7 +322,7 @@ pub async fn get_file_diff(
     let validated_path = validate_project_path(&project_path)?;
 
     // Run git diff HEAD -- <filepath> to get all uncommitted changes
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["diff", "HEAD", "--", &file_path])
         .current_dir(&validated_path)
         .output()
@@ -334,7 +333,7 @@ pub async fn get_file_diff(
     // If diff is empty, the file might be untracked (new file)
     if diff_content.trim().is_empty() {
         // Check if file is untracked
-        let status_output = Command::new("git")
+        let status_output = create_command("git")
             .args(["status", "--porcelain", "--", &file_path])
             .current_dir(&validated_path)
             .output()
@@ -398,7 +397,7 @@ pub async fn get_branch_status(project_path: String) -> Result<BranchStatus, Str
     let local_changes = git_has_uncommitted_changes(&validated_path)?;
 
     // Fetch latest from origin (log errors but don't fail)
-    match Command::new("git")
+    match create_command("git")
         .args(["fetch", "origin"])
         .current_dir(&validated_path)
         .output()
@@ -419,7 +418,7 @@ pub async fn get_branch_status(project_path: String) -> Result<BranchStatus, Str
     }
 
     // Check if staging branch exists on remote
-    let staging_check = Command::new("git")
+    let staging_check = create_command("git")
         .args(["ls-remote", "--heads", "origin", "staging"])
         .current_dir(&validated_path)
         .output()
@@ -431,7 +430,7 @@ pub async fn get_branch_status(project_path: String) -> Result<BranchStatus, Str
 
     // Get commits ahead/behind for staging
     let (staging_ahead, staging_behind) = if staging_exists {
-        let output = Command::new("git")
+        let output = create_command("git")
             .args([
                 "rev-list",
                 "--left-right",
@@ -454,7 +453,7 @@ pub async fn get_branch_status(project_path: String) -> Result<BranchStatus, Str
     };
 
     // Get commits ahead/behind for main
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["rev-list", "--left-right", "--count", "HEAD...origin/main"])
         .current_dir(&validated_path)
         .output();
@@ -493,7 +492,7 @@ pub async fn reset_to_branch(project_path: String, branch: String) -> Result<(),
     };
 
     // Fetch latest from remote first
-    let fetch = Command::new("git")
+    let fetch = create_command("git")
         .args(["fetch", "origin"])
         .current_dir(&validated_path)
         .output()
@@ -504,7 +503,7 @@ pub async fn reset_to_branch(project_path: String, branch: String) -> Result<(),
     }
 
     // Reset hard to the remote branch
-    let reset = Command::new("git")
+    let reset = create_command("git")
         .args(["reset", "--hard", remote_branch])
         .current_dir(&validated_path)
         .output()
@@ -516,7 +515,7 @@ pub async fn reset_to_branch(project_path: String, branch: String) -> Result<(),
     }
 
     // Clean untracked files
-    let clean = Command::new("git")
+    let clean = create_command("git")
         .args(["clean", "-fd"])
         .current_dir(&validated_path)
         .output()
@@ -537,13 +536,13 @@ pub async fn list_branches(project_path: String) -> Result<Vec<BranchInfo>, Stri
     debug!("Listing branches");
 
     // Fetch all remotes first
-    let _ = Command::new("git")
+    let _ = create_command("git")
         .args(["fetch", "--all", "--prune"])
         .current_dir(&validated_path)
         .output();
 
     // Get all branches (local and remote)
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["branch", "-a", "--format=%(refname:short)|%(objectname:short)|%(committerdate:unix)|%(authorname)|%(HEAD)"])
         .current_dir(&validated_path)
         .output()
@@ -633,7 +632,7 @@ pub async fn get_current_branch(project_path: String) -> Result<String, String> 
 
     let validated_path = validate_project_path(&project_path)?;
 
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(&validated_path)
         .output()
@@ -708,7 +707,7 @@ pub async fn switch_branch(
     let has_changes = git_has_any_changes(&validated_path)?;
 
     if has_changes && auto_stash {
-        let stash_output = Command::new("git")
+        let stash_output = create_command("git")
             .args([
                 "stash",
                 "push",
@@ -748,7 +747,7 @@ pub async fn switch_branch(
     }
 
     // Try to checkout the branch
-    let checkout_output = Command::new("git")
+    let checkout_output = create_command("git")
         .args(["checkout", &branch_name])
         .current_dir(&validated_path)
         .output()
@@ -757,7 +756,7 @@ pub async fn switch_branch(
     if !checkout_output.status.success() {
         // Checkout failed - restore the stash if we made one
         if stashed {
-            let _ = Command::new("git")
+            let _ = create_command("git")
                 .args(["stash", "pop"])
                 .current_dir(&validated_path)
                 .output();
@@ -785,7 +784,7 @@ pub async fn switch_branch(
         // If we're switching back to the branch where we stashed from, offer to apply
         if stash_info.from_branch == branch_name {
             // Try to auto-apply the stash
-            let pop_output = Command::new("git")
+            let pop_output = create_command("git")
                 .args(["stash", "pop"])
                 .current_dir(&validated_path)
                 .output();
@@ -808,7 +807,7 @@ pub async fn switch_branch(
     }
 
     // Pull latest changes from remote
-    let _ = Command::new("git")
+    let _ = create_command("git")
         .args(["pull", "--ff-only"])
         .current_dir(&validated_path)
         .output();
@@ -818,7 +817,7 @@ pub async fn switch_branch(
     for config in &config_files {
         let config_path = validated_path.join(config);
         if config_path.exists() {
-            let _ = Command::new("touch").arg(&config_path).output();
+            let _ = create_command("touch").arg(&config_path).output();
             break;
         }
     }
@@ -857,7 +856,7 @@ pub async fn get_stash_info(
 pub async fn apply_stash(project_path: String) -> Result<bool, String> {
     let validated_path = validate_project_path(&project_path)?;
 
-    let pop_output = Command::new("git")
+    let pop_output = create_command("git")
         .args(["stash", "pop"])
         .current_dir(&validated_path)
         .output()
@@ -882,7 +881,7 @@ pub async fn apply_stash(project_path: String) -> Result<bool, String> {
 pub async fn drop_stash(project_path: String) -> Result<bool, String> {
     let validated_path = validate_project_path(&project_path)?;
 
-    let drop_output = Command::new("git")
+    let drop_output = create_command("git")
         .args(["stash", "drop"])
         .current_dir(&validated_path)
         .output()
@@ -907,7 +906,7 @@ pub async fn discard_changes(project_path: String) -> Result<(), String> {
     let validated_path = validate_project_path(&project_path)?;
 
     // Discard changes to tracked files
-    let checkout_output = Command::new("git")
+    let checkout_output = create_command("git")
         .args(["checkout", "."])
         .current_dir(&validated_path)
         .output()
@@ -919,7 +918,7 @@ pub async fn discard_changes(project_path: String) -> Result<(), String> {
     }
 
     // Remove untracked files
-    let clean_output = Command::new("git")
+    let clean_output = create_command("git")
         .args(["clean", "-fd"])
         .current_dir(&validated_path)
         .output()
@@ -966,7 +965,7 @@ pub async fn create_branch(
     }
 
     // Get the current branch name
-    let current_branch_output = Command::new("git")
+    let current_branch_output = create_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(&validated_path)
         .output()
@@ -981,7 +980,7 @@ pub async fn create_branch(
 
     if is_from_current {
         // Create branch from current HEAD (preserves local changes)
-        let output = Command::new("git")
+        let output = create_command("git")
             .args(["checkout", "-b", &branch_name])
             .current_dir(&validated_path)
             .output()
@@ -993,7 +992,7 @@ pub async fn create_branch(
         }
     } else {
         // Creating from a different branch - fetch and use origin
-        let _ = Command::new("git")
+        let _ = create_command("git")
             .args(["fetch", "origin"])
             .current_dir(&validated_path)
             .output();
@@ -1004,7 +1003,7 @@ pub async fn create_branch(
             format!("origin/{}", from_branch)
         };
 
-        let output = Command::new("git")
+        let output = create_command("git")
             .args(["checkout", "-b", &branch_name, &base_ref])
             .current_dir(&validated_path)
             .output()
@@ -1029,7 +1028,7 @@ pub async fn create_branch(
 pub async fn fetch_all_branches(project_path: String) -> Result<(), String> {
     let validated_path = validate_project_path(&project_path)?;
 
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["fetch", "--all", "--prune"])
         .current_dir(&validated_path)
         .output()
@@ -1048,7 +1047,7 @@ pub async fn fetch_all_branches(project_path: String) -> Result<(), String> {
 pub async fn git_pull(project_path: String) -> Result<(), String> {
     let validated_path = validate_project_path(&project_path)?;
 
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["pull", "--ff-only"])
         .current_dir(&validated_path)
         .output()
@@ -1074,19 +1073,19 @@ pub async fn pull_and_merge(
     let validated_path = validate_project_path(&project_path)?;
 
     // First fetch to ensure we have latest refs
-    let _ = Command::new("git")
+    let _ = create_command("git")
         .args(["fetch", "origin"])
         .current_dir(&validated_path)
         .output();
 
     let output = if let Some(branch) = merge_branch {
-        Command::new("git")
+        create_command("git")
             .args(["merge", &format!("origin/{}", branch)])
             .current_dir(&validated_path)
             .output()
             .map_err(|e| e.to_string())?
     } else {
-        Command::new("git")
+        create_command("git")
             .args(["pull", "--no-rebase"])
             .current_dir(&validated_path)
             .output()
@@ -1127,7 +1126,7 @@ pub async fn delete_branch(
     }
 
     // Get current branch to make sure we're not on it
-    let current = Command::new("git")
+    let current = create_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(&validated_path)
         .output()
@@ -1141,7 +1140,7 @@ pub async fn delete_branch(
     }
 
     // Delete local branch
-    let local_output = Command::new("git")
+    let local_output = create_command("git")
         .args(["branch", "-D", &branch_name])
         .current_dir(&validated_path)
         .output()
@@ -1156,7 +1155,7 @@ pub async fn delete_branch(
 
     // Delete remote branch if requested
     if delete_remote {
-        let remote_output = Command::new("git")
+        let remote_output = create_command("git")
             .args(["push", "origin", "--delete", &branch_name])
             .current_dir(&validated_path)
             .output()
@@ -1190,7 +1189,7 @@ pub async fn get_backups(
     info!(limit, "Getting backups");
 
     // Format: hash|full_hash|message|timestamp|relative_time
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["log", &format!("-{}", limit), "--format=%h|%H|%s|%ct|%cr"])
         .current_dir(&validated_path)
         .output()
@@ -1245,7 +1244,7 @@ pub async fn restore_backup(
     };
 
     // Get the commit message of the target backup
-    let msg_output = Command::new("git")
+    let msg_output = create_command("git")
         .args(["log", "-1", "--format=%s", &commit_hash])
         .current_dir(&validated_path)
         .output()
@@ -1263,7 +1262,7 @@ pub async fn restore_backup(
     let has_changes = git_has_any_changes(&validated_path)?;
     if has_changes {
         info!("Stashing current changes");
-        let stash_output = Command::new("git")
+        let stash_output = create_command("git")
             .args(["stash", "push", "-m", "Auto-stash before restore"])
             .current_dir(&validated_path)
             .output()
@@ -1279,7 +1278,7 @@ pub async fn restore_backup(
     let branch_name = format!("restore-{}", short_hash);
 
     // Check if branch already exists and delete it if so
-    let branch_exists = Command::new("git")
+    let branch_exists = create_command("git")
         .args(["rev-parse", "--verify", &branch_name])
         .current_dir(&validated_path)
         .output()
@@ -1288,13 +1287,13 @@ pub async fn restore_backup(
 
     if branch_exists {
         // Delete the existing branch
-        let _ = Command::new("git")
+        let _ = create_command("git")
             .args(["branch", "-D", &branch_name])
             .current_dir(&validated_path)
             .output();
     }
 
-    let create_output = Command::new("git")
+    let create_output = create_command("git")
         .args(["checkout", "-b", &branch_name])
         .current_dir(&validated_path)
         .output()
@@ -1303,7 +1302,7 @@ pub async fn restore_backup(
     if !create_output.status.success() {
         // Restore stash if we created one
         if has_changes {
-            let _ = Command::new("git")
+            let _ = create_command("git")
                 .args(["stash", "pop"])
                 .current_dir(&validated_path)
                 .output();
@@ -1313,7 +1312,7 @@ pub async fn restore_backup(
     }
 
     // 3. Checkout all files from the target commit
-    let checkout_output = Command::new("git")
+    let checkout_output = create_command("git")
         .args(["checkout", &commit_hash, "--", "."])
         .current_dir(&validated_path)
         .output()
@@ -1321,16 +1320,16 @@ pub async fn restore_backup(
 
     if !checkout_output.status.success() {
         // Switch back to original branch and restore stash
-        let _ = Command::new("git")
+        let _ = create_command("git")
             .args(["checkout", &current_branch])
             .current_dir(&validated_path)
             .output();
-        let _ = Command::new("git")
+        let _ = create_command("git")
             .args(["branch", "-D", &branch_name])
             .current_dir(&validated_path)
             .output();
         if has_changes {
-            let _ = Command::new("git")
+            let _ = create_command("git")
                 .args(["stash", "pop"])
                 .current_dir(&validated_path)
                 .output();
@@ -1346,16 +1345,16 @@ pub async fn restore_backup(
     if !committed {
         // No changes means we're already at this state
         // Switch back to original branch and clean up
-        let _ = Command::new("git")
+        let _ = create_command("git")
             .args(["checkout", &current_branch])
             .current_dir(&validated_path)
             .output();
-        let _ = Command::new("git")
+        let _ = create_command("git")
             .args(["branch", "-D", &branch_name])
             .current_dir(&validated_path)
             .output();
         if has_changes {
-            let _ = Command::new("git")
+            let _ = create_command("git")
                 .args(["stash", "pop"])
                 .current_dir(&validated_path)
                 .output();
@@ -1365,7 +1364,7 @@ pub async fn restore_backup(
 
     // 5. Push the new branch to remote
     info!("Pushing restore branch");
-    let push_output = Command::new("git")
+    let push_output = create_command("git")
         .args(["push", "-u", "origin", &branch_name])
         .current_dir(&validated_path)
         .output()

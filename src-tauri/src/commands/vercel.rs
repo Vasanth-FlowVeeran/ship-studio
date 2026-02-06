@@ -8,7 +8,9 @@ use crate::types::{
     ProjectVercelStatus, PublishRecord, VercelCliStatus, VercelDeployment, VercelDeploymentStatus,
     VercelProject, VercelTeam,
 };
-use crate::utils::{format_relative_time, get_extended_path, validate_project_path};
+use crate::utils::{
+    create_command, format_relative_time, get_extended_path, validate_project_path,
+};
 use std::process::Command;
 use tracing::{debug, info, warn};
 
@@ -201,10 +203,10 @@ pub fn find_vercel_binary() -> Option<std::path::PathBuf> {
 /// Returns a Command for vercel with extended PATH set
 pub fn get_vercel_command() -> Command {
     let mut cmd = if let Some(path) = find_vercel_binary() {
-        Command::new(path)
+        create_command(path)
     } else {
         // Fallback to system PATH
-        Command::new("vercel")
+        create_command("vercel")
     };
     // Ensure extended PATH is available for any child processes
     cmd.env("PATH", get_extended_path());
@@ -248,7 +250,7 @@ pub async fn install_vercel_cli() -> Result<(), String> {
             .ok_or("[VERCEL_INSTALL_002] npm not found")?;
 
         // Run npm with Node.js directory explicitly in PATH
-        let output = Command::new(&npm_path)
+        let output = create_command(&npm_path)
             .args(["install", "-g", "vercel"])
             .env("PATH", extended_path)
             .output()
@@ -273,7 +275,7 @@ pub async fn install_vercel_cli() -> Result<(), String> {
         let brew = crate::utils::get_brew_command()
             .ok_or("[VERCEL_INSTALL_001] Homebrew not found. Please install Homebrew first.")?;
 
-        let output = Command::new(&brew)
+        let output = create_command(&brew)
             .args(["install", "vercel-cli"])
             // Skip auto-update to speed up install (can save 10-30 seconds)
             .env("HOMEBREW_NO_AUTO_UPDATE", "1")

@@ -3,10 +3,9 @@
 //! Commands for IDE integration, browser selection, preview webviews, and screenshots.
 
 use crate::types::{BrowserInfo, IdeAvailability};
-use crate::utils::validate_project_path;
+use crate::utils::{create_command, validate_project_path};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Manager, Webview, WebviewUrl};
@@ -96,7 +95,7 @@ pub async fn open_in_ide(project_path: String, ide: String) -> Result<(), String
         };
 
         // Use 'open -a' on macOS which is more reliable
-        Command::new("open")
+        create_command("open")
             .args(["-a", app_name, path_str.as_ref()])
             .spawn()
             .map_err(|e| format!("Failed to open in {}: {}", ide, e))?;
@@ -110,7 +109,7 @@ pub async fn open_in_ide(project_path: String, ide: String) -> Result<(), String
             _ => return Err(format!("Unknown IDE: {}", ide)),
         };
 
-        Command::new(cmd)
+        create_command(cmd)
             .arg(path_str.as_ref())
             .spawn()
             .map_err(|e| format!("Failed to open in {}: {}", ide, e))?;
@@ -173,7 +172,7 @@ pub async fn open_url_in_browser(url: String, browser_id: String) -> Result<(), 
             .map(|(_, name, _)| *name)
             .ok_or_else(|| format!("Unknown browser: {}", browser_id))?;
 
-        Command::new("open")
+        create_command("open")
             .args(["-a", app_name, &url])
             .spawn()
             .map_err(|e| format!("Failed to open in {}: {}", browser_id, e))?;
@@ -192,7 +191,7 @@ pub async fn open_url_in_browser(url: String, browser_id: String) -> Result<(), 
         let browser_exe = find_windows_browser(relative_path)
             .ok_or_else(|| format!("Browser not found: {}", browser_id))?;
 
-        Command::new(browser_exe)
+        create_command(browser_exe)
             .arg(&url)
             .spawn()
             .map_err(|e| format!("Failed to open in {}: {}", browser_id, e))?;
@@ -559,7 +558,7 @@ pub async fn capture_project_thumbnail(
     let thumbnail_path_str = thumbnail_path.to_string_lossy().to_string();
 
     // Try using Playwright first (more reliable viewport control)
-    let npx_result = Command::new("npx")
+    let npx_result = create_command("npx")
         .args([
             "playwright",
             "screenshot",
@@ -590,7 +589,7 @@ pub async fn capture_project_thumbnail(
 
         // Use new headless mode with explicit viewport control
         // Set background to white so any extra captured area isn't black
-        let output = Command::new(&browser)
+        let output = create_command(&browser)
             .args([
                 "--headless=new",
                 "--disable-gpu",
@@ -689,7 +688,7 @@ fn get_playwright_env() -> Result<std::path::PathBuf, String> {
 
     // Install playwright
     tracing::info!("Installing Playwright (this may take a moment on first run)...");
-    let install_output = Command::new("npm")
+    let install_output = create_command("npm")
         .args(["install", "playwright"])
         .current_dir(&playwright_dir)
         .output()
@@ -702,7 +701,7 @@ fn get_playwright_env() -> Result<std::path::PathBuf, String> {
 
     // Install Chromium browser
     tracing::info!("Installing Chromium browser...");
-    let browser_output = Command::new("npx")
+    let browser_output = create_command("npx")
         .args(["playwright", "install", "chromium"])
         .current_dir(&playwright_dir)
         .output()
@@ -826,7 +825,7 @@ const {{ chromium }} = require('playwright');
 
     // Run the script from the playwright environment directory
     // This ensures require('playwright') can find the module
-    let output = Command::new("node")
+    let output = create_command("node")
         .arg(&script_path)
         .current_dir(&playwright_env)
         .output()
@@ -934,7 +933,7 @@ const {{ chromium }} = require('playwright');
         .map_err(|e| format!("Failed to write capture script: {}", e))?;
 
     // Run the script
-    let output = Command::new("node")
+    let output = create_command("node")
         .arg(&script_path)
         .current_dir(&playwright_env)
         .output()

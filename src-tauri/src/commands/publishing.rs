@@ -4,8 +4,7 @@
 
 use crate::commands::git::git_stage_and_commit;
 use crate::types::PublishResult;
-use crate::utils::validate_project_path;
-use std::process::Command;
+use crate::utils::{create_command, validate_project_path};
 use tracing::{debug, error, info, instrument, warn};
 
 #[tauri::command]
@@ -19,7 +18,7 @@ pub async fn publish_to_github(
     info!(message = %message, "Publishing to GitHub");
 
     // Get current branch name
-    let branch_output = Command::new("git")
+    let branch_output = create_command("git")
         .args(["branch", "--show-current"])
         .current_dir(&validated_path)
         .output()
@@ -35,7 +34,7 @@ pub async fn publish_to_github(
     };
 
     // Pull latest changes first (rebase to keep history clean)
-    let pull_output = Command::new("git")
+    let pull_output = create_command("git")
         .args(["pull", "--rebase", "origin", &branch])
         .current_dir(&validated_path)
         .output();
@@ -63,7 +62,7 @@ pub async fn publish_to_github(
     }
 
     // Stage all changes
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["add", "-A"])
         .current_dir(&validated_path)
         .output()
@@ -74,7 +73,7 @@ pub async fn publish_to_github(
     }
 
     // Check if there are changes to commit
-    let status = Command::new("git")
+    let status = create_command("git")
         .args(["status", "--porcelain"])
         .current_dir(&validated_path)
         .output()
@@ -84,7 +83,7 @@ pub async fn publish_to_github(
 
     if has_changes {
         // Commit changes
-        let output = Command::new("git")
+        let output = create_command("git")
             .args(["commit", "-m", &message])
             .current_dir(&validated_path)
             .output()
@@ -96,7 +95,7 @@ pub async fn publish_to_github(
     }
 
     // Push to origin
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["push", "-u", "origin", &branch])
         .current_dir(&validated_path)
         .output()
@@ -129,7 +128,7 @@ pub async fn publish_to_staging(
 
     // Push to staging branch - Vercel auto-deploys via GitHub integration
     // Note: Using regular push instead of force push to avoid overwriting others' work
-    let push_output = Command::new("git")
+    let push_output = create_command("git")
         .args(["push", "-u", "origin", "HEAD:staging"])
         .current_dir(&validated_path)
         .output()
@@ -168,7 +167,7 @@ pub async fn publish_to_production(
     let _ = git_stage_and_commit(&validated_path, &message);
 
     // Push to main branch - Vercel auto-deploys to production via GitHub integration
-    let push_output = Command::new("git")
+    let push_output = create_command("git")
         .args(["push", "-u", "origin", "HEAD:main"])
         .current_dir(&validated_path)
         .output()
@@ -200,7 +199,7 @@ pub async fn publish_branch(
     let message = commit_message.unwrap_or_else(|| "Updates from Ship Studio".to_string());
 
     // Get current branch name
-    let branch_output = Command::new("git")
+    let branch_output = create_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(&validated_path)
         .output()
@@ -212,13 +211,13 @@ pub async fn publish_branch(
     info!(branch = %branch, message = %message, "Publishing branch");
 
     // Stage all changes
-    let _ = Command::new("git")
+    let _ = create_command("git")
         .args(["add", "-A"])
         .current_dir(&validated_path)
         .output();
 
     // Check if there are changes to commit
-    let status = Command::new("git")
+    let status = create_command("git")
         .args(["status", "--porcelain"])
         .current_dir(&validated_path)
         .output()
@@ -228,7 +227,7 @@ pub async fn publish_branch(
 
     if has_changes {
         // Commit changes
-        let commit_output = Command::new("git")
+        let commit_output = create_command("git")
             .args(["commit", "-m", &message])
             .current_dir(&validated_path)
             .output()
@@ -241,7 +240,7 @@ pub async fn publish_branch(
     }
 
     // Push to origin
-    let push_output = Command::new("git")
+    let push_output = create_command("git")
         .args(["push", "-u", "origin", &branch])
         .current_dir(&validated_path)
         .output()

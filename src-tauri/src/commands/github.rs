@@ -4,7 +4,7 @@
 
 use crate::commands::git::git_stage_and_commit;
 use crate::types::{GitHubCliStatus, GitHubRepo, ProjectGitHubStatus, PushToGitHubOptions};
-use crate::utils::{find_executable, get_extended_path, validate_project_path};
+use crate::utils::{create_command, find_executable, get_extended_path, validate_project_path};
 use std::path::Path;
 use std::process::Command;
 use tracing::{info, warn};
@@ -35,9 +35,9 @@ async fn run_command_with_timeout(
 /// Returns a Command for gh with extended PATH set
 pub fn get_gh_command() -> Command {
     let mut cmd = if let Some(path) = find_executable("gh") {
-        Command::new(path)
+        create_command(path)
     } else {
-        Command::new("gh")
+        create_command("gh")
     };
     cmd.env("PATH", get_extended_path());
     cmd
@@ -160,7 +160,7 @@ pub async fn get_project_github_status(project_path: String) -> ProjectGitHubSta
 
     // Get remote URL (with timeout)
     let step_start = std::time::Instant::now();
-    let mut remote_cmd = Command::new("git");
+    let mut remote_cmd = create_command("git");
     remote_cmd
         .args(["remote", "get-url", "origin"])
         .current_dir(&project)
@@ -259,14 +259,14 @@ pub async fn get_project_github_status(project_path: String) -> ProjectGitHubSta
 /// Ensures git user.name and user.email are configured for the repo.
 /// If not set, fetches the user's identity from GitHub CLI and sets it locally.
 fn ensure_git_identity(repo_path: &std::path::Path) -> Result<(), String> {
-    let has_name = Command::new("git")
+    let has_name = create_command("git")
         .args(["config", "user.name"])
         .current_dir(repo_path)
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
 
-    let has_email = Command::new("git")
+    let has_email = create_command("git")
         .args(["config", "user.email"])
         .current_dir(repo_path)
         .output()
@@ -296,7 +296,7 @@ fn ensure_git_identity(repo_path: &std::path::Path) -> Result<(), String> {
 
     if !has_name {
         let display_name = name.unwrap_or(login);
-        Command::new("git")
+        create_command("git")
             .args(["config", "user.name", display_name])
             .current_dir(repo_path)
             .output()
@@ -313,7 +313,7 @@ fn ensure_git_identity(repo_path: &std::path::Path) -> Result<(), String> {
         } else {
             user_email.to_string()
         };
-        Command::new("git")
+        create_command("git")
             .args(["config", "user.email", &final_email])
             .current_dir(repo_path)
             .output()
@@ -336,7 +336,7 @@ pub async fn push_to_github(options: PushToGitHubOptions) -> Result<String, Stri
     // Check if it's already a git repo, if not initialize
     let git_dir = validated_path.join(".git");
     if !git_dir.exists() {
-        Command::new("git")
+        create_command("git")
             .args(["init"])
             .current_dir(&validated_path)
             .output()
@@ -357,7 +357,7 @@ pub async fn push_to_github(options: PushToGitHubOptions) -> Result<String, Stri
     );
 
     // Ensure at least one commit exists (gh repo create --push requires it)
-    let has_commits = Command::new("git")
+    let has_commits = create_command("git")
         .args(["rev-parse", "HEAD"])
         .current_dir(&validated_path)
         .output()
@@ -365,7 +365,7 @@ pub async fn push_to_github(options: PushToGitHubOptions) -> Result<String, Stri
         .unwrap_or(false);
 
     if !has_commits {
-        let output = Command::new("git")
+        let output = create_command("git")
             .args([
                 "commit",
                 "--allow-empty",

@@ -7,9 +7,8 @@ use crate::state::{get_window_for_project, register_project_window, unregister_p
 use crate::types::{
     DashboardProject, PageInfo, ProjectInfo, ProjectMetadata, PROJECT_METADATA_SCHEMA_VERSION,
 };
-use crate::utils::validate_project_path;
+use crate::utils::{create_command, validate_project_path};
 use std::io::{Read, Write};
-use std::process::Command;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
 use walkdir::WalkDir;
@@ -25,7 +24,7 @@ fn get_git_branch(project_path: &std::path::Path) -> Option<String> {
         return None;
     }
 
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(project_path)
         .output()
@@ -48,7 +47,7 @@ fn get_uncommitted_count(project_path: &std::path::Path) -> Option<u32> {
     }
 
     // Use -uno to ignore untracked files like .DS_Store
-    let output = Command::new("git")
+    let output = create_command("git")
         .args(["status", "--porcelain", "-uno"])
         .current_dir(project_path)
         .output()
@@ -766,7 +765,7 @@ pub async fn open_in_finder(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open")
+        crate::utils::create_command("open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -774,7 +773,7 @@ pub async fn open_in_finder(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer")
+        crate::utils::create_command("explorer")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -782,7 +781,7 @@ pub async fn open_in_finder(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("xdg-open")
+        crate::utils::create_command("xdg-open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;

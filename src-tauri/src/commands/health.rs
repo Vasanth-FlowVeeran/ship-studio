@@ -7,14 +7,11 @@ use crate::types::{
     DetectedScripts, HealthCheckResult, HealthCheckStatus, PackageManager, ProjectMetadata,
     ScriptCategory, ScriptSuggestion,
 };
-use crate::utils::validate_project_path;
+use crate::utils::{create_command, get_extended_path, validate_project_path};
 use serde_json::Value;
 use std::path::Path;
-use std::process::Command;
 use std::time::Instant;
 use tracing::{debug, error, info, warn};
-
-use crate::utils::get_extended_path;
 
 /// Script patterns for each category
 /// First match wins, so more specific patterns should come first
@@ -274,7 +271,7 @@ pub async fn run_health_script(
     let start = Instant::now();
 
     // Build the command
-    let mut cmd = Command::new(pm_cmd);
+    let mut cmd = create_command(pm_cmd);
     cmd.arg("run").arg(&script_name);
     cmd.current_dir(&validated_path);
     cmd.env("PATH", get_extended_path());

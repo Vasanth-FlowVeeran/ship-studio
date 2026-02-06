@@ -4,7 +4,7 @@
 
 use crate::commands::github::get_gh_command;
 use crate::types::PullRequestInfo;
-use crate::utils::validate_project_path;
+use crate::utils::{create_command, validate_project_path};
 
 /// List pull requests for the repository
 #[tauri::command]
@@ -71,7 +71,7 @@ pub async fn create_pull_request(
     let validated_path = validate_project_path(&project_path)?;
 
     // Push the branch to the remote first (gh pr create requires this)
-    let push_output = std::process::Command::new("git")
+    let push_output = create_command("git")
         .args(["push", "-u", "origin", "HEAD"])
         .current_dir(&validated_path)
         .output()
