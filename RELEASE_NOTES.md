@@ -6,6 +6,12 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.51
+
+- **Import collaborator repos** - Import repos you're a collaborator on, not just repos you own
+- **Fix restart crashes** - Dev server restart no longer crashes the app
+
+
 ## What's New in v0.3.50
 
 - **Fixed npm cache permissions** - Setup now detects and fixes npm cache permission errors
