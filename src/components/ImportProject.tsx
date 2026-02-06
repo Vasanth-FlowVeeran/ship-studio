@@ -19,6 +19,7 @@ import {
   getGitHubUsername,
   getGitHubOrgs,
   listGitHubRepos,
+  listCollaboratorRepos,
   detectPackageManager,
   GitHubRepo,
 } from '../lib/github';
@@ -141,7 +142,9 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
     setSelectedRepo(null);
     setError(null);
     try {
-      const repoList = await listGitHubRepos(owner);
+      // Special case: "collaborator" fetches repos where user is a collaborator
+      const repoList =
+        owner === '__collaborator__' ? await listCollaboratorRepos() : await listGitHubRepos(owner);
       // Sort by updated date (most recent first)
       repoList.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       setRepos(repoList);
@@ -288,7 +291,11 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       const projectPath = `${shipstudioDir}/${safeName}`;
 
       // Clone repository using gh CLI (uses GitHub CLI authentication)
-      const repoFullName = `${selectedOwner}/${selectedRepo.name}`;
+      // For collaborator repos, the name already includes the owner (e.g., "owner/repo")
+      const repoFullName =
+        selectedOwner === '__collaborator__'
+          ? selectedRepo.name
+          : `${selectedOwner}/${selectedRepo.name}`;
       const cloneId = await invoke<number>('spawn_pty', {
         options: {
           cwd: shipstudioDir,
@@ -518,6 +525,31 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
                 </div>
               </button>
             ))}
+            {/* Collaborator repos - repos owned by others where user has access */}
+            <button
+              className={`import-owner-btn ${selectedOwner === '__collaborator__' ? 'selected' : ''}`}
+              onClick={() => handleOwnerSelect('__collaborator__')}
+            >
+              <div className="import-owner-avatar collab">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              </div>
+              <div className="import-owner-info">
+                <span className="import-owner-name">Collaborator Access</span>
+                <span className="import-owner-type">Repos shared with you</span>
+              </div>
+            </button>
           </div>
 
           {error && <p className="error">{error}</p>}
@@ -539,7 +571,13 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
             <div>
               <h2>Import Project</h2>
               <p className="template-context">
-                From <strong>{selectedOwner}</strong>
+                {selectedOwner === '__collaborator__' ? (
+                  <>Repos shared with you</>
+                ) : (
+                  <>
+                    From <strong>{selectedOwner}</strong>
+                  </>
+                )}
               </p>
             </div>
             <button className="create-modal-close" onClick={onCancel} type="button">

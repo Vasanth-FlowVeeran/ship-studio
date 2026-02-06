@@ -63,6 +63,10 @@
   background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
 }
 
+.import-owner-avatar.collab {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
 .import-owner-info {
   display: flex;
   flex-direction: column;

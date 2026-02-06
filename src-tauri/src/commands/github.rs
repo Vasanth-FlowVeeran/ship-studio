@@ -3,8 +3,11 @@
 //! Commands for GitHub CLI status, authentication, and user info.
 
 use crate::commands::git::{git_stage_and_commit, init_git_repo};
-use crate::types::{GitHubCliStatus, GitHubRepo, ProjectGitHubStatus, PushToGitHubOptions};
+use crate::types::{
+    GitHubCliStatus, GitHubLanguage, GitHubRepo, ProjectGitHubStatus, PushToGitHubOptions,
+};
 use crate::utils::{find_executable, get_extended_path, validate_project_path};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
 use tracing::{info, warn};
@@ -318,6 +321,66 @@ pub async fn list_github_repos(owner: String) -> Result<Vec<GitHubRepo>, String>
     let json_str = String::from_utf8_lossy(&output.stdout);
     let repos: Vec<GitHubRepo> =
         serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse repo list: {}", e))?;
+
+    Ok(repos)
+}
+
+/// GitHub repo from API (different field names than gh repo list)
+#[derive(Debug, Serialize, Deserialize)]
+struct GitHubApiRepo {
+    name: String,
+    html_url: String,
+    ssh_url: String,
+    private: bool,
+    description: Option<String>,
+    language: Option<String>,
+    updated_at: String,
+    owner: GitHubApiOwner,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GitHubApiOwner {
+    login: String,
+}
+
+/// Lists GitHub repositories where the user is a collaborator (not owner)
+#[tauri::command]
+pub async fn list_collaborator_repos() -> Result<Vec<GitHubRepo>, String> {
+    // Use GitHub API to get repos where user is a collaborator
+    // affiliation=collaborator returns repos where user has been added as a collaborator
+    let output = get_gh_command()
+        .args([
+            "api",
+            "/user/repos?affiliation=collaborator&per_page=100&sort=updated",
+            "--paginate",
+        ])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to list collaborator repos: {}", stderr));
+    }
+
+    let json_str = String::from_utf8_lossy(&output.stdout);
+
+    // The API returns an array of repo objects with different field names
+    let api_repos: Vec<GitHubApiRepo> = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse collaborator repo list: {}", e))?;
+
+    // Convert to our GitHubRepo format
+    let repos: Vec<GitHubRepo> = api_repos
+        .into_iter()
+        .map(|r| GitHubRepo {
+            name: format!("{}/{}", r.owner.login, r.name),
+            url: r.html_url,
+            ssh_url: r.ssh_url,
+            is_private: r.private,
+            description: r.description,
+            primary_language: r.language.map(|l| GitHubLanguage { name: l }),
+            updated_at: r.updated_at,
+        })
+        .collect();
 
     Ok(repos)
 }

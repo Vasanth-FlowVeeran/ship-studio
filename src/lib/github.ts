@@ -183,6 +183,15 @@ export async function listGitHubRepos(owner: string): Promise<GitHubRepo[]> {
 }
 
 /**
+ * List GitHub repositories where the user is a collaborator (not owner).
+ * These are repos owned by others where the user has been granted access.
+ * @returns Array of repository information (name includes owner, e.g., "owner/repo")
+ */
+export async function listCollaboratorRepos(): Promise<GitHubRepo[]> {
+  return invoke<GitHubRepo[]>('list_collaborator_repos');
+}
+
+/**
  * Detect the package manager used in a project.
  * Checks for lock files in the following order: pnpm, yarn, bun, npm (default).
  * @param projectPath - Absolute path to the project directory
