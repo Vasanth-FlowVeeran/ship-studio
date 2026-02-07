@@ -2138,6 +2138,8 @@ function App({ initialProjectPath }: AppProps) {
                       onCropCancel={handleCropCancel}
                       isBranchSwitching={isBranchSwitching}
                       isDevServerRestarting={isRestartingDevServer}
+                      onSendToClaude={sendToClaude}
+                      onToast={showToast}
                       toolbarExtra={
                         <div className="agent-toolbar">
                           <button

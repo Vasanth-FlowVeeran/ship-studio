@@ -159,6 +159,10 @@ interface PreviewProps {
   isDevServerRestarting?: boolean;
   /** Extra toolbar elements to render in the center */
   toolbarExtra?: React.ReactNode;
+  /** Callback to send prompt to Claude terminal */
+  onSendToClaude?: (prompt: string) => void;
+  /** Callback for toast notifications */
+  onToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
 /**
@@ -191,6 +195,8 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     isBranchSwitching = false,
     isDevServerRestarting = false,
     toolbarExtra,
+    onSendToClaude,
+    onToast,
   },
   ref
 ) {
@@ -381,19 +387,42 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     };
   }, [serverReady, port]);
 
-  // Listen for navigation events from the injected proxy script
+  // Listen for navigation and error events from the injected proxy scripts
   useEffect(() => {
-    const handleMessage = (event: MessageEvent<{ type?: string; pathname?: string }>) => {
+    const handleMessage = (
+      event: MessageEvent<{
+        type?: string;
+        pathname?: string;
+        status?: number;
+        message?: string;
+      }>
+    ) => {
       const data = event.data;
       if (data && data.type === 'shipstudio:navigate' && typeof data.pathname === 'string') {
         const pathname: string = data.pathname || '/';
         // Only update if actually different (prevents feedback loops)
         setCurrentPage((prev) => (prev === pathname ? prev : pathname));
       }
+      if (data && data.type === 'shipstudio:error') {
+        logger.warn('[Preview] Dev server error detected via proxy', {
+          status: data.status,
+          message: data.message?.substring(0, 200),
+        });
+      }
+      if (data && data.type === 'shipstudio:copy-error' && data.message) {
+        navigator.clipboard.writeText(data.message).then(
+          () => onToast?.('Error copied to clipboard', 'success'),
+          () => onToast?.('Failed to copy to clipboard', 'error')
+        );
+      }
+      if (data && data.type === 'shipstudio:send-error-to-claude' && data.message) {
+        const prompt = `My dev server is returning an error:\n\n${data.message}\n\nPlease help me fix this.`;
+        onSendToClaude?.(prompt);
+      }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [onSendToClaude, onToast]);
 
   useEffect(() => {
     // Skip if not ready to check yet (-1 means waiting for old server to die)
