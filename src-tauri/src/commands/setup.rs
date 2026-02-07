@@ -8,9 +8,10 @@ use crate::commands::vercel::{find_vercel_binary, get_vercel_command};
 use crate::types::{
     AppState, FullSetupStatus, OptionalAuths, QuickSetupCheck, SetupItemInfo, SetupItemStatus,
 };
-use crate::utils::{
-    check_winget, create_command, find_executable, get_brew_command, get_winget_command,
-};
+use crate::utils::{create_command, find_executable, get_brew_command};
+
+#[cfg(windows)]
+use crate::utils::{check_winget, get_winget_command};
 
 #[cfg(not(windows))]
 use crate::utils::check_homebrew;

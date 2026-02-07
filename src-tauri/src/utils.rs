@@ -7,6 +7,7 @@ use std::process::Command;
 /// Creates a `Command` that won't spawn a visible console window on Windows.
 /// On non-Windows platforms, this is identical to `Command::new()`.
 pub fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    #[allow(unused_mut)]
     let mut cmd = Command::new(program);
     #[cfg(windows)]
     {

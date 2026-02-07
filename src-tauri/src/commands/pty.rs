@@ -631,6 +631,7 @@ pub fn get_shell_path() -> String {
 /// On macOS/Linux, returns an empty map (the Unix env vars are hardcoded in the frontend).
 #[tauri::command]
 pub fn get_system_env() -> std::collections::HashMap<String, String> {
+    #[allow(unused_mut)]
     let mut env = std::collections::HashMap::new();
 
     #[cfg(windows)]
