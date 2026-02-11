@@ -24,7 +24,7 @@ export interface PluginContextValue {
     openUrl: (url: string) => void;
   };
   shell: {
-    exec: (command: string, args: string[]) => Promise<{
+    exec: (command: string, args: string[], options?: { timeout?: number }) => Promise<{
       stdout: string;
       stderr: string;
       exit_code: number;

@@ -23,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 ShipStudio.zip
+
+# Claude Code skills
+.agents/
+.claude/

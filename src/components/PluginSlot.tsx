@@ -88,8 +88,8 @@ function buildContext(
     project,
     actions,
     shell: {
-      exec: (command: string, args: string[]) =>
-        execPluginShell(pluginId, projectPath, command, args),
+      exec: (command: string, args: string[], options?: { timeout?: number }) =>
+        execPluginShell(pluginId, projectPath, command, args, options?.timeout),
     },
     storage: {
       read: () => readPluginStorage(pluginId, projectPath),

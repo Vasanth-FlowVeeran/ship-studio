@@ -162,15 +162,22 @@ export async function togglePlugin(
 
 /**
  * Execute a shell command in a plugin's context.
- * Command runs in the project directory with a 30s timeout.
+ * Command runs in the project directory with a configurable timeout (default 120s).
  */
 export async function execPluginShell(
   pluginId: string,
   projectPath: string,
   command: string,
-  args: string[]
+  args: string[],
+  timeoutSecs?: number
 ): Promise<ShellResult> {
-  return invoke<ShellResult>('exec_plugin_shell', { pluginId, projectPath, command, args });
+  return invoke<ShellResult>('exec_plugin_shell', {
+    pluginId,
+    projectPath,
+    command,
+    args,
+    timeoutSecs,
+  });
 }
 
 /**

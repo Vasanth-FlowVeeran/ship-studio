@@ -580,13 +580,14 @@ pub fn toggle_plugin(project_path: String, plugin_id: String, enabled: bool) -> 
 
 /// Execute a shell command in a plugin's context
 ///
-/// Security: validates project_path, uses extended PATH, enforces 30s timeout.
+/// Security: validates project_path, uses extended PATH, enforces configurable timeout (default 120s).
 #[tauri::command]
 pub async fn exec_plugin_shell(
     plugin_id: String,
     project_path: String,
     command: String,
     args: Vec<String>,
+    timeout_secs: Option<u64>,
 ) -> Result<ShellResult, String> {
     // Validate the project path for security
     let validated_path = validate_project_path(&project_path)?;
@@ -608,8 +609,9 @@ pub async fn exec_plugin_shell(
     }
 
     // Build and execute command with timeout
+    let timeout = timeout_secs.unwrap_or(120);
     let output = tokio::time::timeout(
-        std::time::Duration::from_secs(30),
+        std::time::Duration::from_secs(timeout),
         tokio::task::spawn_blocking(move || {
             create_command(&command)
                 .args(&args)
@@ -625,7 +627,7 @@ pub async fn exec_plugin_shell(
         }),
     )
     .await
-    .map_err(|_| "Plugin shell command timed out (30s)".to_string())?
+    .map_err(|_| format!("Plugin shell command timed out ({}s)", timeout))?
     .map_err(|e| format!("Failed to spawn command: {}", e))?
     .map_err(|e| format!("Failed to execute command: {}", e))?;
 
