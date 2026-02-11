@@ -286,6 +286,9 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
       }
     };
 
+    // Show a loading message while the command starts up
+    term.write('\r\n  \x1b[2mStarting...\x1b[0m');
+
     // Small delay before starting to ensure terminal is ready
     setTimeout(() => void setupPty(), 100);
 
@@ -310,5 +313,27 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
     terminalRef.current?.focus();
   }, []);
 
-  return <div ref={containerRef} onClick={handleClick} className="onboarding-terminal-container" />;
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div ref={containerRef} onClick={handleClick} className="onboarding-terminal-container" />
+      {/* Loading indicator while terminal is initializing */}
+      {!isReady && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#1e1e1e',
+            color: '#666666',
+            fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+            fontSize: 13,
+          }}
+        >
+          Starting...
+        </div>
+      )}
+    </div>
+  );
 }

@@ -392,6 +392,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       }
     };
 
+    // Show a loading message while Claude Code starts up
+    term.write('\r\n  \x1b[2mStarting Claude Code...\x1b[0m');
+
     // Small delay before starting to ensure terminal is ready
     setTimeout(() => void setupPty(), 100);
 
@@ -471,6 +474,24 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           transition: 'filter 150ms ease-in-out',
         }}
       />
+      {/* Loading indicator while terminal is initializing */}
+      {!isReady && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#1e1e1e',
+            color: '#666666',
+            fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+            fontSize: 13,
+          }}
+        >
+          Starting Claude Code...
+        </div>
+      )}
       {/* Dimming overlay when terminal is not focused */}
       <div
         onClick={handleClick}
