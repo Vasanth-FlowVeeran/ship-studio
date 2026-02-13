@@ -303,6 +303,16 @@ export function GitHubButton({
                           })
                           .catch(async (e) => {
                             console.error('Failed to auto-connect to Vercel:', e);
+                            // Surface the error to the user so they can fix it
+                            const errorMsg = String(e);
+                            if (errorMsg.includes('GitHub connection failed')) {
+                              onToast?.(errorMsg, 'error');
+                            } else {
+                              onToast?.(
+                                'Failed to connect Vercel to GitHub. Click the Vercel button to retry.',
+                                'error'
+                              );
+                            }
                             // Still refresh status even on error to show correct state
                             await onStatusChange();
                             onVercelAutoConnectEnd?.();

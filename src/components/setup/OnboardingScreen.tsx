@@ -182,13 +182,20 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   // Handle terminal cancel/close
   const handleTerminalCancel = useCallback(() => {
     const itemId = terminalConfig?.itemId;
-    if (itemId && !terminalExitCode) {
-      // Only refresh status if user cancelled (not if process already failed)
-      void fetchStatus();
-    }
     setTerminalConfig(null);
     setTerminalExitCode(null);
     setActiveItemId(null);
+
+    if (itemId && !terminalExitCode) {
+      // Refresh status immediately
+      void fetchStatus();
+      // For auth items, do a delayed re-check in case the auth process
+      // was still completing when the user cancelled (e.g., gh/vercel
+      // writing the token after receiving the OAuth callback)
+      if (itemId === 'gh_auth' || itemId === 'vercel_auth' || itemId === 'claude_auth') {
+        setTimeout(() => void fetchStatus(), 2000);
+      }
+    }
   }, [terminalConfig, terminalExitCode, fetchStatus]);
 
   // Handle item action (install or connect)
@@ -198,6 +205,32 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
 
       setActiveItemId(itemId);
       updateItemStatus(itemId, { status: 'in_progress', errorMessage: undefined });
+
+      // For auth items, re-check status first — the user may have already
+      // completed auth (e.g., in a previous cancelled terminal session) but
+      // the checklist didn't update. This also serves as a "refresh" mechanism.
+      if (itemId === 'gh_auth') {
+        const status = await checkGitHubCliStatus();
+        if (status.authenticated) {
+          await fetchStatus();
+          setActiveItemId(null);
+          return;
+        }
+      } else if (itemId === 'vercel_auth') {
+        const status = await checkVercelCliStatus();
+        if (status.authenticated) {
+          await fetchStatus();
+          setActiveItemId(null);
+          return;
+        }
+      } else if (itemId === 'claude_auth') {
+        const isAuthed = await checkClaudeAuthStatus();
+        if (isAuthed) {
+          await fetchStatus();
+          setActiveItemId(null);
+          return;
+        }
+      }
 
       // Check if this item uses terminal
       if (USES_TERMINAL.has(itemId)) {

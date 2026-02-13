@@ -564,8 +564,29 @@ pub async fn deploy_to_vercel(options: DeployToVercelOptions) -> Result<String, 
         return Err(parse_vercel_error(&stdout, &stderr, "Link project"));
     }
 
-    // Step 2: If GitHub repo is provided, connect it for auto-deploy on future pushes
-    if let Some(github_repo) = &options.github_repo {
+    // Step 2: Connect GitHub repo for auto-deploy on future pushes.
+    // If github_repo wasn't provided, try to detect it from git remote.
+    let github_repo = options.github_repo.clone().or_else(|| {
+        let output = Command::new("git")
+            .args(["remote", "get-url", "origin"])
+            .current_dir(&validated_path)
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        // Parse "https://github.com/owner/repo.git" or "git@github.com:owner/repo.git"
+        if let Some(rest) = url.strip_prefix("https://github.com/") {
+            Some(rest.trim_end_matches(".git").to_string())
+        } else if let Some(rest) = url.strip_prefix("git@github.com:") {
+            Some(rest.trim_end_matches(".git").to_string())
+        } else {
+            None
+        }
+    });
+
+    if let Some(github_repo) = &github_repo {
         let github_url = format!("https://github.com/{}", github_repo);
         let mut connect_cmd = get_vercel_command();
         connect_cmd.args(["git", "connect", &github_url, "--yes"]);
@@ -609,6 +630,12 @@ pub async fn deploy_to_vercel(options: DeployToVercelOptions) -> Result<String, 
                 }
             }
         }
+    } else {
+        warn!(
+            project_name = %project_name,
+            "No GitHub repo provided or detected from git remote — skipping vercel git connect. \
+             Auto-deploy on push will NOT work until GitHub is connected."
+        );
     }
 
     // Step 3: Deploy to production
@@ -1094,7 +1121,32 @@ pub async fn link_to_vercel(options: LinkToVercelOptions) -> Result<String, Stri
     let combined_output = format!("{}{}", stdout, stderr);
 
     if !connect_output.status.success() && !combined_output.contains("already connected") {
-        eprintln!("Warning: Failed to connect Vercel to GitHub: {}", stderr);
+        warn!(
+            github_repo = %github_repo,
+            stderr = %stderr,
+            "Failed to connect Vercel to GitHub — auto-deploy on push will not work"
+        );
+
+        // If the error indicates a permissions issue, return it so the user can fix it.
+        // This must be resolved before auto-deploy can work, so hard-fail.
+        let combined_lower = combined_output.to_lowercase();
+        if combined_lower.contains("make sure there aren't any typos")
+            || combined_lower.contains("access to the repository")
+        {
+            let github_org = github_repo
+                .split('/')
+                .next()
+                .unwrap_or("the GitHub organization");
+            return Err(format!(
+                "GitHub connection failed: The Vercel team doesn't have access to the '{}' GitHub organization.\n\n\
+                To fix this:\n\
+                1. Go to Vercel → Team Settings → Git\n\
+                2. Connect or authorize the '{}' GitHub organization",
+                github_org, github_org
+            ));
+        }
+        // For other failures, log and continue — the initial deploy will still work,
+        // but we log prominently so the issue is diagnosable.
     }
 
     // Step 3: Trigger initial production deployment
