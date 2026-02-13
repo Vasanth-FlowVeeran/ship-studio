@@ -23,6 +23,14 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.53',
+    items: [
+      'HTML/CSS/JS project support - no framework needed',
+      'Live reload for static HTML projects',
+      'New HTML/CSS/JS starter template',
+    ],
+  },
+  {
     version: '0.3.52',
     items: ['Terminal loading indicator while Claude Code starts up'],
   },
