@@ -1719,7 +1719,7 @@ function App({ initialProjectPath }: AppProps) {
               theme={pluginTheme}
             />
             <button
-              className={`education-button ${isEducationMode ? 'active' : ''}`}
+              className={`toolbar-icon-btn ${isEducationMode ? 'active' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEducationMode(!isEducationMode);
@@ -1730,7 +1730,7 @@ function App({ initialProjectPath }: AppProps) {
               <GraduationCapIcon size={14} />
             </button>
             <button
-              className="education-button"
+              className="toolbar-icon-btn"
               onClick={() => setShowPluginManager(true)}
               title="Manage Plugins"
               data-education-id="plugin-manager"
@@ -1738,7 +1738,7 @@ function App({ initialProjectPath }: AppProps) {
               <PuzzleIcon size={14} />
             </button>
             <button
-              className="assets-button"
+              className="toolbar-icon-btn"
               onClick={() => setShowAssetsPanel(true)}
               title="Assets"
               data-education-id="assets-button"
@@ -1751,7 +1751,7 @@ function App({ initialProjectPath }: AppProps) {
               onMouseLeave={() => setShowIdeDropdown(false)}
               data-education-id="ide-button"
             >
-              <button className="ide-button" title="Open in IDE">
+              <button className="toolbar-icon-btn" title="Open in IDE">
                 <CodeIcon size={14} />
               </button>
               {showIdeDropdown && (
@@ -1783,7 +1783,7 @@ function App({ initialProjectPath }: AppProps) {
               )}
             </div>
             <button
-              className="env-button"
+              className="toolbar-icon-btn"
               onClick={() => setShowEnvEditor(true)}
               title="Environment Variables"
               data-education-id="env-button"
@@ -1791,7 +1791,7 @@ function App({ initialProjectPath }: AppProps) {
               <DollarIcon size={14} />
             </button>
             <button
-              className="backups-button"
+              className="toolbar-icon-btn"
               onClick={() => setShowBackupsModal(true)}
               title="Backups"
               data-education-id="backups-button"

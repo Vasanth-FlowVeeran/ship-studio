@@ -368,34 +368,6 @@
 }
 
 /* Env Button in Header */
-.env-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  min-height: 32px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.env-button:hover {
-  background: var(--border);
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
-.env-button svg {
-  color: var(--text-muted);
-}
-
-.env-button:hover svg {
-  color: var(--text-secondary);
-}
 
 /* Env Sync Warning */
 .env-sync-warning {

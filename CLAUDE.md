@@ -194,6 +194,18 @@ Key files:
 - `src/lib/setup.ts` — step definitions, helpers, backend API
 - `src-tauri/src/commands/setup.rs` — backend setup checks, mock/force modes
 
+## Shared CSS Classes (Plugin-Stable)
+
+These classes are defined in `src/styles/base.css` and are part of Ship Studio's public API for plugins. Plugins can use them directly without injecting their own styles. **Do not rename or remove these classes without updating the plugin starter repo.**
+
+| Class | Defined In | Description |
+|-------|-----------|-------------|
+| `toolbar-icon-btn` | `base.css` | Icon button for the workspace toolbar (32px height, border, rounded corners, hover states). Used by all header action buttons and toolbar plugins. |
+| `btn-primary` | `base.css` | Primary action button (accent background, white text) |
+| `btn-secondary` | `base.css` | Secondary button (tertiary background, border) |
+
+CSS variables (`--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--text-primary`, `--text-secondary`, `--text-muted`, `--border`, `--accent`, `--action`, etc.) are also stable and available to plugins.
+
 ## Common Patterns
 
 ### Publishing Flow
