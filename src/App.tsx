@@ -1535,6 +1535,7 @@ function App({ initialProjectPath }: AppProps) {
         path: currentProject.path,
         currentBranch: currentBranch || 'main',
         hasUncommittedChanges,
+        devServerUrl: `http://localhost:${devServerPort}`,
       }
     : null;
 
@@ -2211,6 +2212,15 @@ function App({ initialProjectPath }: AppProps) {
                       isDevServerRestarting={isRestartingDevServer}
                       onSendToClaude={sendToClaude}
                       onToast={showToast}
+                      previewPlugins={
+                        <PluginSlot
+                          name="preview"
+                          plugins={getSlotPlugins('preview')}
+                          project={pluginProject}
+                          actions={pluginActions}
+                          theme={pluginTheme}
+                        />
+                      }
                       toolbarExtra={
                         <div className="agent-toolbar">
                           <button

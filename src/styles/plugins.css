@@ -121,6 +121,17 @@
   font-size: 13px;
 }
 
+/* Beta notice */
+.plugins-beta-notice {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
 /* Plugin List */
 .plugins-list {
   display: flex;

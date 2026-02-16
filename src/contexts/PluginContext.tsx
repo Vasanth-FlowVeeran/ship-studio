@@ -16,6 +16,7 @@ export interface PluginProjectData {
   path: string;
   currentBranch: string;
   hasUncommittedChanges: boolean;
+  devServerUrl?: string;
 }
 
 /** App actions plugins can trigger */

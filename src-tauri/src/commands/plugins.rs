@@ -69,6 +69,11 @@ const PLUGIN_INVOKABLE_COMMANDS: &[&str] = &[
     "check_ide_availability",
     "open_in_ide",
     "open_url_in_browser",
+    // Preview webview
+    "create_preview_webview",
+    "resize_preview_webview",
+    "destroy_preview_webview",
+    "navigate_preview_webview",
     // Plugin self-management
     "read_plugin_storage",
     "write_plugin_storage",

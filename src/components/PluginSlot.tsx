@@ -225,7 +225,7 @@ export function PluginSlot({ name, plugins, project, actions, theme }: PluginSlo
             <PluginErrorBoundary
               pluginId={plugin.info.manifest.id}
               pluginName={plugin.info.manifest.name}
-              compact={name === 'toolbar'}
+              compact={name === 'toolbar' || name === 'preview'}
             >
               <SlotComponent />
             </PluginErrorBoundary>

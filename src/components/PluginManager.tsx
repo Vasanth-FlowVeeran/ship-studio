@@ -428,6 +428,11 @@ export function PluginManager({
 
           {projectPath && activeTab === 'library' && (
             <>
+              <div className="plugins-beta-notice">
+                Plugins are new and in beta. If you experience any issues, please report them in the
+                Slack group.
+              </div>
+
               {isLoadingRegistry && registry.length === 0 && (
                 <div className="plugins-loading">
                   <div className="plugins-loading-spinner" />

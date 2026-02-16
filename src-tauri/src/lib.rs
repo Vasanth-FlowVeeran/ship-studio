@@ -165,7 +165,6 @@ pub fn run() {
             commands::projects::list_projects,
             commands::projects::get_dashboard_projects,
             commands::projects::list_pages,
-            commands::projects::check_sanity_installed,
             commands::projects::open_in_finder,
             commands::projects::read_project_metadata,
             commands::projects::write_project_metadata,
@@ -193,7 +192,6 @@ pub fn run() {
             commands::env::write_env_file,
             commands::env::create_env_file,
             commands::env::delete_env_file,
-            commands::env::check_sanity_env_keys,
             // IDE & Webviews
             commands::ide::check_ide_availability,
             commands::ide::open_in_ide,

@@ -842,26 +842,6 @@ pub async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, String> {
     }
 }
 
-#[tauri::command]
-pub async fn check_sanity_installed(project_path: String) -> Result<bool, String> {
-    let path = validate_project_path(&project_path)?;
-
-    if path.join("sanity.config.ts").exists() || path.join("sanity.config.js").exists() {
-        return Ok(true);
-    }
-
-    let pkg_path = path.join("package.json");
-    if pkg_path.exists() {
-        if let Ok(contents) = std::fs::read_to_string(&pkg_path) {
-            if contents.contains("\"sanity\"") || contents.contains("\"next-sanity\"") {
-                return Ok(true);
-            }
-        }
-    }
-
-    Ok(false)
-}
-
 /// Opens a folder in Finder (macOS)
 #[tauri::command]
 pub async fn open_in_finder(path: String) -> Result<(), String> {

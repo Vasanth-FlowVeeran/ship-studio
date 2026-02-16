@@ -18,6 +18,7 @@ export interface PluginContextValue {
     path: string;
     currentBranch: string;
     hasUncommittedChanges: boolean;
+    devServerUrl?: string;
   } | null;
   actions: {
     showToast: (message: string, type?: 'success' | 'error') => void;
