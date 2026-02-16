@@ -31,6 +31,10 @@ const CLAUDE_AUTH_READY = item('claude_auth', 'Claude Account', 'ready', {
 });
 const CODEX_READY = item('codex', 'Codex', 'ready', { version: '0.1.0' });
 const CODEX_AUTH_READY = item('codex_auth', 'Codex Account', 'ready', { username: 'codex-user' });
+const VERCEL_READY = item('vercel', 'Vercel CLI', 'ready', { version: '33.0.0' });
+const VERCEL_AUTH_READY = item('vercel_auth', 'Vercel Account', 'ready', {
+  username: 'vercel-user',
+});
 
 // ============ Not-installed items ============
 
@@ -43,6 +47,8 @@ const CLAUDE_MISSING = item('claude', 'Claude Code', 'not_installed');
 const CLAUDE_AUTH_MISSING = item('claude_auth', 'Claude Account', 'not_authenticated');
 const CODEX_MISSING = item('codex', 'Codex', 'not_installed');
 const CODEX_AUTH_MISSING = item('codex_auth', 'Codex Account', 'not_authenticated');
+const VERCEL_MISSING = item('vercel', 'Vercel CLI', 'not_installed');
+const VERCEL_AUTH_MISSING = item('vercel_auth', 'Vercel Account', 'not_authenticated');
 
 // ============ Pre-built item arrays ============
 
@@ -57,6 +63,8 @@ export const FRESH_INSTALL_ITEMS: SetupItem[] = [
   CLAUDE_AUTH_MISSING,
   CODEX_MISSING,
   CODEX_AUTH_MISSING,
+  VERCEL_MISSING,
+  VERCEL_AUTH_MISSING,
 ];
 
 /** All ready with Claude Code only (no Codex) */
@@ -70,6 +78,8 @@ export const ALL_READY_CLAUDE_ONLY: SetupItem[] = [
   CLAUDE_AUTH_READY,
   CODEX_MISSING,
   CODEX_AUTH_MISSING,
+  VERCEL_READY,
+  VERCEL_AUTH_READY,
 ];
 
 /** All ready with both agents */
@@ -83,6 +93,8 @@ export const ALL_READY_BOTH_AGENTS: SetupItem[] = [
   CLAUDE_AUTH_READY,
   CODEX_READY,
   CODEX_AUTH_READY,
+  VERCEL_READY,
+  VERCEL_AUTH_READY,
 ];
 
 /** All ready with Codex only (no Claude) */
@@ -96,6 +108,8 @@ export const ALL_READY_CODEX_ONLY: SetupItem[] = [
   CLAUDE_AUTH_MISSING,
   CODEX_READY,
   CODEX_AUTH_READY,
+  VERCEL_READY,
+  VERCEL_AUTH_READY,
 ];
 
 /** Base tools ready but no agents at all */
@@ -109,6 +123,8 @@ export const BASE_READY_NO_AGENTS: SetupItem[] = [
   CLAUDE_AUTH_MISSING,
   CODEX_MISSING,
   CODEX_AUTH_MISSING,
+  VERCEL_MISSING,
+  VERCEL_AUTH_MISSING,
 ];
 
 /** All tools installed, but no auth configured */
@@ -122,6 +138,8 @@ export const AUTH_ONLY_ITEMS: SetupItem[] = [
   CLAUDE_AUTH_MISSING,
   CODEX_READY,
   CODEX_AUTH_MISSING,
+  VERCEL_READY,
+  VERCEL_AUTH_MISSING,
 ];
 
 /** Everything except homebrew */
@@ -135,6 +153,8 @@ export const HOMEBREW_MISSING_ITEMS: SetupItem[] = [
   CLAUDE_AUTH_READY,
   CODEX_READY,
   CODEX_AUTH_READY,
+  VERCEL_READY,
+  VERCEL_AUTH_READY,
 ];
 
 // ============ FullSetupStatus builders ============
@@ -198,6 +218,8 @@ export const STEP1_COMPLETE_ITEMS: SetupItem[] = [
   CLAUDE_AUTH_MISSING,
   CODEX_MISSING,
   CODEX_AUTH_MISSING,
+  VERCEL_MISSING,
+  VERCEL_AUTH_MISSING,
 ];
 
 export const STEP1_COMPLETE_STATUS: FullSetupStatus = makeSetupStatus({
@@ -216,6 +238,8 @@ export const HAS_BASE_NO_AGENTS_ITEMS: SetupItem[] = [
   CLAUDE_AUTH_MISSING,
   CODEX_MISSING,
   CODEX_AUTH_MISSING,
+  VERCEL_MISSING,
+  VERCEL_AUTH_MISSING,
 ];
 
 export const HAS_BASE_NO_AGENTS_STATUS: FullSetupStatus = makeSetupStatus({
@@ -235,6 +259,8 @@ export const HAS_CLAUDE_NO_GITHUB_ITEMS: SetupItem[] = [
   CLAUDE_AUTH_READY,
   CODEX_MISSING,
   CODEX_AUTH_MISSING,
+  VERCEL_MISSING,
+  VERCEL_AUTH_MISSING,
 ];
 
 export const HAS_CLAUDE_NO_GITHUB_STATUS: FullSetupStatus = makeSetupStatus({

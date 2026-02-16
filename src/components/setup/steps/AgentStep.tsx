@@ -79,37 +79,6 @@ export function AgentStep({
             tabIndex={showSelection ? 0 : undefined}
           >
             <div className="wizard-agent-card-header">
-              <div className="wizard-agent-card-icon">
-                {pair.binaryId === 'claude' ? (
-                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                    <rect width="32" height="32" rx="8" fill="var(--accent)" />
-                    <text
-                      x="16"
-                      y="22"
-                      textAnchor="middle"
-                      fill="white"
-                      fontSize="16"
-                      fontWeight="bold"
-                    >
-                      C
-                    </text>
-                  </svg>
-                ) : (
-                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                    <rect width="32" height="32" rx="8" fill="#10a37f" />
-                    <text
-                      x="16"
-                      y="22"
-                      textAnchor="middle"
-                      fill="white"
-                      fontSize="16"
-                      fontWeight="bold"
-                    >
-                      X
-                    </text>
-                  </svg>
-                )}
-              </div>
               <div className="wizard-agent-card-title">
                 <span className="wizard-agent-card-name">{displayName}</span>
                 {isRecommended && <span className="wizard-agent-card-badge">Recommended</span>}

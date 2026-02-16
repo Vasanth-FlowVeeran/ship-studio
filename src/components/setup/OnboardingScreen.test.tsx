@@ -567,23 +567,36 @@ describe('OnboardingScreen', () => {
       expect(screen.getByText('Install at least one AI coding assistant')).toBeInTheDocument();
     });
 
-    it('hosting step shows Skip for Now button that advances', async () => {
-      // All base + agents ready, but create a status that lands on hosting step
-      // (hosting is always complete, so we won't naturally land here, but
-      // we can test by having steps 1-3 complete and navigating manually)
+    it('hosting step shows Skip for Now button that advances to celebration', async () => {
+      // Steps 1-3 complete, vercel missing → lands on hosting step
+      const items = HAS_BASE_NO_AGENTS_ITEMS.map((i) => {
+        if (i.id === 'claude') return { ...i, status: 'ready' as const, version: '1.0.0' };
+        if (i.id === 'claude_auth')
+          return { ...i, status: 'ready' as const, username: 'claude-user' };
+        return i;
+      });
       const status = makeSetupStatus({
-        items: ALL_READY_CLAUDE_ONLY,
+        items,
         optionalAuths: { githubAuthenticated: true },
         detectedAgents: ['claude-code'],
       });
-      // Since all steps are complete, the wizard will go to celebration.
-      // Instead, test the HostingStep component behavior is covered by
-      // navigating back from celebration — but that's not possible.
-      // Let's just verify celebration is reached (hosting auto-passes).
       mockInvoke('get_full_setup_status', status);
       mockInvoke('set_default_agent_id', undefined);
 
       render(<OnboardingScreen onComplete={onComplete} />);
+
+      // Should land on hosting step
+      await waitFor(() => {
+        expect(screen.getByText('Deploy your projects to the web')).toBeInTheDocument();
+      });
+
+      // Skip for Now should be visible
+      expect(screen.getByText('Skip for Now')).toBeInTheDocument();
+
+      // Click skip → celebration
+      await act(async () => {
+        fireEvent.click(screen.getByText('Skip for Now'));
+      });
 
       await waitFor(() => {
         expect(screen.getByText("You're all set!")).toBeInTheDocument();
@@ -875,7 +888,7 @@ describe('OnboardingScreen', () => {
         expect(nextBtn).not.toBeDisabled();
       });
 
-      // Click Next → should reach celebration
+      // Click Next → hosting step is also complete (vercel ready in status) → celebration
       await act(async () => {
         fireEvent.click(screen.getByText('Next'));
       });

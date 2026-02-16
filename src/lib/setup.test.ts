@@ -82,6 +82,16 @@ describe('getSetupDependencies', () => {
     const deps = getSetupDependencies();
     expect(deps.gh_auth).toEqual(['gh']);
   });
+
+  it('vercel has no dependencies (uses npm global install)', () => {
+    const deps = getSetupDependencies();
+    expect(deps.vercel).toEqual([]);
+  });
+
+  it('vercel_auth depends on vercel', () => {
+    const deps = getSetupDependencies();
+    expect(deps.vercel_auth).toEqual(['vercel']);
+  });
 });
 
 // ============ SETUP_DEPENDENCIES (const) ============
@@ -90,6 +100,11 @@ describe('SETUP_DEPENDENCIES', () => {
   it('has codex entries with correct deps', () => {
     expect(SETUP_DEPENDENCIES.codex).toEqual([]);
     expect(SETUP_DEPENDENCIES.codex_auth).toEqual(['codex']);
+  });
+
+  it('has vercel entries with correct deps', () => {
+    expect(SETUP_DEPENDENCIES.vercel).toEqual([]);
+    expect(SETUP_DEPENDENCIES.vercel_auth).toEqual(['vercel']);
   });
 });
 
@@ -243,6 +258,8 @@ describe('OPTIONAL_ITEMS', () => {
     expect(OPTIONAL_ITEMS.has('claude_auth')).toBe(true);
     expect(OPTIONAL_ITEMS.has('codex')).toBe(true);
     expect(OPTIONAL_ITEMS.has('codex_auth')).toBe(true);
+    expect(OPTIONAL_ITEMS.has('vercel')).toBe(true);
+    expect(OPTIONAL_ITEMS.has('vercel_auth')).toBe(true);
   });
 
   it('does not contain required items', () => {
@@ -275,13 +292,15 @@ describe('SETUP_ITEM_ORDER', () => {
     expect(SETUP_ITEM_ORDER).toContain('claude_auth');
     expect(SETUP_ITEM_ORDER).toContain('codex');
     expect(SETUP_ITEM_ORDER).toContain('codex_auth');
+    expect(SETUP_ITEM_ORDER).toContain('vercel');
+    expect(SETUP_ITEM_ORDER).toContain('vercel_auth');
   });
 });
 
 // ============ SETUP_FRIENDLY_NAMES ============
 
 describe('SETUP_FRIENDLY_NAMES', () => {
-  it('has entries for all items including codex', () => {
+  it('has entries for all items including codex and vercel', () => {
     expect(SETUP_FRIENDLY_NAMES.homebrew).toBe('Package Manager');
     expect(SETUP_FRIENDLY_NAMES.node).toBe('Node.js');
     expect(SETUP_FRIENDLY_NAMES.npm_fix).toBe('Fix npm Permissions');
@@ -292,6 +311,8 @@ describe('SETUP_FRIENDLY_NAMES', () => {
     expect(SETUP_FRIENDLY_NAMES.claude_auth).toBe('Claude Account');
     expect(SETUP_FRIENDLY_NAMES.codex).toBe('Codex');
     expect(SETUP_FRIENDLY_NAMES.codex_auth).toBe('Codex Account');
+    expect(SETUP_FRIENDLY_NAMES.vercel).toBe('Vercel CLI');
+    expect(SETUP_FRIENDLY_NAMES.vercel_auth).toBe('Vercel Account');
   });
 });
 
@@ -311,6 +332,16 @@ describe('TERMINAL_COMMANDS', () => {
     expect(TERMINAL_COMMANDS.claude_auth).toBeDefined();
     expect(TERMINAL_COMMANDS.claude_auth.command).toBe('claude');
   });
+
+  it('has vercel entry', () => {
+    expect(TERMINAL_COMMANDS.vercel).toBeDefined();
+  });
+
+  it('has vercel_auth entry', () => {
+    expect(TERMINAL_COMMANDS.vercel_auth).toBeDefined();
+    expect(TERMINAL_COMMANDS.vercel_auth.command).toBe('vercel');
+    expect(TERMINAL_COMMANDS.vercel_auth.args).toEqual(['login']);
+  });
 });
 
 // ============ USES_TERMINAL ============
@@ -326,6 +357,11 @@ describe('USES_TERMINAL', () => {
     expect(USES_TERMINAL.has('gh_auth')).toBe(true);
     expect(USES_TERMINAL.has('claude')).toBe(true);
     expect(USES_TERMINAL.has('claude_auth')).toBe(true);
+  });
+
+  it('includes vercel and vercel_auth', () => {
+    expect(USES_TERMINAL.has('vercel')).toBe(true);
+    expect(USES_TERMINAL.has('vercel_auth')).toBe(true);
   });
 
   it('does not include non-interactive items', () => {
@@ -410,8 +446,8 @@ describe('WIZARD_STEPS', () => {
     expect(WIZARD_STEPS[3].skippable).toBe(true);
   });
 
-  it('hosting step has no item IDs', () => {
-    expect(WIZARD_STEPS[3].itemIds).toEqual([]);
+  it('hosting step has vercel item IDs', () => {
+    expect(WIZARD_STEPS[3].itemIds).toEqual(['vercel', 'vercel_auth']);
   });
 });
 
@@ -437,9 +473,10 @@ describe('getStepItems', () => {
     expect(ids).toEqual(['claude', 'claude_auth', 'codex', 'codex_auth']);
   });
 
-  it('returns empty for hosting step', () => {
+  it('returns vercel items for hosting step', () => {
     const items = getStepItems('hosting', FRESH_INSTALL_ITEMS);
-    expect(items).toEqual([]);
+    const ids = items.map((i) => i.id);
+    expect(ids).toEqual(['vercel', 'vercel_auth']);
   });
 
   it('filters out items not in the items array (e.g., npm_fix)', () => {
@@ -480,9 +517,13 @@ describe('isWizardStepComplete', () => {
     expect(isWizardStepComplete('agent', FRESH_INSTALL_ITEMS)).toBe(false);
   });
 
-  it('hosting step is always complete', () => {
-    expect(isWizardStepComplete('hosting', FRESH_INSTALL_ITEMS)).toBe(true);
+  it('hosting step is complete when vercel items are ready', () => {
     expect(isWizardStepComplete('hosting', ALL_READY_BOTH_AGENTS)).toBe(true);
+    expect(isWizardStepComplete('hosting', ALL_READY_CLAUDE_ONLY)).toBe(true);
+  });
+
+  it('hosting step is incomplete when vercel items are not ready', () => {
+    expect(isWizardStepComplete('hosting', FRESH_INSTALL_ITEMS)).toBe(false);
   });
 });
 
@@ -505,8 +546,18 @@ describe('findFirstIncompleteStep', () => {
     expect(findFirstIncompleteStep(HAS_CLAUDE_NO_GITHUB_ITEMS)).toBe('git-github');
   });
 
-  it('returns null when all steps are complete', () => {
+  it('returns null when all steps are complete (including vercel)', () => {
     expect(findFirstIncompleteStep(ALL_READY_CLAUDE_ONLY)).toBeNull();
     expect(findFirstIncompleteStep(ALL_READY_BOTH_AGENTS)).toBeNull();
+  });
+
+  it('returns hosting when steps 1-3 are complete but vercel is missing', () => {
+    const items = HAS_BASE_NO_AGENTS_ITEMS.map((i) => {
+      if (i.id === 'claude') return { ...i, status: 'ready' as const, version: '1.0.0' };
+      if (i.id === 'claude_auth')
+        return { ...i, status: 'ready' as const, username: 'claude-user' };
+      return i;
+    });
+    expect(findFirstIncompleteStep(items)).toBe('hosting');
   });
 });

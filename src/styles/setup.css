@@ -541,15 +541,24 @@
   font-size: 14px;
   font-weight: 500;
   border-radius: 8px;
-  border: none;
-  background: #7fe89a;
-  color: #1e1e1e;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+  margin-top: 8px;
 }
 
 .wizard-hosting-skip-btn:hover {
-  background: #6dd889;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.wizard-hosting-skip-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ============ Slack CTA ============ */

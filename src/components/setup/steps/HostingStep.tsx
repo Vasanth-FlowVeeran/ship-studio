@@ -1,38 +1,56 @@
 /**
- * Wizard Step 4: Hosting Provider (placeholder)
+ * Wizard Step 4: Hosting Provider
  *
- * Shows a "Coming Soon" message. Always skippable.
+ * Shows SetupItem rows for vercel and vercel_auth.
+ * Always skippable — users can set up hosting later.
  */
 
+import { SetupItem } from '../SetupItem';
+import {
+  SetupItem as SetupItemType,
+  getStepItems,
+  getBlockingDependencies,
+} from '../../../lib/setup';
+
 interface HostingStepProps {
+  items: SetupItemType[];
+  onItemAction: (itemId: string) => void;
+  activeItemId: string | null;
+  terminalActive: boolean;
   onSkip: () => void;
 }
 
-export function HostingStep({ onSkip }: HostingStepProps) {
+export function HostingStep({
+  items,
+  onItemAction,
+  activeItemId,
+  terminalActive,
+  onSkip,
+}: HostingStepProps) {
+  const stepItems = getStepItems('hosting', items);
+  const isAnyActionInProgress = activeItemId !== null || terminalActive;
+
   return (
     <div className="wizard-step-items">
-      <div className="wizard-hosting-placeholder">
-        <div className="wizard-hosting-icon">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="var(--bg-tertiary)" />
-            <path
-              d="M24 14v20M14 24h20"
-              stroke="var(--text-muted)"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <circle cx="24" cy="24" r="8" stroke="var(--text-muted)" strokeWidth="2" fill="none" />
-          </svg>
-        </div>
-        <h3 className="wizard-hosting-title">Coming Soon</h3>
-        <p className="wizard-hosting-desc">
-          Hosting provider integration is on the way. You can set this up later from your project
-          settings.
-        </p>
-        <button className="wizard-hosting-skip-btn" onClick={onSkip}>
-          Skip for Now
-        </button>
-      </div>
+      {stepItems.map((item) => {
+        const blockedBy = getBlockingDependencies(item.id, items);
+        const isBlocked = blockedBy.length > 0 && item.status !== 'ready';
+        const displayItem: SetupItemType = isBlocked ? { ...item, status: 'blocked' } : item;
+
+        return (
+          <SetupItem
+            key={item.id}
+            item={displayItem}
+            blockedBy={blockedBy}
+            onAction={() => onItemAction(item.id)}
+            isActionInProgress={activeItemId === item.id}
+            isAnyActionInProgress={isAnyActionInProgress}
+          />
+        );
+      })}
+      <button className="wizard-hosting-skip-btn" onClick={onSkip} disabled={isAnyActionInProgress}>
+        Skip for Now
+      </button>
     </div>
   );
 }

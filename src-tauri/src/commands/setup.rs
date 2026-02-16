@@ -117,10 +117,12 @@ const ALL_ITEMS: &[&str] = &[
     "claude_auth",
     "codex",
     "codex_auth",
+    "vercel",
+    "vercel_auth",
 ];
 
 /// Tool items (not auth)
-const TOOL_ITEMS: &[&str] = &["homebrew", "node", "git", "gh", "claude", "codex"];
+const TOOL_ITEMS: &[&str] = &["homebrew", "node", "git", "gh", "claude", "codex", "vercel"];
 
 /// Get items that should be pre-installed for a given scenario
 fn get_scenario_items(scenario: &str) -> Vec<&'static str> {
@@ -159,8 +161,11 @@ fn get_scenario_items(scenario: &str) -> Vec<&'static str> {
             .copied()
             .collect(),
 
-        // Both agents installed and authed (tests agent selection screen)
+        // Both agents installed and authed + vercel (tests agent selection screen)
         "both-agents" => ALL_ITEMS.to_vec(),
+
+        // Vercel installed and authed (for testing hosting step)
+        "vercel-ready" => vec!["vercel", "vercel_auth"],
 
         // Only Codex installed (no Claude)
         "codex-only" => ALL_ITEMS
@@ -255,6 +260,8 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
             ("claude_auth", "Claude Account", Some("claude")),
             ("codex", "Codex", None),
             ("codex_auth", "Codex Account", Some("codex")),
+            ("vercel", "Vercel CLI", None),
+            ("vercel_auth", "Vercel Account", Some("vercel")),
         ];
 
         let mock_items: Vec<SetupItemInfo> = items
@@ -325,7 +332,13 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
         }
 
         let at_least_one_agent = !detected_agents.is_empty();
-        let all_ready = base_ready && at_least_one_agent;
+        // In mock mode, also require all items ready so the wizard shows
+        // for any incomplete step (including optional ones like hosting).
+        // The wizard handles skippable steps internally.
+        let all_items_ready = mock_items
+            .iter()
+            .all(|i| matches!(i.status, SetupItemStatus::Ready));
+        let all_ready = base_ready && at_least_one_agent && all_items_ready;
 
         return FullSetupStatus {
             all_ready,
@@ -589,6 +602,80 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
         }
     }
 
+    // 8. Vercel CLI
+    let vercel_path = find_executable("vercel");
+    let vercel_version = vercel_path.as_ref().and_then(|p| {
+        create_command(p)
+            .args(["--version"])
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+    });
+    items.push(SetupItemInfo {
+        id: "vercel".to_string(),
+        friendly_name: "Vercel CLI".to_string(),
+        status: if vercel_path.is_some() {
+            SetupItemStatus::Ready
+        } else {
+            SetupItemStatus::NotInstalled
+        },
+        version: vercel_version,
+        username: None,
+        error_message: None,
+    });
+
+    // 9. Vercel Auth
+    let vercel_auth = if vercel_path.is_some() {
+        find_executable("vercel")
+            .map(|p| {
+                create_command(&p)
+                    .args(["whoami"])
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false)
+    } else {
+        false
+    };
+    let vercel_username = if vercel_auth {
+        find_executable("vercel").and_then(|p| {
+            create_command(&p)
+                .args(["whoami"])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    } else {
+                        None
+                    }
+                })
+        })
+    } else {
+        None
+    };
+    items.push(SetupItemInfo {
+        id: "vercel_auth".to_string(),
+        friendly_name: "Vercel Account".to_string(),
+        status: if vercel_auth {
+            SetupItemStatus::Ready
+        } else if vercel_path.is_some() {
+            SetupItemStatus::NotAuthenticated
+        } else {
+            SetupItemStatus::NotInstalled
+        },
+        version: None,
+        username: vercel_username,
+        error_message: None,
+    });
+
     // Required base items for setup completion (GitHub auth and individual agent items are optional)
     const REQUIRED_ITEMS: &[&str] = &["homebrew", "node", "git", "gh"];
 
@@ -632,6 +719,14 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
 pub async fn quick_setup_check() -> QuickSetupCheck {
     // Force onboarding mode: always show onboarding with real checks
     if is_force_onboarding_mode() {
+        return QuickSetupCheck {
+            all_present: false,
+            setup_complete_cached: false,
+        };
+    }
+
+    // Mock mode: always show onboarding so the mock scenario is visible
+    if is_mock_mode() {
         return QuickSetupCheck {
             all_present: false,
             setup_complete_cached: false,
@@ -690,13 +785,16 @@ pub async fn quick_setup_check() -> QuickSetupCheck {
 /// Mark setup as complete (persists to disk)
 #[tauri::command]
 pub async fn mark_setup_complete() -> Result<(), String> {
-    // Force onboarding mode: don't persist to disk, but mark as completed
-    // this session so background verification doesn't loop back to onboarding
+    // Force onboarding / mock mode: don't persist to disk
     if is_force_onboarding_mode() {
         if let Ok(mut completed) = FORCE_ONBOARDING_COMPLETED.lock() {
             *completed = true;
         }
         tracing::info!("Force onboarding mode: skipping setup complete persistence");
+        return Ok(());
+    }
+    if is_mock_mode() {
+        tracing::info!("Mock mode: skipping setup complete persistence");
         return Ok(());
     }
 
@@ -1531,17 +1629,20 @@ mod tests {
     }
 
     #[test]
-    fn all_items_contains_9_items_including_codex() {
-        assert_eq!(ALL_ITEMS.len(), 9);
+    fn all_items_contains_11_items_including_codex_and_vercel() {
+        assert_eq!(ALL_ITEMS.len(), 11);
         assert!(ALL_ITEMS.contains(&"codex"));
         assert!(ALL_ITEMS.contains(&"codex_auth"));
+        assert!(ALL_ITEMS.contains(&"vercel"));
+        assert!(ALL_ITEMS.contains(&"vercel_auth"));
     }
 
     #[test]
-    fn tool_items_contains_6_items_including_codex() {
-        assert_eq!(TOOL_ITEMS.len(), 6);
+    fn tool_items_contains_7_items_including_codex_and_vercel() {
+        assert_eq!(TOOL_ITEMS.len(), 7);
         assert!(TOOL_ITEMS.contains(&"codex"));
         assert!(TOOL_ITEMS.contains(&"claude"));
+        assert!(TOOL_ITEMS.contains(&"vercel"));
     }
 
     // ============ AppState ============

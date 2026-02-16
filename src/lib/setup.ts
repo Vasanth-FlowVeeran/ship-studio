@@ -88,7 +88,15 @@ export interface FullSetupStatus {
  * Individual agent items are "optional" because each one individually is not required,
  * but the backend `allReady` enforces "at least one agent pair".
  */
-export const OPTIONAL_ITEMS = new Set(['gh_auth', 'claude', 'claude_auth', 'codex', 'codex_auth']);
+export const OPTIONAL_ITEMS = new Set([
+  'gh_auth',
+  'claude',
+  'claude_auth',
+  'codex',
+  'codex_auth',
+  'vercel',
+  'vercel_auth',
+]);
 
 /** Quick setup check result (fast Tier-1 check) */
 export interface QuickSetupCheck {
@@ -119,6 +127,8 @@ export function getSetupDependencies(): Record<string, string[]> {
     claude_auth: ['claude'],
     codex: [], // Uses npm global install
     codex_auth: ['codex'],
+    vercel: [], // Uses npm global install
+    vercel_auth: ['vercel'],
   };
 }
 
@@ -137,6 +147,8 @@ export const SETUP_ITEM_ORDER = [
   'claude_auth',
   'codex',
   'codex_auth',
+  'vercel',
+  'vercel_auth',
 ];
 
 /** Friendly names for each item */
@@ -151,6 +163,8 @@ export const SETUP_FRIENDLY_NAMES: Record<string, string> = {
   claude_auth: 'Claude Account',
   codex: 'Codex',
   codex_auth: 'Codex Account',
+  vercel: 'Vercel CLI',
+  vercel_auth: 'Vercel Account',
 };
 
 /** Messages shown while item is in progress */
@@ -165,6 +179,8 @@ export const SETUP_PROGRESS_MESSAGES: Record<string, string> = {
   claude_auth: 'Connecting to Claude...',
   codex: 'Installing Codex...',
   codex_auth: 'Connecting to Codex...',
+  vercel: 'Installing Vercel CLI...',
+  vercel_auth: 'Connecting to Vercel...',
 };
 
 /** Time estimates for each setup item */
@@ -179,6 +195,8 @@ export const SETUP_TIME_ESTIMATES: Record<string, string> = {
   claude_auth: '~15 sec',
   codex: '~15 sec',
   codex_auth: '~15 sec',
+  vercel: '~10 sec',
+  vercel_auth: '~15 sec',
 };
 
 // ============ Agent Pair Helpers ============
@@ -296,7 +314,7 @@ export const WIZARD_STEPS: WizardStepDef[] = [
     id: 'hosting',
     title: 'Hosting Provider',
     subtitle: 'Deploy your projects to the web',
-    itemIds: [],
+    itemIds: ['vercel', 'vercel_auth'],
     skippable: true,
   },
 ];
@@ -319,7 +337,13 @@ export function getStepItems(stepId: WizardStepId, items: SetupItem[]): SetupIte
  * - hosting: always complete (placeholder)
  */
 export function isWizardStepComplete(stepId: WizardStepId, items: SetupItem[]): boolean {
-  if (stepId === 'hosting') return true;
+  if (stepId === 'hosting') {
+    // Hosting is complete when both vercel and vercel_auth are ready.
+    // If items aren't present (e.g. backend hasn't reported them), treat as incomplete
+    // so the step shows up rather than being silently skipped.
+    const stepItems = getStepItems(stepId, items);
+    return stepItems.length > 0 && stepItems.every((i) => i.status === 'ready');
+  }
 
   if (stepId === 'agent') {
     return isAtLeastOneAgentReady(items);
@@ -551,6 +575,14 @@ export function getTerminalCommands(): Record<string, TerminalCommand> {
         command: 'codex',
         args: [],
       },
+      vercel: {
+        command: 'npm',
+        args: ['install', '-g', 'vercel'],
+      },
+      vercel_auth: {
+        command: 'vercel',
+        args: ['login'],
+      },
     };
   } else {
     // macOS/Linux commands (using bash)
@@ -606,6 +638,14 @@ export function getTerminalCommands(): Record<string, TerminalCommand> {
         command: 'codex',
         args: [],
       },
+      vercel: {
+        command: '/bin/bash',
+        args: ['-c', 'npm install -g vercel'],
+      },
+      vercel_auth: {
+        command: 'vercel',
+        args: ['login'],
+      },
     };
   }
 }
@@ -622,4 +662,6 @@ export const USES_TERMINAL = new Set([
   'claude_auth',
   'codex',
   'codex_auth',
+  'vercel',
+  'vercel_auth',
 ]);

@@ -337,6 +337,15 @@ function App({ initialProjectPath }: AppProps) {
   // Compact publish dropdown state - controlled mode for toggle behavior via the compact Publish button
   const [isCompactPublishOpen, setIsCompactPublishOpen] = useState(false);
 
+  // Plugin terminal modal state
+  const [pluginTerminal, setPluginTerminal] = useState<{
+    command: string;
+    args: string[];
+    title: string;
+    resolve: (exitCode: number | null) => void;
+  } | null>(null);
+  const [pluginTerminalExited, setPluginTerminalExited] = useState(false);
+
   // Branch management state
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
@@ -1586,6 +1595,12 @@ function App({ initialProjectPath }: AppProps) {
     openUrl: (url: string) => {
       void import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url));
     },
+    openTerminal: (command: string, args: string[], options?: { title?: string }) => {
+      return new Promise<number | null>((resolve) => {
+        setPluginTerminalExited(false);
+        setPluginTerminal({ command, args, title: options?.title || command, resolve });
+      });
+    },
   };
 
   const pluginTheme = {
@@ -1624,8 +1639,9 @@ function App({ initialProjectPath }: AppProps) {
       initDefaultAgent(defaultAgent);
       // Persist that setup is complete so future launches are fast
       await markSetupComplete();
-      // Force full check to update all CLI states
-      void checkSetup(true);
+      // Refresh CLI states and go to projects directly (don't re-enter onboarding)
+      await refreshAllCliStatuses();
+      setView('projects');
     };
 
     return (
@@ -2685,6 +2701,44 @@ function App({ initialProjectPath }: AppProps) {
           </div>
         )}
       </div>
+
+      {/* Plugin terminal modal — reuses OnboardingTerminal for interactive CLI commands */}
+      {pluginTerminal && (
+        <div className="onboarding-terminal-overlay">
+          <div className="onboarding-terminal-modal">
+            <div className="onboarding-terminal-header">
+              <span className="onboarding-terminal-title">{pluginTerminal.title}</span>
+              <button
+                className="onboarding-terminal-cancel"
+                onClick={() => {
+                  const resolve = pluginTerminal.resolve;
+                  setPluginTerminal(null);
+                  setPluginTerminalExited(false);
+                  resolve(null);
+                }}
+              >
+                {pluginTerminalExited ? 'Close' : 'Cancel'}
+              </button>
+            </div>
+            <OnboardingTerminal
+              command={pluginTerminal.command}
+              args={pluginTerminal.args}
+              cwd={currentProject?.path}
+              onExit={(exitCode) => {
+                setPluginTerminalExited(true);
+                const resolve = pluginTerminal.resolve;
+                // Small delay so the user can see the terminal output before it closes
+                setTimeout(() => {
+                  setPluginTerminal(null);
+                  setPluginTerminalExited(false);
+                  resolve(exitCode);
+                }, 1000);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <BugReportButton />
     </>
   );

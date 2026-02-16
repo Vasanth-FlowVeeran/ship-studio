@@ -26,6 +26,12 @@ export interface PluginAppActions {
   refreshBranches: () => void;
   focusTerminal: () => void;
   openUrl: (url: string) => void;
+  /** Open a terminal modal running an interactive command. Resolves with the exit code when the process finishes or null if cancelled. */
+  openTerminal: (
+    command: string,
+    args: string[],
+    options?: { title?: string }
+  ) => Promise<number | null>;
 }
 
 /** Shell command proxy for plugins */

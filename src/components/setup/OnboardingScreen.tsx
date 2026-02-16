@@ -458,27 +458,33 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
             />
           )}
 
-          {currentStep === 'hosting' && <HostingStep onSkip={() => void handleNext()} />}
+          {currentStep === 'hosting' && (
+            <HostingStep
+              items={items}
+              onItemAction={(id) => void handleItemAction(id)}
+              activeItemId={activeItemId}
+              terminalActive={terminalConfig !== null}
+              onSkip={() => void handleNext()}
+            />
+          )}
         </div>
 
         {/* Navigation buttons */}
-        {currentStep !== 'hosting' && (
-          <div className="wizard-nav">
-            {!isFirstStep && (
-              <button className="wizard-nav-back" onClick={handleBack}>
-                Back
-              </button>
-            )}
-            <div className="wizard-nav-spacer" />
-            <button
-              className="wizard-nav-next"
-              onClick={() => void handleNext()}
-              disabled={!isNextEnabled}
-            >
-              {isLastStep ? 'Finish' : 'Next'}
+        <div className="wizard-nav">
+          {!isFirstStep && (
+            <button className="wizard-nav-back" onClick={handleBack}>
+              Back
             </button>
-          </div>
-        )}
+          )}
+          <div className="wizard-nav-spacer" />
+          <button
+            className="wizard-nav-next"
+            onClick={() => void handleNext()}
+            disabled={!isNextEnabled}
+          >
+            {isLastStep ? 'Finish' : 'Next'}
+          </button>
+        </div>
 
         {/* Terminal modal for interactive commands */}
         {terminalConfig && (
