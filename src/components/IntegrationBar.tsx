@@ -13,25 +13,15 @@
  */
 
 import { useState, useEffect } from 'react';
-import {
-  CheckIcon,
-  WarningIcon,
-  ChevronIcon,
-  ClaudeIcon,
-  GitHubIcon,
-  VercelIcon,
-  SpinnerIcon,
-} from './icons';
+import { CheckIcon, WarningIcon, ChevronIcon, ClaudeIcon, GitHubIcon, SpinnerIcon } from './icons';
 import { getFullSetupStatus, SetupItem, SETUP_ITEM_ORDER } from '../lib/setup';
 
 interface IntegrationBarProps {
   /** Callback to connect GitHub account */
   onGitHubConnect?: () => void;
-  /** Callback to connect Vercel account */
-  onVercelConnect?: () => void;
 }
 
-export function IntegrationBar({ onGitHubConnect, onVercelConnect }: IntegrationBarProps) {
+export function IntegrationBar({ onGitHubConnect }: IntegrationBarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [setupItems, setSetupItems] = useState<SetupItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,9 +59,6 @@ export function IntegrationBar({ onGitHubConnect, onVercelConnect }: Integration
       case 'gh':
       case 'gh_auth':
         return <GitHubIcon />;
-      case 'vercel':
-      case 'vercel_auth':
-        return <VercelIcon size={16} />;
       default:
         return <CheckIcon size={16} />;
     }
@@ -88,7 +75,6 @@ export function IntegrationBar({ onGitHubConnect, onVercelConnect }: Integration
   // Get connect handler for auth items
   const getConnectHandler = (itemId: string) => {
     if (itemId === 'gh_auth') return onGitHubConnect;
-    if (itemId === 'vercel_auth') return onVercelConnect;
     return undefined;
   };
 

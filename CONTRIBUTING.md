@@ -206,6 +206,22 @@ Before submitting a PR, verify:
 - [ ] GitHub integration works (if you have `gh` installed)
 - [ ] No console errors in DevTools
 
+### Testing Onboarding
+
+Onboarding is the first thing every new user sees. See the detailed testing guide in `CLAUDE.md` under "Onboarding / Setup Wizard Testing". Quick reference:
+
+```bash
+# Force onboarding with REAL system checks (recommended for UI testing)
+SHIPSTUDIO_FORCE_ONBOARDING=1 pnpm tauri dev
+
+# Force onboarding with MOCK states (for testing specific incomplete scenarios)
+SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev        # Nothing installed
+SHIPSTUDIO_FORCE_SETUP=auth-only pnpm tauri dev     # Tools installed, no auth
+SHIPSTUDIO_FORCE_SETUP=almost-done pnpm tauri dev   # Only gh_auth missing
+```
+
+For the real end-to-end test, use a clean macOS install or VM. See `CLAUDE.md` for the full fresh-machine checklist.
+
 ### Building for Production
 
 ```bash

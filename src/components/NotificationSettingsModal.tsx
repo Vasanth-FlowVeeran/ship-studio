@@ -15,12 +15,14 @@ interface NotificationSettingsModalProps {
   settings: NotificationSettings;
   onSave: (settings: NotificationSettings) => void;
   onClose: () => void;
+  agentDisplayName?: string;
 }
 
 export function NotificationSettingsModal({
   settings,
   onSave,
   onClose,
+  agentDisplayName = 'the agent',
 }: NotificationSettingsModalProps) {
   const [localSettings, setLocalSettings] = useState<NotificationSettings>(settings);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,7 +77,7 @@ export function NotificationSettingsModal({
       <div className="notification-settings-content" onClick={(e) => e.stopPropagation()}>
         <div className="notification-settings-header">
           <h2>Notification Sounds</h2>
-          <p>Play a sound when Claude needs your input</p>
+          <p>Play a sound when {agentDisplayName} needs your input</p>
         </div>
 
         <div className="notification-settings-body">
@@ -84,7 +86,7 @@ export function NotificationSettingsModal({
               <div className="notification-setting-info">
                 <div className="notification-setting-title">Enable sounds</div>
                 <div className="notification-setting-description">
-                  Play a sound when Claude finishes and is waiting for you
+                  Play a sound when {agentDisplayName} finishes and is waiting for you
                 </div>
               </div>
               <label className="notification-toggle">

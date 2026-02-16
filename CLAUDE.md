@@ -106,6 +106,106 @@ cd src-tauri && cargo test
 
 Unit tests are colocated in source files using `#[cfg(test)]` modules.
 
+### Onboarding / Setup Wizard Testing
+
+Onboarding is critical — it's the first thing every new user sees. There are two ways to test it:
+
+#### 1. Real Mode: `SHIPSTUDIO_FORCE_ONBOARDING=1` (recommended for UI/flow testing)
+
+```bash
+SHIPSTUDIO_FORCE_ONBOARDING=1 pnpm tauri dev
+```
+
+This forces the onboarding wizard to appear but runs **real system checks**. Items show their actual status on your machine (homebrew, node, git, etc. will show as "ready" with real versions). Terminal-based installs and auth flows work normally.
+
+How it works:
+- `quick_setup_check` returns `setup_complete_cached: false` → app shows onboarding
+- `get_full_setup_status` returns `all_ready: false` → onboarding stays open
+- All individual item checks are real (versions, auth status, etc.)
+- `mark_setup_complete` sets an in-memory flag instead of writing to disk
+- After completing onboarding, background verification sees real `all_ready: true` → no redirect loop
+- Next launch with the env var: onboarding shows again (nothing persisted)
+
+Since your dev machine likely has everything installed, the wizard will auto-advance to the celebration screen. This is correct behavior — it validates the auto-advance logic works.
+
+#### 2. Mock Mode: `SHIPSTUDIO_FORCE_SETUP=<scenario>` (for testing specific states)
+
+```bash
+SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev        # Nothing installed (step 1)
+SHIPSTUDIO_FORCE_SETUP=auth-only pnpm tauri dev     # Tools installed, no auth (step 2/3)
+SHIPSTUDIO_FORCE_SETUP=almost-done pnpm tauri dev   # Only gh_auth missing (step 2)
+SHIPSTUDIO_FORCE_SETUP=both-agents pnpm tauri dev   # Everything ready → celebration
+SHIPSTUDIO_FORCE_SETUP=codex-only pnpm tauri dev    # Only Codex, no Claude
+SHIPSTUDIO_FORCE_SETUP=homebrew,node,git,gh,gh_auth pnpm tauri dev  # Custom: step 3
+```
+
+This uses a **mock backend** — item statuses are faked. Clicking "Install" simulates a 2-second install. However, **terminal-based items (homebrew, gh_auth, claude, codex) spawn real processes** that will fail or do unexpected things since they run against your actual system, not the mock.
+
+**When to use which:**
+| Scenario | Use |
+|----------|-----|
+| Testing wizard UI flow and navigation | `SHIPSTUDIO_FORCE_ONBOARDING=1` |
+| Testing specific incomplete states | `SHIPSTUDIO_FORCE_SETUP=<scenario>` |
+| Testing on a fresh machine (real installs) | No env var needed — onboarding shows automatically |
+
+#### 3. Testing on a Fresh Machine (Real End-to-End)
+
+This is the gold standard test. On a clean macOS install (or a VM):
+
+1. Install Xcode CLI tools: `xcode-select --install`
+2. Install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+3. Install the app (DMG or `pnpm tauri dev`)
+4. Walk through every wizard step — verify each install/connect actually works
+5. Verify the wizard auto-advances past pre-existing tools
+6. Verify celebration screen appears and app loads correctly
+
+**Checklist for fresh machine testing:**
+
+- [ ] Step 1: Homebrew installs successfully via terminal
+- [ ] Step 1: Node.js installs after homebrew completes
+- [ ] Step 1: npm_fix appears only if ~/.npm has permission issues
+- [ ] Step 1: "Next" enables only when all step 1 items are ready
+- [ ] Step 2: Git and GitHub CLI install (batch install works)
+- [ ] Step 2: GitHub auth opens browser and completes
+- [ ] Step 3: Claude Code installs via terminal
+- [ ] Step 3: Claude auth flow completes
+- [ ] Step 3: "Next" enables when at least one agent pair is ready
+- [ ] Step 3: If both agents ready, default agent selection appears inline
+- [ ] Step 4: "Skip for Now" advances to celebration
+- [ ] Celebration: "You're all set!" shows, auto-continues after 2.5s
+- [ ] App: Projects view loads correctly after onboarding
+- [ ] Re-launch: Onboarding does NOT show again (setup_complete persisted)
+
+#### Wizard Architecture Quick Reference
+
+The wizard has 4 steps defined in `src/lib/setup.ts` (`WIZARD_STEPS`):
+
+| Step | ID | Items | Complete When |
+|------|----|-------|---------------|
+| 1 | `package-manager` | homebrew, node, npm_fix | All present items ready |
+| 2 | `git-github` | git, gh, gh_auth | All 3 ready |
+| 3 | `agent` | claude, claude_auth, codex, codex_auth | At least 1 agent pair ready |
+| 4 | `hosting` | *(none)* | Always (placeholder, skippable) |
+
+Key files:
+- `src/components/setup/OnboardingScreen.tsx` — wizard orchestrator
+- `src/components/setup/WizardStepIndicator.tsx` — step dots
+- `src/components/setup/steps/` — per-step components
+- `src/lib/setup.ts` — step definitions, helpers, backend API
+- `src-tauri/src/commands/setup.rs` — backend setup checks, mock/force modes
+
+## Shared CSS Classes (Plugin-Stable)
+
+These classes are defined in `src/styles/base.css` and are part of Ship Studio's public API for plugins. Plugins can use them directly without injecting their own styles. **Do not rename or remove these classes without updating the plugin starter repo.**
+
+| Class | Defined In | Description |
+|-------|-----------|-------------|
+| `toolbar-icon-btn` | `base.css` | Icon button for the workspace toolbar (32px height, border, rounded corners, hover states). Used by all header action buttons and toolbar plugins. |
+| `btn-primary` | `base.css` | Primary action button (accent background, white text) |
+| `btn-secondary` | `base.css` | Secondary button (tertiary background, border) |
+
+CSS variables (`--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--text-primary`, `--text-secondary`, `--text-muted`, `--border`, `--accent`, `--action`, etc.) are also stable and available to plugins.
+
 ## Common Patterns
 
 ### Publishing Flow

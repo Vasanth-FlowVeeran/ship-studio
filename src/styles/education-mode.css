@@ -95,47 +95,18 @@
 }
 
 /* Education Mode button in header */
-.education-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 10px;
-  min-height: 32px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.education-button:hover {
-  background: var(--border);
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
-.education-button svg {
-  color: var(--text-muted);
-}
-
-.education-button:hover svg {
-  color: var(--text-secondary);
-}
-
 /* Active state when education mode is on */
-.education-button.active {
+.toolbar-icon-btn.active {
   background: var(--accent, #22c55e);
   border-color: var(--accent, #22c55e);
   color: #000;
 }
 
-.education-button.active svg {
+.toolbar-icon-btn.active svg {
   color: #000;
 }
 
-.education-button.active:hover {
+.toolbar-icon-btn.active:hover {
   background: #16a34a;
   border-color: #16a34a;
 }

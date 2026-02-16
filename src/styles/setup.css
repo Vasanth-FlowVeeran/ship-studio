@@ -244,33 +244,321 @@
   color: var(--text-muted);
 }
 
-/* ============ Progress Bar ============ */
+/* ============ Wizard Step Indicator ============ */
 
-.onboarding-progress {
+.wizard-indicator {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 32px;
+  position: relative;
+}
+
+.wizard-indicator-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  flex: 1;
+  max-width: 120px;
+}
+
+.wizard-indicator-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border: 2px solid var(--border);
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.wizard-indicator-dot.current {
+  background: #7fe89a;
+  border-color: #7fe89a;
+  color: #1e1e1e;
+}
+
+.wizard-indicator-dot.completed {
+  background: #7fe89a;
+  border-color: #7fe89a;
+  color: white;
+}
+
+.wizard-indicator-dot.past {
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+.wizard-indicator-line {
+  position: absolute;
+  top: 14px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.wizard-indicator-line.active {
+  background: #7fe89a;
+}
+
+.wizard-indicator-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.wizard-indicator-label.current {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.wizard-indicator-label.completed {
+  color: var(--text-secondary);
+}
+
+/* ============ Wizard Step Container ============ */
+
+.wizard-step-container {
+  margin-bottom: 24px;
+  animation: wizardStepIn 0.2s ease-out;
+}
+
+@keyframes wizardStepIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wizard-step-header {
+  margin-bottom: 16px;
+}
+
+.wizard-step-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.wizard-step-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.wizard-step-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ============ Wizard Navigation ============ */
+
+.wizard-nav {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.wizard-nav-spacer {
+  flex: 1;
+}
+
+.wizard-nav-back {
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.wizard-nav-back:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.wizard-nav-next {
+  padding: 8px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: none;
+  background: #7fe89a;
+  color: #1e1e1e;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.wizard-nav-next:hover:not(:disabled) {
+  background: #6dd889;
+}
+
+.wizard-nav-next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ============ Agent Step Cards ============ */
+
+.wizard-agent-selection-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.wizard-agent-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  transition: all 0.2s ease;
+}
+
+.wizard-agent-card.ready {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.wizard-agent-card.selected {
+  border-color: var(--success);
+  background: rgba(34, 197, 94, 0.05);
+  cursor: pointer;
+}
+
+.wizard-agent-card[role='button'] {
+  cursor: pointer;
+}
+
+.wizard-agent-card[role='button']:hover {
+  border-color: var(--accent);
+}
+
+.wizard-agent-card-header {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-bottom: 12px;
 }
 
-.onboarding-progress-bar {
-  flex: 1;
-  height: 6px;
-  background: var(--bg-tertiary);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.onboarding-progress-fill {
-  height: 100%;
-  background: #7fe89a;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.onboarding-progress-text {
-  font-size: 12px;
-  color: var(--text-muted);
+.wizard-agent-card-icon {
   flex-shrink: 0;
+}
+
+.wizard-agent-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.wizard-agent-card-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.wizard-agent-card-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(147, 51, 234, 0.15);
+  color: #c4b5fd;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wizard-agent-card-check {
+  flex-shrink: 0;
+}
+
+.wizard-agent-card-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wizard-agent-card-items .setup-item {
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+/* ============ Hosting Step Placeholder ============ */
+
+.wizard-hosting-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 24px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+}
+
+.wizard-hosting-icon {
+  margin-bottom: 16px;
+}
+
+.wizard-hosting-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.wizard-hosting-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+.wizard-hosting-skip-btn {
+  padding: 10px 28px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+  margin-top: 8px;
+}
+
+.wizard-hosting-skip-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.wizard-hosting-skip-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ============ Slack CTA ============ */

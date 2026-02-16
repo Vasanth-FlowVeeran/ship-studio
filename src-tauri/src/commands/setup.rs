@@ -1,10 +1,28 @@
 //! # Setup/Onboarding Commands
 //!
 //! Commands for the setup wizard and onboarding flow.
+//!
+//! ## Testing Modes
+//!
+//! Two env vars control onboarding testing:
+//!
+//! ### `SHIPSTUDIO_FORCE_ONBOARDING=1`
+//! Forces the onboarding wizard to appear but runs REAL system checks.
+//! Items show their actual status. Terminal installs work normally.
+//! After completing onboarding, an in-memory flag (`FORCE_ONBOARDING_COMPLETED`)
+//! prevents background verification from looping back. Nothing is persisted
+//! to disk, so onboarding shows again on next launch.
+//!
+//! ### `SHIPSTUDIO_FORCE_SETUP=<scenario>`
+//! Uses a fully mocked backend. Item statuses are faked based on the scenario.
+//! Clicking "Install" triggers a 2-second mock install. Terminal-based items
+//! (homebrew, gh_auth, claude, codex) still spawn real processes.
+//! Scenarios: `fresh`, `auth-only`, `almost-done`, `both-agents`, `codex-only`,
+//! or comma-separated item IDs (e.g. `homebrew,node,git,gh,gh_auth`).
 
-use crate::commands::claude::find_claude_binary;
+use crate::agent::{get_active_agent, get_agent_by_id, ALL_AGENTS};
+use crate::commands::claude::find_binary_by_name;
 use crate::commands::github::get_gh_command;
-use crate::commands::vercel::{find_vercel_binary, get_vercel_command};
 use crate::types::{
     AppState, FullSetupStatus, OptionalAuths, QuickSetupCheck, SetupItemInfo, SetupItemStatus,
 };
@@ -81,8 +99,11 @@ lazy_static::lazy_static! {
     static ref MOCK_INSTALLED: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
     static ref MOCK_INITIALIZED: Mutex<bool> = Mutex::new(false);
     /// Global registry of spawned auth process PIDs for cleanup
-    /// Maps auth type (e.g., "github", "claude", "vercel") -> OS process ID (PID)
+    /// Maps auth type (e.g., "github", "claude") -> OS process ID (PID)
     static ref AUTH_PIDS: Mutex<std::collections::HashMap<String, u32>> = Mutex::new(std::collections::HashMap::new());
+    /// Tracks whether onboarding was completed this session in force-onboarding mode.
+    /// Once set, stop overriding all_ready so background verification doesn't loop.
+    static ref FORCE_ONBOARDING_COMPLETED: Mutex<bool> = Mutex::new(false);
 }
 
 /// All setup item IDs in dependency order
@@ -94,12 +115,14 @@ const ALL_ITEMS: &[&str] = &[
     "gh_auth",
     "claude",
     "claude_auth",
+    "codex",
+    "codex_auth",
     "vercel",
     "vercel_auth",
 ];
 
 /// Tool items (not auth)
-const TOOL_ITEMS: &[&str] = &["homebrew", "node", "git", "gh", "claude", "vercel"];
+const TOOL_ITEMS: &[&str] = &["homebrew", "node", "git", "gh", "claude", "codex", "vercel"];
 
 /// Get items that should be pre-installed for a given scenario
 fn get_scenario_items(scenario: &str) -> Vec<&'static str> {
@@ -109,13 +132,6 @@ fn get_scenario_items(scenario: &str) -> Vec<&'static str> {
 
         // All tools installed, but no auth configured
         "auth-only" => TOOL_ITEMS.to_vec(),
-
-        // Everything except Vercel auth
-        "vercel-missing" => ALL_ITEMS
-            .iter()
-            .filter(|&&item| item != "vercel_auth")
-            .copied()
-            .collect(),
 
         // Everything except GitHub auth
         "github-missing" => ALL_ITEMS
@@ -138,15 +154,28 @@ fn get_scenario_items(scenario: &str) -> Vec<&'static str> {
             .copied()
             .collect(),
 
-        // Almost done - only vercel_auth left
+        // Almost done - only gh_auth left
         "almost-done" => ALL_ITEMS
             .iter()
-            .filter(|&&item| item != "vercel_auth")
+            .filter(|&&item| item != "gh_auth")
+            .copied()
+            .collect(),
+
+        // Both agents installed and authed + vercel (tests agent selection screen)
+        "both-agents" => ALL_ITEMS.to_vec(),
+
+        // Vercel installed and authed (for testing hosting step)
+        "vercel-ready" => vec!["vercel", "vercel_auth"],
+
+        // Only Codex installed (no Claude)
+        "codex-only" => ALL_ITEMS
+            .iter()
+            .filter(|&&item| item != "claude" && item != "claude_auth")
             .copied()
             .collect(),
 
         // Comma-separated list of specific items to pre-install
-        // e.g., "homebrew,node,git" or "homebrew,node,git,gh,gh_auth,claude,claude_auth,vercel"
+        // e.g., "homebrew,node,git" or "homebrew,node,git,gh,gh_auth,claude,claude_auth"
         _ => scenario
             .split(',')
             .map(|s| s.trim())
@@ -183,6 +212,24 @@ pub fn is_mock_mode() -> bool {
     is_mock
 }
 
+/// Check if we're in "force onboarding" mode.
+/// Unlike mock mode, this runs REAL system checks but forces the onboarding
+/// screen to appear so you can test the wizard flow on a fully set up machine.
+/// Once onboarding completes this session, stops overriding so background
+/// verification doesn't loop back.
+///
+/// Usage: SHIPSTUDIO_FORCE_ONBOARDING=1 npm run tauri dev
+fn is_force_onboarding_mode() -> bool {
+    if std::env::var("SHIPSTUDIO_FORCE_ONBOARDING").is_err() {
+        return false;
+    }
+    // Once onboarding completed this session, stop forcing
+    FORCE_ONBOARDING_COMPLETED
+        .lock()
+        .map(|completed| !*completed)
+        .unwrap_or(false)
+}
+
 /// Mark an item as mock-installed (for testing)
 pub fn mock_install(item_id: &str) {
     if let Ok(mut set) = MOCK_INSTALLED.lock() {
@@ -211,7 +258,9 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
             ("gh_auth", "GitHub Account", Some("gh")),
             ("claude", "Claude Code", None),
             ("claude_auth", "Claude Account", Some("claude")),
-            ("vercel", "Vercel CLI", Some("homebrew")),
+            ("codex", "Codex", None),
+            ("codex_auth", "Codex Account", Some("codex")),
+            ("vercel", "Vercel CLI", None),
             ("vercel_auth", "Vercel Account", Some("vercel")),
         ];
 
@@ -255,34 +304,49 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
             .find(|i| i.id == "gh_auth")
             .map(|i| matches!(i.status, SetupItemStatus::Ready))
             .unwrap_or(false);
-        let vercel_authenticated = mock_items
-            .iter()
-            .find(|i| i.id == "vercel_auth")
-            .map(|i| matches!(i.status, SetupItemStatus::Ready))
-            .unwrap_or(false);
 
-        // Required items for setup completion (GitHub and Vercel auth are optional)
-        const REQUIRED_ITEMS_MOCK: &[&str] = &[
-            "homebrew",
-            "node",
-            "git",
-            "gh",
-            "claude",
-            "claude_auth",
-            "vercel",
-        ];
+        // Required base items for setup completion
+        const REQUIRED_ITEMS_MOCK: &[&str] = &["homebrew", "node", "git", "gh"];
 
-        let all_ready = mock_items
+        let base_ready = mock_items
             .iter()
             .filter(|i| REQUIRED_ITEMS_MOCK.contains(&i.id.as_str()))
             .all(|i| matches!(i.status, SetupItemStatus::Ready));
+
+        // Check which agent pairs are fully ready
+        let mut detected_agents = Vec::new();
+        for agent in ALL_AGENTS {
+            let binary_ready = mock_items
+                .iter()
+                .find(|i| i.id == agent.setup_item_ids.0)
+                .map(|i| matches!(i.status, SetupItemStatus::Ready))
+                .unwrap_or(false);
+            let auth_ready = mock_items
+                .iter()
+                .find(|i| i.id == agent.setup_item_ids.1)
+                .map(|i| matches!(i.status, SetupItemStatus::Ready))
+                .unwrap_or(false);
+            if binary_ready && auth_ready {
+                detected_agents.push(agent.id.to_string());
+            }
+        }
+
+        let at_least_one_agent = !detected_agents.is_empty();
+        // In mock mode, also require all items ready so the wizard shows
+        // for any incomplete step (including optional ones like hosting).
+        // The wizard handles skippable steps internally.
+        let all_items_ready = mock_items
+            .iter()
+            .all(|i| matches!(i.status, SetupItemStatus::Ready));
+        let all_ready = base_ready && at_least_one_agent && all_items_ready;
+
         return FullSetupStatus {
             all_ready,
             items: mock_items,
             optional_auths: OptionalAuths {
                 github_authenticated,
-                vercel_authenticated,
             },
+            detected_agents,
         };
     }
 
@@ -472,69 +536,74 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
         error_message: None,
     });
 
-    // 6. Claude Code
-    let claude_path = find_claude_binary();
-    let claude_version = claude_path.as_ref().and_then(|p| {
-        create_command(p)
-            .args(["--version"])
-            .output()
-            .ok()
-            .and_then(|o| {
-                if o.status.success() {
-                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                } else {
-                    None
-                }
-            })
-    });
-    items.push(SetupItemInfo {
-        id: "claude".to_string(),
-        friendly_name: "Claude Code".to_string(),
-        status: if claude_path.is_some() {
-            SetupItemStatus::Ready
-        } else {
-            SetupItemStatus::NotInstalled
-        },
-        version: claude_version,
-        username: None,
-        error_message: None,
-    });
+    // 6-7. Agent CLIs and Auth — check ALL agents
+    let mut detected_agents = Vec::new();
 
-    // 7. Claude Auth
-    let claude_auth = if claude_path.is_some() {
-        if let Some(home) = dirs::home_dir() {
-            let claude_dir = home.join(".claude");
-            // Check for various indicators that Claude has been authenticated/used:
-            // - settings.json (older versions)
-            // - statsig directory (created after auth)
-            // - projects directory (created after using Claude)
-            let settings_exists = claude_dir.join("settings.json").exists();
-            let statsig_exists = claude_dir.join("statsig").is_dir();
-            let projects_exists = claude_dir.join("projects").is_dir();
-            settings_exists || statsig_exists || projects_exists
+    for agent in ALL_AGENTS {
+        let agent_path = find_binary_by_name(agent.binary_name);
+        let agent_version = agent_path.as_ref().and_then(|p| {
+            create_command(p)
+                .args([agent.version_flag])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    } else {
+                        None
+                    }
+                })
+        });
+        let binary_ready = agent_path.is_some();
+        items.push(SetupItemInfo {
+            id: agent.setup_item_ids.0.to_string(),
+            friendly_name: agent.setup_display_names.0.to_string(),
+            status: if binary_ready {
+                SetupItemStatus::Ready
+            } else {
+                SetupItemStatus::NotInstalled
+            },
+            version: agent_version,
+            username: None,
+            error_message: None,
+        });
+
+        // Agent Auth
+        let agent_auth = if binary_ready {
+            if let Some(home) = dirs::home_dir() {
+                let agent_dir = home.join(agent.auth_config_dir);
+                agent.auth_indicators.iter().any(|indicator| {
+                    let path = agent_dir.join(indicator);
+                    path.exists()
+                })
+            } else {
+                false
+            }
         } else {
             false
+        };
+        items.push(SetupItemInfo {
+            id: agent.setup_item_ids.1.to_string(),
+            friendly_name: agent.setup_display_names.1.to_string(),
+            status: if agent_auth {
+                SetupItemStatus::Ready
+            } else if binary_ready {
+                SetupItemStatus::NotAuthenticated
+            } else {
+                SetupItemStatus::NotInstalled
+            },
+            version: None,
+            username: None,
+            error_message: None,
+        });
+
+        if binary_ready && agent_auth {
+            detected_agents.push(agent.id.to_string());
         }
-    } else {
-        false
-    };
-    items.push(SetupItemInfo {
-        id: "claude_auth".to_string(),
-        friendly_name: "Claude Account".to_string(),
-        status: if claude_auth {
-            SetupItemStatus::Ready
-        } else if claude_path.is_some() {
-            SetupItemStatus::NotAuthenticated
-        } else {
-            SetupItemStatus::NotInstalled
-        },
-        version: None,
-        username: None,
-        error_message: None,
-    });
+    }
 
     // 8. Vercel CLI
-    let vercel_path = find_vercel_binary();
+    let vercel_path = find_executable("vercel");
     let vercel_version = vercel_path.as_ref().and_then(|p| {
         create_command(p)
             .args(["--version"])
@@ -563,26 +632,32 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
 
     // 9. Vercel Auth
     let vercel_auth = if vercel_path.is_some() {
-        get_vercel_command()
-            .args(["whoami"])
-            .output()
-            .map(|o| o.status.success())
+        find_executable("vercel")
+            .map(|p| {
+                create_command(&p)
+                    .args(["whoami"])
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+            })
             .unwrap_or(false)
     } else {
         false
     };
     let vercel_username = if vercel_auth {
-        get_vercel_command()
-            .args(["whoami"])
-            .output()
-            .ok()
-            .and_then(|o| {
-                if o.status.success() {
-                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                } else {
-                    None
-                }
-            })
+        find_executable("vercel").and_then(|p| {
+            create_command(&p)
+                .args(["whoami"])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    } else {
+                        None
+                    }
+                })
+        })
     } else {
         None
     };
@@ -601,21 +676,17 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
         error_message: None,
     });
 
-    // Required items for setup completion (GitHub and Vercel auth are optional)
-    const REQUIRED_ITEMS: &[&str] = &[
-        "homebrew",
-        "node",
-        "git",
-        "gh",
-        "claude",
-        "claude_auth",
-        "vercel",
-    ];
+    // Required base items for setup completion (GitHub auth and individual agent items are optional)
+    const REQUIRED_ITEMS: &[&str] = &["homebrew", "node", "git", "gh"];
 
-    let all_ready = items
+    let base_ready = items
         .iter()
         .filter(|i| REQUIRED_ITEMS.contains(&i.id.as_str()) || i.id == "npm_fix")
         .all(|i| matches!(i.status, SetupItemStatus::Ready));
+
+    // At least one agent pair must be fully ready
+    let at_least_one_agent = !detected_agents.is_empty();
+    let all_ready = base_ready && at_least_one_agent;
 
     // Track optional auth status separately
     let github_authenticated = items
@@ -624,19 +695,21 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
         .map(|i| matches!(i.status, SetupItemStatus::Ready))
         .unwrap_or(false);
 
-    let vercel_authenticated = items
-        .iter()
-        .find(|i| i.id == "vercel_auth")
-        .map(|i| matches!(i.status, SetupItemStatus::Ready))
-        .unwrap_or(false);
+    // Force onboarding mode: run real checks but always report not-all-ready
+    // so the onboarding wizard is shown with real item statuses
+    let all_ready = if is_force_onboarding_mode() {
+        false
+    } else {
+        all_ready
+    };
 
     FullSetupStatus {
         all_ready,
         items,
         optional_auths: OptionalAuths {
             github_authenticated,
-            vercel_authenticated,
         },
+        detected_agents,
     }
 }
 
@@ -644,6 +717,22 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
 /// This is ~10ms vs 2-5 seconds for full setup check
 #[tauri::command]
 pub async fn quick_setup_check() -> QuickSetupCheck {
+    // Force onboarding mode: always show onboarding with real checks
+    if is_force_onboarding_mode() {
+        return QuickSetupCheck {
+            all_present: false,
+            setup_complete_cached: false,
+        };
+    }
+
+    // Mock mode: always show onboarding so the mock scenario is visible
+    if is_mock_mode() {
+        return QuickSetupCheck {
+            all_present: false,
+            setup_complete_cached: false,
+        };
+    }
+
     // Check persisted state first
     let app_state = read_app_state();
 
@@ -663,29 +752,29 @@ pub async fn quick_setup_check() -> QuickSetupCheck {
     let node_present = find_executable("node").is_some();
     let git_present = find_executable("git").is_some();
     let gh_present = find_executable("gh").is_some();
-    let claude_present = find_claude_binary().is_some();
-    let vercel_present = find_vercel_binary().is_some();
 
-    // Fast auth checks: file/directory existence only
-    let claude_auth_present = if let Some(home) = dirs::home_dir() {
-        let claude_dir = home.join(".claude");
-        claude_dir.join("settings.json").exists()
-            || claude_dir.join("statsig").is_dir()
-            || claude_dir.join("projects").is_dir()
-    } else {
-        false
-    };
+    // Check ALL agents — at least one pair must be present
+    let at_least_one_agent = ALL_AGENTS.iter().any(|agent| {
+        let binary_present = find_binary_by_name(agent.binary_name).is_some();
+        if !binary_present {
+            return false;
+        }
+        if let Some(home) = dirs::home_dir() {
+            let agent_dir = home.join(agent.auth_config_dir);
+            agent
+                .auth_indicators
+                .iter()
+                .any(|indicator| agent_dir.join(indicator).exists())
+        } else {
+            false
+        }
+    });
 
-    // For gh_auth and vercel_auth, we trust the cached state since checking requires subprocess
-    // These will be verified in the background after showing projects
+    // For gh_auth, we trust the cached state since checking requires subprocess
+    // It will be verified in the background after showing projects
 
-    let all_present = pkg_mgr_present
-        && node_present
-        && git_present
-        && gh_present
-        && claude_present
-        && vercel_present
-        && claude_auth_present;
+    let all_present =
+        pkg_mgr_present && node_present && git_present && gh_present && at_least_one_agent;
 
     QuickSetupCheck {
         all_present,
@@ -696,6 +785,19 @@ pub async fn quick_setup_check() -> QuickSetupCheck {
 /// Mark setup as complete (persists to disk)
 #[tauri::command]
 pub async fn mark_setup_complete() -> Result<(), String> {
+    // Force onboarding / mock mode: don't persist to disk
+    if is_force_onboarding_mode() {
+        if let Ok(mut completed) = FORCE_ONBOARDING_COMPLETED.lock() {
+            *completed = true;
+        }
+        tracing::info!("Force onboarding mode: skipping setup complete persistence");
+        return Ok(());
+    }
+    if is_mock_mode() {
+        tracing::info!("Mock mode: skipping setup complete persistence");
+        return Ok(());
+    }
+
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -721,6 +823,24 @@ pub async fn reset_setup_state() -> Result<(), String> {
 
     write_app_state(&state)?;
     tracing::info!("Setup state reset");
+    Ok(())
+}
+
+/// Get the default agent ID from persisted AppState.
+/// Returns None if not set (frontend should fall back to Claude Code).
+#[tauri::command]
+pub async fn get_default_agent_id() -> Option<String> {
+    read_app_state().default_agent_id
+}
+
+/// Set the default agent ID. Persists to AppState and updates in-memory cache.
+#[tauri::command]
+pub async fn set_default_agent_id(agent_id: String) -> Result<(), String> {
+    let mut state = read_app_state();
+    state.default_agent_id = Some(agent_id.clone());
+    write_app_state(&state)?;
+    crate::agent::set_default_agent_cached(&agent_id);
+    tracing::info!("Default agent set to: {}", agent_id);
     Ok(())
 }
 
@@ -863,7 +983,6 @@ pub async fn install_gh_via_brew(app: tauri::AppHandle) -> Result<(), String> {
 /// - node -> node
 /// - git -> git
 /// - gh -> gh
-/// - vercel -> vercel-cli
 #[tauri::command]
 pub async fn install_brew_packages(
     app: tauri::AppHandle,
@@ -884,26 +1003,14 @@ pub async fn install_brew_packages(
     if is_mock_mode() {
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
         for pkg in &packages {
-            // Map brew package names back to item IDs for mock
-            let item_id = match pkg.as_str() {
-                "vercel-cli" => "vercel",
-                other => other,
-            };
-            mock_install(item_id);
+            mock_install(pkg);
         }
         return Ok(());
     }
 
     let brew = get_brew_command().ok_or("Homebrew not found")?;
 
-    // Map item IDs to actual brew package names
-    let brew_packages: Vec<&str> = packages
-        .iter()
-        .map(|p| match p.as_str() {
-            "vercel" => "vercel-cli",
-            other => other,
-        })
-        .collect();
+    let brew_packages: Vec<&str> = packages.iter().map(|p| p.as_str()).collect();
 
     let mut args = vec!["install"];
     args.extend(brew_packages.iter().copied());
@@ -932,7 +1039,6 @@ pub async fn install_brew_packages(
 /// - node -> OpenJS.NodeJS
 /// - git -> Git.Git
 /// - gh -> GitHub.cli
-/// - vercel -> N/A (installed via npm after node)
 #[cfg(windows)]
 #[tauri::command]
 pub async fn install_winget_packages(
@@ -968,7 +1074,6 @@ pub async fn install_winget_packages(
             "node" => Some("OpenJS.NodeJS"),
             "git" => Some("Git.Git"),
             "gh" => Some("GitHub.cli"),
-            "vercel" => None, // Installed via npm
             _ => None,
         })
         .collect();
@@ -1093,109 +1198,86 @@ pub async fn start_github_auth(app: tauri::AppHandle) -> Result<String, String> 
     Ok("A code has been copied to your clipboard. Paste it in the browser to connect.".to_string())
 }
 
-/// Start Claude authentication
+/// Start agent authentication.
+/// If `agent_id` is provided, authenticate that specific agent. Otherwise, use the active agent.
 #[tauri::command]
-pub async fn start_claude_auth(app: tauri::AppHandle) -> Result<String, String> {
+pub async fn start_claude_auth(
+    app: tauri::AppHandle,
+    agent_id: Option<String>,
+) -> Result<String, String> {
+    let agent = match agent_id.as_deref() {
+        Some(id) => get_agent_by_id(id),
+        None => get_active_agent(),
+    };
+
     let _ = app.emit(
         "setup-progress",
         serde_json::json!({
-            "itemId": "claude_auth",
+            "itemId": agent.setup_item_ids.1,
             "message": "Opening browser..."
         }),
     );
 
     if is_mock_mode() {
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-        mock_install("claude_auth");
+        mock_install(agent.setup_item_ids.1);
         return Ok("Mock auth completed".to_string());
     }
 
-    let claude_path = find_claude_binary().ok_or("Claude Code not installed")?;
+    let agent_path = find_binary_by_name(agent.binary_name)
+        .ok_or(format!("{} not installed", agent.display_name))?;
 
-    let child = create_command(&claude_path)
-        .args(["--print", "hello"])
+    let child = create_command(&agent_path)
+        .args(agent.auth_trigger_args)
         .spawn()
-        .map_err(|e| format!("Failed to start Claude auth: {}", e))?;
+        .map_err(|e| format!("Failed to start {} auth: {}", agent.display_name, e))?;
 
     // Store the process PID for potential cleanup instead of forgetting it
     let pid = child.id();
     if let Ok(mut pids) = AUTH_PIDS.lock() {
-        pids.insert("claude".to_string(), pid);
+        pids.insert(agent.id.to_string(), pid);
     }
     // Spawn a thread to wait for the process and clean up the registry when it exits
+    let agent_id_str = agent.id.to_string();
     std::thread::spawn(move || {
         let _ = child.wait_with_output();
         if let Ok(mut pids) = AUTH_PIDS.lock() {
-            pids.remove("claude");
+            pids.remove(&agent_id_str);
         }
     });
 
-    Ok("Browser opened. Log in to your Anthropic account to continue.".to_string())
+    Ok(format!(
+        "Browser opened. Log in to your {} account to continue.",
+        agent.display_name
+    ))
 }
 
-/// Check if Claude is authenticated
+/// Check if an agent is authenticated.
+/// If `agent_id` is provided, check that specific agent. Otherwise, use the active agent.
 #[tauri::command]
-pub async fn check_claude_auth_status() -> bool {
+pub async fn check_claude_auth_status(agent_id: Option<String>) -> bool {
+    let agent = match agent_id.as_deref() {
+        Some(id) => get_agent_by_id(id),
+        None => get_active_agent(),
+    };
+
     if is_mock_mode() {
-        return is_mock_installed("claude_auth");
+        return is_mock_installed(agent.setup_item_ids.1);
     }
 
-    if find_claude_binary().is_none() {
+    if find_binary_by_name(agent.binary_name).is_none() {
         return false;
     }
 
     if let Some(home) = dirs::home_dir() {
-        let claude_dir = home.join(".claude");
-        // Check for various indicators that Claude has been authenticated/used:
-        // - settings.json (older versions)
-        // - statsig directory (created after auth)
-        // - projects directory with content (created after using Claude)
-        let settings_exists = claude_dir.join("settings.json").exists();
-        let statsig_exists = claude_dir.join("statsig").is_dir();
-        let projects_exists = claude_dir.join("projects").is_dir();
-
-        return settings_exists || statsig_exists || projects_exists;
+        let agent_dir = home.join(agent.auth_config_dir);
+        return agent.auth_indicators.iter().any(|indicator| {
+            let path = agent_dir.join(indicator);
+            path.exists()
+        });
     }
 
     false
-}
-
-/// Start Vercel authentication (opens browser)
-#[tauri::command]
-pub async fn start_vercel_auth(app: tauri::AppHandle) -> Result<String, String> {
-    let _ = app.emit(
-        "setup-progress",
-        serde_json::json!({
-            "itemId": "vercel_auth",
-            "message": "Opening browser..."
-        }),
-    );
-
-    if is_mock_mode() {
-        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-        mock_install("vercel_auth");
-        return Ok("Mock auth completed".to_string());
-    }
-
-    let child = get_vercel_command()
-        .arg("login")
-        .spawn()
-        .map_err(|e| format!("Failed to start Vercel auth: {}", e))?;
-
-    // Store the process PID for potential cleanup instead of forgetting it
-    let pid = child.id();
-    if let Ok(mut pids) = AUTH_PIDS.lock() {
-        pids.insert("vercel".to_string(), pid);
-    }
-    // Spawn a thread to wait for the process and clean up the registry when it exits
-    std::thread::spawn(move || {
-        let _ = child.wait_with_output();
-        if let Ok(mut pids) = AUTH_PIDS.lock() {
-            pids.remove("vercel");
-        }
-    });
-
-    Ok("Browser opened. Log in to your Vercel account to continue.".to_string())
 }
 
 /// Kill all tracked auth processes (synchronous helper).
@@ -1476,4 +1558,115 @@ async fn install_version_platform(
     _temp_dir: &std::path::Path,
 ) -> Result<(), String> {
     Err("Version rewind is not yet available on this platform.".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ============ get_scenario_items ============
+
+    #[test]
+    fn scenario_fresh_returns_empty() {
+        let items = get_scenario_items("fresh");
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn scenario_1_alias_returns_empty() {
+        let items = get_scenario_items("1");
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn scenario_auth_only_returns_tool_items() {
+        let items = get_scenario_items("auth-only");
+        assert_eq!(items, TOOL_ITEMS.to_vec());
+    }
+
+    #[test]
+    fn scenario_both_agents_returns_all_items() {
+        let items = get_scenario_items("both-agents");
+        assert_eq!(items, ALL_ITEMS.to_vec());
+    }
+
+    #[test]
+    fn scenario_codex_only_excludes_claude() {
+        let items = get_scenario_items("codex-only");
+        assert!(!items.contains(&"claude"));
+        assert!(!items.contains(&"claude_auth"));
+        assert!(items.contains(&"codex"));
+        assert!(items.contains(&"codex_auth"));
+    }
+
+    #[test]
+    fn scenario_github_missing_excludes_gh_auth() {
+        let items = get_scenario_items("github-missing");
+        assert!(!items.contains(&"gh_auth"));
+        assert!(items.contains(&"gh"));
+    }
+
+    #[test]
+    fn scenario_homebrew_missing_excludes_homebrew() {
+        let items = get_scenario_items("homebrew-missing");
+        assert!(!items.contains(&"homebrew"));
+        assert!(items.contains(&"node"));
+    }
+
+    #[test]
+    fn scenario_comma_separated_returns_exact_items() {
+        let items = get_scenario_items("homebrew,node,git");
+        assert_eq!(items.len(), 3);
+        assert!(items.contains(&"homebrew"));
+        assert!(items.contains(&"node"));
+        assert!(items.contains(&"git"));
+    }
+
+    #[test]
+    fn scenario_unknown_item_in_csv_returns_empty() {
+        let items = get_scenario_items("unknown_item");
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn all_items_contains_11_items_including_codex_and_vercel() {
+        assert_eq!(ALL_ITEMS.len(), 11);
+        assert!(ALL_ITEMS.contains(&"codex"));
+        assert!(ALL_ITEMS.contains(&"codex_auth"));
+        assert!(ALL_ITEMS.contains(&"vercel"));
+        assert!(ALL_ITEMS.contains(&"vercel_auth"));
+    }
+
+    #[test]
+    fn tool_items_contains_7_items_including_codex_and_vercel() {
+        assert_eq!(TOOL_ITEMS.len(), 7);
+        assert!(TOOL_ITEMS.contains(&"codex"));
+        assert!(TOOL_ITEMS.contains(&"claude"));
+        assert!(TOOL_ITEMS.contains(&"vercel"));
+    }
+
+    // ============ AppState ============
+
+    #[test]
+    fn app_state_default_has_no_default_agent_id() {
+        let state = AppState::default();
+        assert!(state.default_agent_id.is_none());
+        assert!(!state.setup_complete);
+    }
+
+    #[test]
+    fn app_state_deserializes_without_default_agent_id() {
+        // Simulate a legacy JSON without the default_agent_id field
+        let json = r#"{"setupComplete": true, "setupCompletedAt": 12345}"#;
+        let state: AppState = serde_json::from_str(json).unwrap();
+        assert!(state.setup_complete);
+        assert!(state.default_agent_id.is_none());
+    }
+
+    #[test]
+    fn app_state_deserializes_with_default_agent_id() {
+        let json = r#"{"setupComplete": true, "defaultAgentId": "codex"}"#;
+        let state: AppState = serde_json::from_str(json).unwrap();
+        assert_eq!(state.default_agent_id, Some("codex".to_string()));
+    }
 }

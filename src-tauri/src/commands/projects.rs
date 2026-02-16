@@ -2,7 +2,6 @@
 //!
 //! Commands for managing projects and project metadata.
 
-use crate::commands::vercel::get_vercel_deployment_info;
 use crate::state::{get_window_for_project, register_project_window, unregister_project_window};
 use crate::types::{
     DashboardProject, PageInfo, ProjectInfo, ProjectMetadata, ProjectType,
@@ -663,7 +662,7 @@ pub async fn list_projects() -> Result<Vec<ProjectInfo>, String> {
     Ok(projects)
 }
 
-/// Returns enhanced project list for dashboard with git/vercel info
+/// Returns enhanced project list for dashboard with git info
 #[tauri::command]
 pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
     let home = dirs::home_dir().ok_or("Could not find home directory")?;
@@ -707,10 +706,6 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
             let git_branch = get_git_branch(&path);
             let uncommitted_count = get_uncommitted_count(&path);
 
-            // Get Vercel deployment info
-            let (production_url, last_deployed, deployment_state) =
-                get_vercel_deployment_info(&path);
-
             projects.push(DashboardProject {
                 name: entry.file_name().to_string_lossy().to_string(),
                 path: path.to_string_lossy().to_string(),
@@ -718,9 +713,6 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
                 last_opened,
                 git_branch,
                 uncommitted_count,
-                production_url,
-                last_deployed,
-                deployment_state,
                 auto_accept_mode,
                 hide_main_branch_warning,
                 is_external: false,
@@ -765,8 +757,6 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
 
                 let git_branch = get_git_branch(&path);
                 let uncommitted_count = get_uncommitted_count(&path);
-                let (production_url, last_deployed, deployment_state) =
-                    get_vercel_deployment_info(&path);
 
                 projects.push(DashboardProject {
                     name,
@@ -775,9 +765,6 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
                     last_opened,
                     git_branch,
                     uncommitted_count,
-                    production_url,
-                    last_deployed,
-                    deployment_state,
                     auto_accept_mode,
                     hide_main_branch_warning,
                     is_external: true,
@@ -853,26 +840,6 @@ pub async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, String> {
             Ok(pages)
         }
     }
-}
-
-#[tauri::command]
-pub async fn check_sanity_installed(project_path: String) -> Result<bool, String> {
-    let path = validate_project_path(&project_path)?;
-
-    if path.join("sanity.config.ts").exists() || path.join("sanity.config.js").exists() {
-        return Ok(true);
-    }
-
-    let pkg_path = path.join("package.json");
-    if pkg_path.exists() {
-        if let Ok(contents) = std::fs::read_to_string(&pkg_path) {
-            if contents.contains("\"sanity\"") || contents.contains("\"next-sanity\"") {
-                return Ok(true);
-            }
-        }
-    }
-
-    Ok(false)
 }
 
 /// Opens a folder in Finder (macOS)
@@ -997,6 +964,13 @@ pub async fn mark_project_opened(project_path: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to write project metadata: {}", e))?;
 
     Ok(())
+}
+
+/// Checks whether a project has a `.vercel/project.json` config file.
+#[tauri::command]
+pub async fn has_vercel_config(project_path: String) -> Result<bool, String> {
+    let project = validate_project_path(&project_path)?;
+    Ok(project.join(".vercel").join("project.json").exists())
 }
 
 /// Gets the branch prefix username preference (defaults to true if not set)

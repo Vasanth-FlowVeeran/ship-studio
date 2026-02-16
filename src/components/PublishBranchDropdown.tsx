@@ -8,30 +8,17 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import { ProjectGitHubStatus } from '../lib/github';
-import { ProjectVercelStatus } from '../lib/vercel';
-import { publishBranch, getDeploymentStatus } from '../lib/branches';
-import {
-  ChevronIcon,
-  BranchIcon,
-  ExternalLinkIcon,
-  SuccessIcon,
-  ErrorIcon,
-  SpinnerIcon,
-  VercelIcon,
-} from './icons';
+import { publishBranch } from '../lib/branches';
+import { ChevronIcon, BranchIcon, SuccessIcon, ErrorIcon, SpinnerIcon } from './icons';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { logger } from '../lib/logger';
-import { ExponentialPoller } from '../lib/polling';
 
 interface PublishBranchDropdownProps {
   /** Current branch name */
   currentBranch: string;
   /** Project's GitHub connection status */
   projectGithubStatus: ProjectGitHubStatus | null;
-  /** Project's Vercel connection status */
-  projectVercelStatus: ProjectVercelStatus | null;
   /** Absolute path to the project */
   projectPath: string;
   /** Whether there are uncommitted changes or unpushed commits */
@@ -65,9 +52,6 @@ interface PublishBranchDropdownProps {
 type PublishState =
   | { status: 'idle' }
   | { status: 'publishing' }
-  | { status: 'deploying'; startTime: number }
-  | { status: 'deployed'; url: string | null; duration: number }
-  | { status: 'deploy_error'; duration: number }
   | { status: 'success' }
   | {
       status: 'error';
@@ -78,7 +62,6 @@ type PublishState =
 export function PublishBranchDropdown({
   currentBranch,
   projectGithubStatus,
-  projectVercelStatus,
   projectPath,
   hasChangesToSync,
   onStatusChange,
@@ -93,42 +76,11 @@ export function PublishBranchDropdown({
 }: PublishBranchDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [publishState, setPublishState] = useState<PublishState>({ status: 'idle' });
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hasShownToastRef = useRef(false);
 
   const hasGitHubRepo =
     projectGithubStatus?.status === 'connected' && projectGithubStatus?.github_repo;
-  const hasVercel = projectVercelStatus?.status === 'connected';
   const isMainBranch = currentBranch === 'main' || currentBranch === 'master';
-
-  // Debug logging for Vercel status
-  useEffect(() => {
-    if (projectVercelStatus) {
-      logger.debug('PublishBranchDropdown: Vercel status received', {
-        status: projectVercelStatus.status,
-        project_name: projectVercelStatus.project_name,
-        vercel_org: projectVercelStatus.vercel_org,
-        production_url: projectVercelStatus.production_url,
-        staging_url: projectVercelStatus.staging_url,
-        hasVercel,
-        willShowLiveSites:
-          hasVercel && (projectVercelStatus.production_url || projectVercelStatus.staging_url),
-      });
-    } else {
-      logger.debug('PublishBranchDropdown: No Vercel status available');
-    }
-  }, [projectVercelStatus, hasVercel]);
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
 
   // Track previous forceOpen value to detect true→false transitions
   const prevForceOpenRef = useRef<boolean | undefined>(undefined);
@@ -153,120 +105,12 @@ export function PublishBranchDropdown({
     }
   }, [forceOpen, hasGitHubRepo, onForceOpenHandled]);
 
-  // Poll deployment status when in deploying state (with exponential backoff)
-  useEffect(() => {
-    if (publishState.status !== 'deploying' || !hasVercel) return;
-
-    const startTime = publishState.startTime;
-    logger.info('Starting deployment polling', { projectPath, startTime });
-
-    // Update elapsed time every second
-    timerRef.current = setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
-
-    // Create poller with exponential backoff
-    const poller = new ExponentialPoller(
-      async () => {
-        // Timeout after 5 minutes - give up and show success without URL
-        const elapsed = Date.now() - startTime;
-        if (elapsed > 5 * 60 * 1000) {
-          logger.warn('Deployment polling timeout', { elapsed });
-          throw new Error('TIMEOUT');
-        }
-
-        // Pass startTime to filter out deployments created before our push
-        const status = await getDeploymentStatus(projectPath, startTime);
-        return status;
-      },
-      (result) => {
-        if (result.error) {
-          if (result.error.message === 'TIMEOUT') {
-            const duration = Math.floor((Date.now() - startTime) / 1000);
-            setPublishState({ status: 'deployed', url: null, duration });
-            poller.stop();
-            if (timerRef.current) clearInterval(timerRef.current);
-          }
-          // Other errors - continue polling with backoff
-          return;
-        }
-
-        const status = result.data;
-        logger.debug('Deployment status poll', { status, attempt: result.attempt });
-
-        if (status) {
-          // Only treat as READY if we have a URL (confirms it's the new deployment)
-          if (status.state === 'READY' && status.url) {
-            logger.info('Deployment ready', { url: status.url });
-            const duration = Math.floor((Date.now() - startTime) / 1000);
-            setPublishState({ status: 'deployed', url: status.url, duration });
-            poller.stop();
-            if (timerRef.current) clearInterval(timerRef.current);
-            // Prevent duplicate toasts from race condition
-            if (!hasShownToastRef.current) {
-              hasShownToastRef.current = true;
-              onToast?.(`Deployed in ${duration}s`, 'success');
-            }
-          } else if (status.state === 'ERROR' || status.state === 'CANCELED') {
-            logger.error('Deployment failed', { state: status.state });
-            const duration = Math.floor((Date.now() - startTime) / 1000);
-            setPublishState({ status: 'deploy_error', duration });
-            poller.stop();
-            if (timerRef.current) clearInterval(timerRef.current);
-            // Prevent duplicate toasts from race condition
-            if (!hasShownToastRef.current) {
-              hasShownToastRef.current = true;
-              onToast?.('Deployment failed', 'error');
-            }
-          }
-        }
-      },
-      {
-        initialInterval: 2000, // Start checking every 2s
-        maxInterval: 15000, // Back off to 15s max
-        multiplier: 1.5, // Gradual backoff
-        jitter: true, // Prevent thundering herd
-        name: 'deployment-status',
-      }
-    );
-
-    // Store reference for cleanup
-    pollingRef.current = { clear: () => poller.stop() } as unknown as ReturnType<
-      typeof setInterval
-    >;
-    poller.start();
-
-    return () => {
-      poller.stop();
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [publishState, hasVercel, projectPath, onToast]);
-
   // Close dropdown when clicking outside
   const closeDropdown = useCallback(() => {
     setIsOpen(false);
     onModalClose?.();
   }, [onModalClose]);
   useClickOutside(dropdownRef, closeDropdown, isOpen, excludeClickOutsideSelector);
-
-  // Generate preview URL for branch
-  const getPreviewUrl = (): string | null => {
-    if (!hasVercel || !projectVercelStatus?.production_url) {
-      return null;
-    }
-    if (isMainBranch) {
-      return `https://${projectVercelStatus.production_url}`;
-    }
-    // For feature branches, Vercel creates preview URLs
-    // Format: project-branch-name.vercel.app
-    const projectName =
-      projectVercelStatus.project_name || projectGithubStatus?.github_repo?.split('/')[1];
-    if (projectName) {
-      const branchSlug = currentBranch.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
-      return `https://${projectName}-git-${branchSlug}.vercel.app`;
-    }
-    return null;
-  };
 
   const handlePublish = async () => {
     logger.info('Starting publish', { branch: currentBranch, isMainBranch, projectPath });
@@ -284,18 +128,7 @@ export function PublishBranchDropdown({
       logger.info('Publish succeeded', { branch: currentBranch });
       onToast?.(isMainBranch ? 'Pushed to GitHub!' : 'Changes synced to GitHub!', 'success');
       onStatusChange();
-
-      // If Vercel is connected, start tracking deployment
-      if (hasVercel) {
-        logger.debug('Starting Vercel deployment tracking');
-        // Give Vercel a moment to register the deployment
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        setElapsedSeconds(0);
-        hasShownToastRef.current = false; // Reset for new deployment
-        setPublishState({ status: 'deploying', startTime: Date.now() });
-      } else {
-        setPublishState({ status: 'success' });
-      }
+      setPublishState({ status: 'success' });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       let errorType: 'push_rejected' | 'auth_error' | 'merge_conflict' | 'generic' = 'generic';
@@ -326,15 +159,6 @@ export function PublishBranchDropdown({
     setPublishState({ status: 'idle' });
     onModalClose?.();
   };
-
-  // Vercel URLs
-  const vercelOrg = projectVercelStatus?.vercel_org;
-  const vercelProjectName = projectVercelStatus?.project_name;
-  const vercelDashboardUrl =
-    vercelOrg && vercelProjectName
-      ? `https://vercel.com/${vercelOrg}/${vercelProjectName}/deployments`
-      : null;
-  const previewUrl = getPreviewUrl();
 
   // Still checking GitHub status - show loading state
   if (projectGithubStatus === null) {
@@ -367,14 +191,6 @@ export function PublishBranchDropdown({
   // Check if there are changes to sync
   const canSync = hasChangesToSync || isPublishing || publishState.status !== 'idle';
 
-  // Get live site URLs
-  const productionUrl = projectVercelStatus?.production_url
-    ? `https://${projectVercelStatus.production_url}`
-    : null;
-  const stagingUrl = projectVercelStatus?.staging_url
-    ? `https://${projectVercelStatus.staging_url}`
-    : null;
-
   return (
     <div className="publish-dropdown" ref={dropdownRef} data-education-id="publish-button">
       <button
@@ -395,110 +211,12 @@ export function PublishBranchDropdown({
 
       {isOpen && (
         <div className="publish-dropdown-menu">
-          {/* Deploying State - Vercel build in progress */}
-          {publishState.status === 'deploying' && (
-            <>
-              <div className="publish-deploying">
-                <SpinnerIcon />
-                <span>Deploying to Vercel...</span>
-                <span className="publish-elapsed">{elapsedSeconds}s</span>
-              </div>
-              <div className="publish-deploying-message">
-                Your changes were pushed to GitHub.
-                <br />
-                Waiting for Vercel build to complete.
-              </div>
-              <div className="publish-actions publish-actions-center">
-                <button className="publish-done" onClick={handleDone}>
-                  Close
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Deployed State - Vercel build complete */}
-          {publishState.status === 'deployed' && (
-            <>
-              <div className="publish-success">
-                <SuccessIcon />
-                <span>Synced!</span>
-                <span className="publish-elapsed">{publishState.duration}s</span>
-              </div>
-              <div className="publish-deployed-message">
-                Your changes are live.{' '}
-                {!isMainBranch && 'Keep working, or create a pull request when ready.'}
-              </div>
-              {publishState.url && (
-                <div className="publish-deployed-url">
-                  <span className="publish-url-text">
-                    {publishState.url.replace('https://', '')}
-                  </span>
-                  <div className="publish-url-actions">
-                    <button
-                      className="publish-url-btn"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(publishState.url!);
-                        onToast?.('URL copied', 'success');
-                      }}
-                      title="Copy URL"
-                    >
-                      Copy
-                    </button>
-                    <button
-                      className="publish-url-btn"
-                      onClick={() => void openUrl(publishState.url!)}
-                      title="Open in browser"
-                    >
-                      Open
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="publish-actions publish-actions-center">
-                <button className="publish-done" onClick={handleDone}>
-                  Done
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Deploy Error State */}
-          {publishState.status === 'deploy_error' && (
-            <>
-              <div className="publish-error-header">
-                <ErrorIcon />
-                <span>Deployment failed</span>
-                <span className="publish-elapsed">{publishState.duration}s</span>
-              </div>
-              <div className="publish-error-message">
-                The Vercel build failed. Check the Vercel dashboard for details.
-              </div>
-              {vercelDashboardUrl && (
-                <div className="publish-success-vercel">
-                  <button
-                    className="publish-vercel-button"
-                    onClick={() => void openUrl(vercelDashboardUrl)}
-                  >
-                    <VercelIcon />
-                    View Build Logs
-                    <ExternalLinkIcon />
-                  </button>
-                </div>
-              )}
-              <div className="publish-actions publish-actions-center">
-                <button className="publish-done" onClick={handleDone}>
-                  Done
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Success State (no Vercel) */}
+          {/* Success State */}
           {publishState.status === 'success' && (
             <>
               <div className="publish-success">
                 <SuccessIcon />
-                <span>{isMainBranch ? 'Published to production' : 'Changes synced'}</span>
+                <span>{isMainBranch ? 'Published!' : 'Changes synced'}</span>
               </div>
               <div className="publish-actions publish-actions-center">
                 <button className="publish-done" onClick={handleDone}>
@@ -576,15 +294,6 @@ export function PublishBranchDropdown({
                     This will save your work to GitHub so others can see it.
                   </div>
                 )}
-
-                {hasVercel && previewUrl && !isMainBranch && (
-                  <div className="publish-branch-url">
-                    <div className="publish-branch-url-label">Preview URL:</div>
-                    <div className="publish-branch-url-value">
-                      {previewUrl.replace('https://', '')}
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="publish-actions">
@@ -602,49 +311,13 @@ export function PublishBranchDropdown({
             </>
           )}
 
-          {/* Synced State - show live sites */}
+          {/* Synced State */}
           {publishState.status === 'idle' && !canSync && (
             <>
               <div className="publish-success">
                 <SuccessIcon />
                 <span>All changes synced</span>
               </div>
-
-              {/* Live Domains */}
-              {hasVercel && (productionUrl || stagingUrl) && (
-                <div className="publish-live-sites">
-                  <div className="publish-live-sites-header">Live Domains</div>
-                  {productionUrl && (
-                    <button
-                      className="publish-live-site-link"
-                      onClick={() => void openUrl(productionUrl)}
-                    >
-                      <span className="publish-live-site-badge publish-live-site-badge-prod">
-                        Prod
-                      </span>
-                      <span className="publish-live-site-url">
-                        {projectVercelStatus?.production_url}
-                      </span>
-                      <ExternalLinkIcon />
-                    </button>
-                  )}
-                  {stagingUrl && (
-                    <button
-                      className="publish-live-site-link"
-                      onClick={() => void openUrl(stagingUrl)}
-                    >
-                      <span className="publish-live-site-badge publish-live-site-badge-preview">
-                        Preview
-                      </span>
-                      <span className="publish-live-site-url">
-                        {projectVercelStatus?.staging_url}
-                      </span>
-                      <ExternalLinkIcon />
-                    </button>
-                  )}
-                </div>
-              )}
-
               <div className="publish-actions publish-actions-center">
                 <button className="publish-done" onClick={handleDone}>
                   Done

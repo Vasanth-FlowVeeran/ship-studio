@@ -202,11 +202,6 @@
   color: var(--text-secondary);
 }
 
-.url-text.url-no-vercel {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
 .url-link {
   padding: 2px;
   background: none;
@@ -257,11 +252,6 @@
 
 .deployment-state.state-none {
   color: var(--text-muted);
-}
-
-.deployment-state.state-no-vercel {
-  color: var(--text-muted);
-  font-style: italic;
 }
 
 .deployment-time {
@@ -493,40 +483,6 @@
   opacity: 0.5;
 }
 
-.publish-success-vercel {
-  padding: 0 16px 12px;
-}
-
-.publish-vercel-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 16px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.publish-vercel-button:hover {
-  background: var(--border);
-}
-
-.publish-vercel-button svg:first-child {
-  opacity: 0.8;
-}
-
-.publish-vercel-button svg:last-child {
-  opacity: 0.5;
-  margin-left: 2px;
-}
-
 .publish-success-sites {
   display: flex;
   flex-direction: column;
@@ -724,22 +680,6 @@
   opacity: 1;
 }
 
-.publish-live-site-vercel {
-  margin-top: 4px;
-  background: transparent;
-  border-color: transparent;
-}
-
-.publish-live-site-vercel:hover {
-  background: var(--bg-secondary);
-  border-color: var(--border);
-}
-
-.publish-live-site-vercel .publish-live-site-url {
-  font-family: inherit;
-  color: var(--text-secondary);
-}
-
 .publish-success-actions {
   display: flex;
   flex-wrap: wrap;
@@ -928,6 +868,10 @@
 .toast-close:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+.toast.toast-info .toast-icon {
+  color: var(--action);
 }
 
 @keyframes toast-slide-in {

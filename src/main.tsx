@@ -14,6 +14,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { exposeReactGlobals } from './lib/plugin-loader';
+import { exposePluginContextRef } from './contexts/PluginContext';
+
+// Expose React globals and context ref for plugins before any rendering
+exposeReactGlobals(React, ReactDOM);
+exposePluginContextRef();
 
 // Parse project path from URL if present (for project windows)
 const urlParams = new URLSearchParams(window.location.search);

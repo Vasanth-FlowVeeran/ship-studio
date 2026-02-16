@@ -53,12 +53,6 @@ pub struct DashboardProject {
     pub git_branch: Option<String>,
     /// Number of uncommitted changes (staged + unstaged)
     pub uncommitted_count: Option<u32>,
-    /// Production URL from Vercel
-    pub production_url: Option<String>,
-    /// Relative time string for last deployment (e.g., "2h ago")
-    pub last_deployed: Option<String>,
-    /// Deployment state: READY, BUILDING, ERROR, QUEUED, CANCELED
-    pub deployment_state: Option<String>,
     /// Whether to run Claude in auto-accept mode
     pub auto_accept_mode: Option<bool>,
     /// Whether to hide the main branch warning banner
@@ -233,102 +227,16 @@ pub struct BrowserInfo {
     pub name: String,
 }
 
-// ============ Claude Integration ============
+// ============ Agent CLI Integration ============
 
 #[derive(Serialize)]
-pub struct ClaudeCliStatus {
+pub struct AgentCliStatus {
     pub installed: bool,
     pub version: Option<String>,
 }
 
-// ============ Vercel Integration ============
-
-#[derive(Serialize)]
-pub struct VercelCliStatus {
-    pub installed: bool,
-    pub authenticated: bool,
-}
-
-/// A Vercel team/organization
-#[derive(Serialize)]
-pub struct VercelTeam {
-    pub id: String,
-    pub name: String,
-    pub is_current: bool,
-}
-
-/// A Vercel project
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct VercelProject {
-    pub id: String,
-    pub name: String,
-    pub org_id: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeployToVercelOptions {
-    pub project_path: String,
-    pub project_name: String,
-    pub github_repo: Option<String>,
-    /// Team/scope ID to deploy under (optional, uses current team if not provided)
-    pub scope: Option<String>,
-}
-
-/// Vercel connection status - verified against Vercel API
-#[derive(Serialize)]
-pub struct ProjectVercelStatus {
-    /// "not-linked" | "not-git-connected" | "connected"
-    pub status: String,
-    /// Vercel project name
-    pub project_name: Option<String>,
-    /// Vercel org/team slug for dashboard URLs
-    pub vercel_org: Option<String>,
-    /// Production URL (shortest alias, could be custom domain)
-    pub production_url: Option<String>,
-    /// Staging URL (contains -git-staging-)
-    pub staging_url: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LinkToVercelOptions {
-    pub project_path: String,
-    pub github_repo: String, // e.g., "username/repo-name"
-}
-
-#[derive(Serialize)]
-pub struct VercelDeployment {
-    pub uid: String,
-    pub url: String,
-    pub state: String, // "READY", "BUILDING", "ERROR", "QUEUED", "CANCELED"
-    pub target: Option<String>, // "production" or null for preview
-    pub created_at: u64, // Unix timestamp in ms
-}
-
-#[derive(Serialize)]
-pub struct VercelDeploymentStatus {
-    pub staging: Option<VercelDeployment>,
-    pub production: Option<VercelDeployment>,
-    pub preview_url: Option<String>,
-    pub production_url: Option<String>,
-}
-
-/// Deployment status from Vercel
-#[derive(Serialize)]
-pub struct DeploymentStatus {
-    /// Current state: BUILDING, QUEUED, READY, ERROR, CANCELED
-    pub state: String,
-    /// Deployment URL (e.g., https://project-xxx.vercel.app)
-    pub url: Option<String>,
-    /// Unix timestamp (ms) when deployment was created
-    #[serde(rename = "createdAt")]
-    pub created_at: Option<u64>,
-    /// Unix timestamp (ms) when deployment became ready
-    #[serde(rename = "readyAt")]
-    pub ready_at: Option<u64>,
-}
+/// Backward-compatible alias
+pub type ClaudeCliStatus = AgentCliStatus;
 
 // ============ GitHub Integration ============
 
@@ -697,12 +605,11 @@ pub struct SetupItemInfo {
     pub error_message: Option<String>,
 }
 
-/// Optional authentication status (GitHub and Vercel can be skipped during onboarding)
+/// Optional authentication status (GitHub can be skipped during onboarding)
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionalAuths {
     pub github_authenticated: bool,
-    pub vercel_authenticated: bool,
 }
 
 /// Full setup status response
@@ -712,6 +619,8 @@ pub struct FullSetupStatus {
     pub all_ready: bool,
     pub items: Vec<SetupItemInfo>,
     pub optional_auths: OptionalAuths,
+    /// Agent IDs that are fully set up (installed + authenticated)
+    pub detected_agents: Vec<String>,
 }
 
 /// Quick setup check result (fast binary/file existence only)
@@ -735,6 +644,9 @@ pub struct AppState {
     /// Compact mode preferences
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compact_mode: Option<CompactModePreferences>,
+    /// Default AI agent ID (e.g., "claude-code" or "codex"). None falls back to Claude Code.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_agent_id: Option<String>,
 }
 
 // ============ Compact Mode ============

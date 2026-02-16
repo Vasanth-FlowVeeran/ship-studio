@@ -427,28 +427,29 @@ pub async fn kill_all_pty() -> Result<u32, String> {
     Ok(count)
 }
 
-/// Clean up orphaned Claude and dev server processes.
+/// Clean up orphaned agent and dev server processes.
 ///
-/// This kills any Claude or next-server processes that have become orphaned
+/// This kills any agent or next-server processes that have become orphaned
 /// (parent PID is 1, meaning their parent process died).
 #[tauri::command]
 pub async fn cleanup_orphaned_processes() -> Result<(), String> {
     #[cfg(unix)]
     {
-        // Kill orphaned claude processes (parent is init/launchd - PID 1)
-        let _ = create_command("sh")
-            .args([
-                "-c",
+        // Kill orphaned processes for ALL agents (not just the active one)
+        for agent in crate::agent::ALL_AGENTS {
+            let kill_script = format!(
                 r#"
-                for pid in $(pgrep -x claude 2>/dev/null); do
-                    ppid=$(ps -o ppid= -p $pid 2>/dev/null | tr -d ' ')
-                    if [ "$ppid" = "1" ]; then
-                        kill $pid 2>/dev/null
-                    fi
-                done
-            "#,
-            ])
-            .output();
+                    for pid in $(pgrep -x {} 2>/dev/null); do
+                        ppid=$(ps -o ppid= -p $pid 2>/dev/null | tr -d ' ')
+                        if [ "$ppid" = "1" ]; then
+                            kill $pid 2>/dev/null
+                        fi
+                    done
+                "#,
+                agent.process_name
+            );
+            let _ = create_command("sh").args(["-c", &kill_script]).output();
+        }
 
         // Also kill orphaned node processes running next-server (from dev server)
         let _ = create_command("sh")

@@ -29,7 +29,7 @@ export interface Project {
 
 /**
  * Extended project information for the dashboard view.
- * Includes git status, deployment info, and metadata.
+ * Includes git status and metadata.
  */
 export interface DashboardProject {
   /** Project folder name */
@@ -44,12 +44,6 @@ export interface DashboardProject {
   git_branch: string | null;
   /** Number of uncommitted changes (staged + unstaged) */
   uncommitted_count: number | null;
-  /** Production URL from Vercel */
-  production_url: string | null;
-  /** Relative time string for last deployment (e.g., "2h ago") */
-  last_deployed: string | null;
-  /** Deployment state: READY, BUILDING, ERROR, QUEUED, CANCELED */
-  deployment_state: string | null;
   /** Whether to run Claude in auto-accept mode */
   auto_accept_mode: boolean | null;
   /** Whether to hide the main branch warning banner */

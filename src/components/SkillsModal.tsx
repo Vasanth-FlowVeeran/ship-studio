@@ -11,14 +11,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { CloseIcon } from './icons';
 import {
-  listClaudeSkills,
-  ClaudeSkill,
+  type ClaudeSkill,
   checkSkillsCli,
   searchSkills,
   installSkill,
   removeSkill,
-  SkillSearchResult,
+  type SkillSearchResult,
 } from '../lib/skills';
+import { listAgentSkills } from '../lib/claude';
 
 type Tab = 'installed' | 'add';
 type ScopeFilter = 'all' | 'user' | 'project';
@@ -28,9 +28,17 @@ interface SkillsModalProps {
   isOpen: boolean;
   onClose: () => void;
   projectPath?: string;
+  agentId?: string;
+  agentDisplayName?: string;
 }
 
-export function SkillsModal({ isOpen, onClose, projectPath }: SkillsModalProps) {
+export function SkillsModal({
+  isOpen,
+  onClose,
+  projectPath,
+  agentId,
+  agentDisplayName = 'Claude',
+}: SkillsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>('installed');
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
   const [skills, setSkills] = useState<ClaudeSkill[]>([]);
@@ -64,7 +72,7 @@ export function SkillsModal({ isOpen, onClose, projectPath }: SkillsModalProps) 
   const fetchSkills = useCallback(async () => {
     setIsLoadingSkills(true);
     try {
-      const result = await listClaudeSkills(projectPath);
+      const result = await listAgentSkills(projectPath, agentId);
       setSkills(result);
     } catch (err) {
       console.error('Failed to load skills:', err);
@@ -72,7 +80,7 @@ export function SkillsModal({ isOpen, onClose, projectPath }: SkillsModalProps) 
     } finally {
       setIsLoadingSkills(false);
     }
-  }, [projectPath]);
+  }, [projectPath, agentId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -117,7 +125,7 @@ export function SkillsModal({ isOpen, onClose, projectPath }: SkillsModalProps) 
   const handleInstall = async (pkg: string) => {
     setInstallingPackage(pkg);
     try {
-      await installSkill(pkg, installScope, projectPath);
+      await installSkill(pkg, installScope, projectPath, agentId);
       // Refresh installed skills and switch to installed tab
       await fetchSkills();
       setActiveTab('installed');
@@ -135,7 +143,7 @@ export function SkillsModal({ isOpen, onClose, projectPath }: SkillsModalProps) 
     setRemovingSkill(skillKey);
     try {
       // Use the plugin as the package identifier
-      await removeSkill(skill.plugin, skill.scope as 'user' | 'project', projectPath);
+      await removeSkill(skill.plugin, skill.scope as 'user' | 'project', projectPath, agentId);
       // Refresh installed skills
       await fetchSkills();
     } catch (err) {
@@ -158,7 +166,7 @@ export function SkillsModal({ isOpen, onClose, projectPath }: SkillsModalProps) 
     <div className="modal-overlay" onMouseDown={onClose}>
       <div className="modal skills-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="skills-modal-header">
-          <h3>Skills</h3>
+          <h3>Skills for {agentDisplayName}</h3>
           <button className="skills-close-btn" onClick={onClose}>
             <CloseIcon size={16} />
           </button>
@@ -265,7 +273,7 @@ export function SkillsModal({ isOpen, onClose, projectPath }: SkillsModalProps) 
                       <input
                         type="text"
                         className="skills-search-input"
-                        placeholder="What do you want Claude to do?"
+                        placeholder={`What do you want ${agentDisplayName} to do?`}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyPress={handleSearchKeyPress}

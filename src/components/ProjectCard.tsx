@@ -9,7 +9,7 @@
  */
 
 import { DashboardProject } from '../lib/project';
-import { BranchIcon, ExternalLinkIcon, CodeIcon, ZapIcon, NewWindowIcon } from './icons';
+import { BranchIcon, CodeIcon, NewWindowIcon } from './icons';
 import { ProjectCardMenu } from './ProjectCardMenu';
 
 /** Props for the ProjectCard component */
@@ -22,12 +22,8 @@ interface ProjectCardProps {
   onSelect: () => void;
   /** Callback when delete button is clicked */
   onDelete: () => void;
-  /** Callback when auto-accept mode is toggled */
-  onToggleAutoAccept: (enabled: boolean) => void;
   /** Callback when main branch warning is toggled */
   onToggleMainBranchWarning: (hidden: boolean) => void;
-  /** Callback to open the production URL in browser (if deployed) */
-  onOpenSite?: () => void;
   /** Callback to open the project in VS Code or Cursor */
   onOpenIde?: () => void;
   /** Callback to move project to a folder */
@@ -47,9 +43,7 @@ export function ProjectCard({
   thumbnailData,
   onSelect,
   onDelete,
-  onToggleAutoAccept,
   onToggleMainBranchWarning,
-  onOpenSite,
   onOpenIde,
   onMoveToFolder,
   onExportAsTemplate,
@@ -58,7 +52,6 @@ export function ProjectCard({
   onRemove,
 }: ProjectCardProps) {
   const hasChanges = project.uncommitted_count !== null && project.uncommitted_count > 0;
-  const autoAcceptMode = project.auto_accept_mode === true;
   const hideMainBranchWarning = project.hide_main_branch_warning === true;
 
   return (
@@ -98,18 +91,6 @@ export function ProjectCard({
                 <NewWindowIcon size={16} />
               </button>
             )}
-            {project.production_url && onOpenSite && (
-              <button
-                className="quick-action-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenSite();
-                }}
-                title="Open live site"
-              >
-                <ExternalLinkIcon size={16} />
-              </button>
-            )}
             {onOpenIde && (
               <button
                 className="quick-action-btn"
@@ -129,11 +110,6 @@ export function ProjectCard({
         <div className="project-card-details" onClick={onSelect} style={{ cursor: 'pointer' }}>
           <div className="project-card-name-row">
             <span className="project-card-name">{project.name}</span>
-            {autoAcceptMode && (
-              <span className="project-card-auto-accept-badge" title="Auto-accept mode enabled">
-                <ZapIcon size={10} />
-              </span>
-            )}
           </div>
           <div className="project-card-meta">
             {project.git_branch && (
@@ -146,24 +122,8 @@ export function ProjectCard({
               <span className="project-card-changes">{project.uncommitted_count} uncommitted</span>
             )}
           </div>
-          <div className="project-card-deployment">
-            {project.deployment_state ? (
-              <>
-                <span className={`status-dot status-${project.deployment_state.toLowerCase()}`} />
-                {project.production_url ? (
-                  <span className="project-card-url">{formatUrl(project.production_url)}</span>
-                ) : (
-                  <span className="project-card-deploy-time">{project.last_deployed}</span>
-                )}
-              </>
-            ) : (
-              <span className="project-card-not-deployed">Not deployed</span>
-            )}
-          </div>
         </div>
         <ProjectCardMenu
-          autoAcceptMode={autoAcceptMode}
-          onToggleAutoAccept={onToggleAutoAccept}
           hideMainBranchWarning={hideMainBranchWarning}
           onToggleMainBranchWarning={onToggleMainBranchWarning}
           onMoveToFolder={onMoveToFolder}
@@ -175,8 +135,4 @@ export function ProjectCard({
       </div>
     </div>
   );
-}
-
-function formatUrl(url: string): string {
-  return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }

@@ -45,11 +45,6 @@ export const educationContent: Record<string, EducationItem> = {
     description:
       'GitHub stores all your project files online and keeps a history of every change. Connect to back up your work and collaborate with others.',
   },
-  'vercel-button': {
-    title: 'Website Hosting',
-    description:
-      'Vercel hosts your website so people can visit it online. Every time you publish, your site updates automatically.',
-  },
   'env-button': {
     title: 'Secret Settings',
     description:

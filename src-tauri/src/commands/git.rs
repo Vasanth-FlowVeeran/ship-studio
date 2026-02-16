@@ -116,11 +116,11 @@ pub fn get_ahead_behind(path: &std::path::Path, branch: &str, compare_to: &str) 
 
 // ============ Tauri Commands ============
 
-/// Checks if required tools (node, npm, git, gh, vercel, claude) are installed.
+/// Checks if required tools (node, npm, git, gh, claude) are installed.
 #[tauri::command]
 #[instrument(name = "check_prerequisites")]
 pub async fn check_prerequisites() -> Vec<PrerequisiteCheck> {
-    let commands = vec!["node", "npm", "git", "gh", "vercel", "claude"];
+    let commands = vec!["node", "npm", "git", "gh", "claude"];
     let mut results = Vec::new();
 
     for cmd in commands {

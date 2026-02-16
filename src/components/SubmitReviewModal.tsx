@@ -19,8 +19,8 @@ interface SubmitReviewModalProps {
   branchName: string;
   /** Available base branches */
   baseBranches: string[];
-  /** Whether Claude CLI is available for AI generation */
-  claudeAvailable: boolean;
+  /** Whether the AI agent CLI is available for AI generation */
+  aiAvailable: boolean;
   /** Callback when PR is created */
   onSuccess: (prUrl: string) => void;
   /** Callback to close modal */
@@ -33,7 +33,7 @@ export function SubmitReviewModal({
   projectPath,
   branchName,
   baseBranches,
-  claudeAvailable,
+  aiAvailable,
   onSuccess,
   onClose,
   onToast,
@@ -133,7 +133,7 @@ export function SubmitReviewModal({
       <div className="submit-review-content" onClick={(e) => e.stopPropagation()}>
         <div className="submit-review-header">
           <h2>Submit for Review</h2>
-          {claudeAvailable && (
+          {aiAvailable && (
             <button
               className="submit-review-generate-btn"
               onClick={() => void handleGenerate()}

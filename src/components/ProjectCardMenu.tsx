@@ -2,26 +2,18 @@
  * ProjectCardMenu component - dropdown menu for project card actions.
  *
  * Provides options for:
- * - Toggling auto-accept mode (Claude runs with --dangerously-skip-permissions)
+ * - Toggling main branch warning
+ * - Moving to folder / exporting as template
  * - Deleting the project
- *
- * Shows a first-time warning when enabling auto-accept mode.
  *
  * @module components/ProjectCardMenu
  */
 
 import { useState, useRef, useCallback } from 'react';
-import { ZapIcon, TrashIcon, FolderIcon, WarningIcon, DownloadIcon, CloseIcon } from './icons';
+import { TrashIcon, FolderIcon, WarningIcon, DownloadIcon, CloseIcon } from './icons';
 import { useClickOutside } from '../hooks/useClickOutside';
 
-/** Local storage key for tracking if user has seen the auto-accept warning */
-const AUTO_ACCEPT_WARNING_SEEN_KEY = 'ship-studio-auto-accept-warning-seen';
-
 interface ProjectCardMenuProps {
-  /** Whether auto-accept mode is currently enabled */
-  autoAcceptMode: boolean;
-  /** Callback when auto-accept mode is toggled */
-  onToggleAutoAccept: (enabled: boolean) => void;
   /** Whether main branch warning is hidden */
   hideMainBranchWarning: boolean;
   /** Callback when main branch warning toggle is clicked */
@@ -39,8 +31,6 @@ interface ProjectCardMenuProps {
 }
 
 export function ProjectCardMenu({
-  autoAcceptMode,
-  onToggleAutoAccept,
   hideMainBranchWarning,
   onToggleMainBranchWarning,
   onMoveToFolder,
@@ -50,38 +40,10 @@ export function ProjectCardMenu({
   onRemove,
 }: ProjectCardMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [showWarning, setShowWarning] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const closeMenu = useCallback(() => setIsOpen(false), []);
   useClickOutside(menuRef, closeMenu, isOpen);
-
-  const handleToggleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (!autoAcceptMode) {
-      // Check if user has seen the warning before
-      const hasSeenWarning = localStorage.getItem(AUTO_ACCEPT_WARNING_SEEN_KEY) === 'true';
-      if (!hasSeenWarning) {
-        setShowWarning(true);
-        setIsOpen(false);
-        return;
-      }
-    }
-
-    onToggleAutoAccept(!autoAcceptMode);
-    setIsOpen(false);
-  };
-
-  const handleWarningAccept = () => {
-    localStorage.setItem(AUTO_ACCEPT_WARNING_SEEN_KEY, 'true');
-    onToggleAutoAccept(true);
-    setShowWarning(false);
-  };
-
-  const handleWarningCancel = () => {
-    setShowWarning(false);
-  };
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -119,96 +81,49 @@ export function ProjectCardMenu({
   };
 
   return (
-    <>
-      <div className="project-card-menu-container" ref={menuRef}>
-        <button
-          className="project-card-menu"
-          onClick={handleMenuButtonClick}
-          title="Project options"
-        >
-          &bull;&bull;&bull;
-        </button>
+    <div className="project-card-menu-container" ref={menuRef}>
+      <button className="project-card-menu" onClick={handleMenuButtonClick} title="Project options">
+        &bull;&bull;&bull;
+      </button>
 
-        {isOpen && (
-          <div className="project-card-dropdown">
-            <button
-              className={`project-card-dropdown-item ${autoAcceptMode ? 'active' : ''}`}
-              onClick={handleToggleClick}
-            >
-              <ZapIcon size={14} />
-              <span>Auto-accept mode</span>
-              <span className={`toggle-indicator ${autoAcceptMode ? 'on' : 'off'}`}>
-                {autoAcceptMode ? 'ON' : 'OFF'}
-              </span>
+      {isOpen && (
+        <div className="project-card-dropdown">
+          <button
+            className={`project-card-dropdown-item ${!hideMainBranchWarning ? 'active' : ''}`}
+            onClick={handleToggleMainBranchWarning}
+          >
+            <WarningIcon size={14} />
+            <span>Main branch warning</span>
+            <span className={`toggle-indicator ${!hideMainBranchWarning ? 'on' : 'off'}`}>
+              {!hideMainBranchWarning ? 'ON' : 'OFF'}
+            </span>
+          </button>
+          {onMoveToFolder && (
+            <button className="project-card-dropdown-item" onClick={handleMoveToFolderClick}>
+              <FolderIcon size={14} />
+              <span>Move to folder</span>
             </button>
-            <button
-              className={`project-card-dropdown-item ${!hideMainBranchWarning ? 'active' : ''}`}
-              onClick={handleToggleMainBranchWarning}
-            >
-              <WarningIcon size={14} />
-              <span>Main branch warning</span>
-              <span className={`toggle-indicator ${!hideMainBranchWarning ? 'on' : 'off'}`}>
-                {!hideMainBranchWarning ? 'ON' : 'OFF'}
-              </span>
+          )}
+          {onExportAsTemplate && (
+            <button className="project-card-dropdown-item" onClick={handleExportAsTemplateClick}>
+              <DownloadIcon size={14} />
+              <span>Export as template</span>
             </button>
-            {onMoveToFolder && (
-              <button className="project-card-dropdown-item" onClick={handleMoveToFolderClick}>
-                <FolderIcon size={14} />
-                <span>Move to folder</span>
-              </button>
-            )}
-            {onExportAsTemplate && (
-              <button className="project-card-dropdown-item" onClick={handleExportAsTemplateClick}>
-                <DownloadIcon size={14} />
-                <span>Export as template</span>
-              </button>
-            )}
-            <div className="project-card-dropdown-divider" />
-            {isExternal && onRemove ? (
-              <button className="project-card-dropdown-item danger" onClick={handleRemoveClick}>
-                <CloseIcon size={14} />
-                <span>Remove from list</span>
-              </button>
-            ) : (
-              <button className="project-card-dropdown-item danger" onClick={handleDeleteClick}>
-                <TrashIcon size={14} />
-                <span>Delete project</span>
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Auto-accept warning modal */}
-      {showWarning && (
-        <div className="modal-overlay" onClick={handleWarningCancel}>
-          <div className="modal auto-accept-warning-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="auto-accept-warning-icon">
-              <ZapIcon size={32} />
-            </div>
-            <h3>Enable Auto-Accept Mode?</h3>
-            <p>
-              This mode allows Claude to execute commands{' '}
-              <strong>without asking for permission</strong>. Claude will be able to:
-            </p>
-            <ul className="auto-accept-warning-list">
-              <li>Read and modify any files in your project</li>
-              <li>Run shell commands automatically</li>
-              <li>Make changes without confirmation</li>
-            </ul>
-            <p className="auto-accept-warning-disclaimer">
-              By enabling this mode, you acknowledge that Ship Studio and Anthropic are{' '}
-              <strong>not liable</strong> for any unintended changes or actions taken by the AI.
-            </p>
-            <div className="modal-actions">
-              <button onClick={handleWarningCancel}>Cancel</button>
-              <button className="btn-warning" onClick={handleWarningAccept}>
-                I understand, enable it
-              </button>
-            </div>
-          </div>
+          )}
+          <div className="project-card-dropdown-divider" />
+          {isExternal && onRemove ? (
+            <button className="project-card-dropdown-item danger" onClick={handleRemoveClick}>
+              <CloseIcon size={14} />
+              <span>Remove from list</span>
+            </button>
+          ) : (
+            <button className="project-card-dropdown-item danger" onClick={handleDeleteClick}>
+              <TrashIcon size={14} />
+              <span>Delete project</span>
+            </button>
+          )}
         </div>
       )}
-    </>
+    </div>
   );
 }

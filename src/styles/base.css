@@ -147,3 +147,34 @@ button:hover {
   justify-content: center;
   padding: 10px;
 }
+
+/* Toolbar icon buttons (header actions row) */
+.toolbar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  min-height: 32px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toolbar-icon-btn:hover {
+  background: var(--border);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.toolbar-icon-btn svg {
+  color: var(--text-muted);
+}
+
+.toolbar-icon-btn:hover svg {
+  color: var(--text-secondary);
+}

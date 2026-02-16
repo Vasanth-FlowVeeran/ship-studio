@@ -479,34 +479,6 @@
 }
 
 /* Assets Button in Header */
-.assets-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  min-height: 32px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.assets-button:hover {
-  background: var(--border);
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
-.assets-button svg {
-  color: var(--text-muted);
-}
-
-.assets-button:hover svg {
-  color: var(--text-secondary);
-}
 
 /* Grid View */
 .assets-grid {

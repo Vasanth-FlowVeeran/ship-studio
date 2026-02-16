@@ -1,7 +1,7 @@
 /**
  * SetupScreen component displayed when required CLI tools are missing.
  *
- * Shows a checklist of prerequisites (node, npm, git, gh, vercel, claude)
+ * Shows a checklist of prerequisites (node, npm, git, gh, claude)
  * with their installation status. For missing tools, provides:
  * - Direct links to installation pages
  * - Homebrew/npm install commands where applicable
@@ -39,10 +39,6 @@ const INSTALL_INSTRUCTIONS: Record<string, { url: string; command?: string }> = 
   gh: {
     url: 'https://cli.github.com',
     command: 'brew install gh',
-  },
-  vercel: {
-    url: 'https://vercel.com/docs/cli',
-    command: 'npm install -g vercel',
   },
   claude: {
     url: 'https://docs.anthropic.com/en/docs/claude-code',

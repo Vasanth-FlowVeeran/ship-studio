@@ -1,16 +1,21 @@
 /**
- * Main onboarding screen that orchestrates the setup flow.
+ * Main onboarding screen that orchestrates the step-by-step setup wizard.
  *
  * Handles:
  * - Fetching and displaying setup status
+ * - Navigating between wizard steps (auto-advances past completed steps)
  * - Triggering installations and authentications
  * - Embedded terminal for interactive CLI commands
  * - Transitioning to celebration screen when complete
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { SetupChecklist } from './SetupChecklist';
+import { WizardStepIndicator } from './WizardStepIndicator';
+import { PackageManagerStep } from './steps/PackageManagerStep';
+import { GitGitHubStep } from './steps/GitGitHubStep';
+import { AgentStep } from './steps/AgentStep';
+import { HostingStep } from './steps/HostingStep';
 import { CelebrationScreen } from './CelebrationScreen';
 import { OnboardingTerminal } from './OnboardingTerminal';
 import {
@@ -19,19 +24,24 @@ import {
   getFullSetupStatus,
   checkClaudeAuthStatus,
   installPackages,
-  installVercel,
+  setDefaultAgentId,
   PKG_MGR_PACKAGES,
   TERMINAL_COMMANDS,
   USES_TERMINAL,
   SETUP_FRIENDLY_NAMES,
-  OPTIONAL_ITEMS,
+  WIZARD_STEPS,
+  WizardStepId,
+  isWizardStepComplete,
+  findFirstIncompleteStep,
+  getReadyAgentPairs,
+  isAtLeastOneAgentReady,
 } from '../../lib/setup';
+import { initDefaultAgent } from '../../lib/agent';
 import { checkGitHubCliStatus } from '../../lib/github';
-import { checkVercelCliStatus } from '../../lib/vercel';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { SlackIcon } from '../icons';
 
-type OnboardingState = 'loading' | 'setup' | 'complete';
+type OnboardingState = 'loading' | 'wizard' | 'complete';
 
 /** Configuration for the active terminal command */
 interface TerminalConfig {
@@ -47,13 +57,28 @@ interface OnboardingScreenProps {
 
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const [state, setState] = useState<OnboardingState>('loading');
+  const [currentStep, setCurrentStep] = useState<WizardStepId>('package-manager');
   const [items, setItems] = useState<SetupItem[]>([]);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [terminalConfig, setTerminalConfig] = useState<TerminalConfig | null>(null);
   const [terminalExitCode, setTerminalExitCode] = useState<number | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
   const unlistenRef = useRef<UnlistenFn | null>(null);
+
+  // Compute completed steps: only show as completed if before the current step
+  const completedSteps = useMemo(() => {
+    const set = new Set<WizardStepId>();
+    const currentIndex = WIZARD_STEPS.findIndex((s) => s.id === currentStep);
+    for (let i = 0; i < WIZARD_STEPS.length; i++) {
+      const step = WIZARD_STEPS[i];
+      if (i < currentIndex && isWizardStepComplete(step.id, items)) {
+        set.add(step.id);
+      }
+    }
+    return set;
+  }, [items, currentStep]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -64,30 +89,39 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     };
   }, []);
 
-  // Fetch initial status
+  // Fetch initial status and determine starting step
   const fetchStatus = useCallback(async () => {
     try {
       const status: FullSetupStatus = await getFullSetupStatus();
       setItems(status.items);
-      if (status.allReady) {
-        setState('complete');
-      } else {
-        setState('setup');
-      }
       setError(null);
+      return status;
     } catch (err) {
       console.warn('Failed to fetch setup status:', err);
       setError('Failed to check setup status. Please try again.');
-      setState('setup');
+      setState('wizard');
+      return null;
     }
   }, []);
 
-  // Initial fetch
+  // Initial fetch — determine which step to start on
   useEffect(() => {
-    // Intentionally not awaited - fire-and-forget on mount
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises, react-hooks/set-state-in-effect
-    fetchStatus();
-  }, [fetchStatus]);
+    const init = async () => {
+      const status = await fetchStatus();
+      if (!status) return;
+
+      const firstIncomplete = findFirstIncompleteStep(status.items);
+      if (firstIncomplete === null) {
+        // All steps complete — handle agent default and go to celebration
+        await handleAllComplete(status);
+      } else {
+        setCurrentStep(firstIncomplete);
+        setState('wizard');
+      }
+    };
+    void init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Listen for setup progress events
   useEffect(() => {
@@ -107,6 +141,17 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     };
   }, []);
 
+  // Handle all-complete: set default agent and transition to celebration
+  const handleAllComplete = useCallback(async (status: FullSetupStatus) => {
+    if (status.detectedAgents.length === 1) {
+      const agentId = status.detectedAgents[0];
+      await setDefaultAgentId(agentId);
+      initDefaultAgent(agentId);
+    }
+    // If multiple agents, they'll be asked to pick in the agent step
+    setState('complete');
+  }, []);
+
   // Update a single item's status
   const updateItemStatus = useCallback((itemId: string, updates: Partial<SetupItem>) => {
     setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
@@ -119,7 +164,6 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       if (!itemId) return;
 
       if (exitCode === 0 || exitCode === null) {
-        // Success (or process ended without explicit code) - hide terminal and refresh
         setTerminalConfig(null);
         setTerminalExitCode(null);
 
@@ -144,25 +188,13 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
             setActiveItemId(null);
             return;
           }
-        } else if (itemId === 'vercel_auth') {
-          const status = await checkVercelCliStatus();
-          if (!status.authenticated) {
-            updateItemStatus(itemId, {
-              status: 'error',
-              errorMessage: 'Authentication not completed. Click to try again.',
-            });
-            setActiveItemId(null);
-            return;
-          }
         }
 
         // Refresh full status
         await fetchStatus();
       } else {
-        // Non-zero exit code - keep terminal open so user can read the output
         setTerminalExitCode(exitCode);
 
-        // Update item status in the background
         let errorMessage = 'Command failed. Click to try again.';
         if (itemId === 'homebrew') {
           errorMessage =
@@ -201,7 +233,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   // Handle item action (install or connect)
   const handleItemAction = useCallback(
     async (itemId: string) => {
-      if (activeItemId || terminalConfig) return; // Already processing something
+      if (activeItemId || terminalConfig) return;
 
       setActiveItemId(itemId);
       updateItemStatus(itemId, { status: 'in_progress', errorMessage: undefined });
@@ -211,13 +243,6 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       // the checklist didn't update. This also serves as a "refresh" mechanism.
       if (itemId === 'gh_auth') {
         const status = await checkGitHubCliStatus();
-        if (status.authenticated) {
-          await fetchStatus();
-          setActiveItemId(null);
-          return;
-        }
-      } else if (itemId === 'vercel_auth') {
-        const status = await checkVercelCliStatus();
         if (status.authenticated) {
           await fetchStatus();
           setActiveItemId(null);
@@ -241,55 +266,50 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
             command: cmd.command,
             args: cmd.args,
           });
-          return; // Terminal will handle the rest
+          return;
         }
       }
 
       // Non-terminal items - run via backend
       try {
-        // Check if this is a package manager package - if so, batch install all missing packages
         if (PKG_MGR_PACKAGES.has(itemId)) {
-          // Find all missing packages to install in one command
           const missingPackages = items
             .filter((item) => PKG_MGR_PACKAGES.has(item.id) && item.status !== 'ready')
             .map((item) => item.id);
 
-          // Mark all of them as in_progress
           for (const pkgId of missingPackages) {
             if (pkgId !== itemId) {
               updateItemStatus(pkgId, { status: 'in_progress', errorMessage: undefined });
             }
           }
 
-          // Batch install all missing packages using appropriate package manager
           await installPackages(missingPackages);
-        } else if (itemId === 'vercel') {
-          // Vercel is handled separately (npm on Windows, brew on macOS)
-          await installVercel();
         } else {
           console.warn('Unknown item:', itemId);
         }
 
-        // Installation complete, refresh status
         await fetchStatus();
         setActiveItemId(null);
       } catch (err) {
         console.warn(`Failed to process ${itemId}:`, err);
         const errorMessage = err instanceof Error ? err.message : String(err);
-        // Show the actual error message so users can troubleshoot
-        // Strip error codes like [VERCEL_INSTALL_002] for cleaner display
         const cleanedMessage = errorMessage.replace(/\[[\w_]+\]\s*/g, '').trim();
 
-        // If this was a batch package install, reset all in_progress package items
         if (PKG_MGR_PACKAGES.has(itemId)) {
-          for (const item of items) {
-            if (PKG_MGR_PACKAGES.has(item.id) && item.status === 'in_progress') {
-              updateItemStatus(item.id, {
-                status: 'error',
-                errorMessage: cleanedMessage || 'Something went wrong. Click to try again.',
-              });
-            }
-          }
+          // Use functional updater to read the latest items state
+          // (the closure `items` may be stale after async operations)
+          setItems((prev) =>
+            prev.map((item) => {
+              if (PKG_MGR_PACKAGES.has(item.id) && item.status === 'in_progress') {
+                return {
+                  ...item,
+                  status: 'error' as const,
+                  errorMessage: cleanedMessage || 'Something went wrong. Click to try again.',
+                };
+              }
+              return item;
+            })
+          );
         } else {
           updateItemStatus(itemId, {
             status: 'error',
@@ -302,24 +322,71 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     [activeItemId, terminalConfig, updateItemStatus, fetchStatus, items]
   );
 
-  // Check if all required items are ready (optional items can be skipped)
-  useEffect(() => {
-    if (items.length > 0) {
-      const requiredItems = items.filter((item) => !OPTIONAL_ITEMS.has(item.id));
-      if (requiredItems.every((item) => item.status === 'ready')) {
-        // Valid pattern: conditional state update based on derived state
-        // This is a computed state transition, not a cascading render
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setState('complete');
+  // Navigate to the next incomplete step
+  const handleNext = useCallback(async () => {
+    const currentIndex = WIZARD_STEPS.findIndex((s) => s.id === currentStep);
+
+    // On the agent step, if multiple agents are ready and no default selected yet, require selection
+    if (currentStep === 'agent') {
+      const readyPairs = getReadyAgentPairs(items);
+      if (readyPairs.length > 1 && !selectedAgentId) {
+        // Don't advance — user needs to pick a default
+        return;
+      }
+      // Set the default agent
+      if (readyPairs.length > 1 && selectedAgentId) {
+        await setDefaultAgentId(selectedAgentId);
+        initDefaultAgent(selectedAgentId);
+      } else if (readyPairs.length === 1) {
+        const agentId =
+          readyPairs[0].binaryId === 'claude' ? 'claude-code' : readyPairs[0].binaryId;
+        await setDefaultAgentId(agentId);
+        initDefaultAgent(agentId);
       }
     }
-  }, [items]);
 
-  // Handle skipping an optional item - check if we can proceed
-  const handleItemSkip = useCallback(() => {
-    // Refresh status to check if required items are ready
-    void fetchStatus();
-  }, [fetchStatus]);
+    // Find next incomplete step after current
+    for (let i = currentIndex + 1; i < WIZARD_STEPS.length; i++) {
+      const step = WIZARD_STEPS[i];
+      if (!isWizardStepComplete(step.id, items)) {
+        setCurrentStep(step.id);
+        return;
+      }
+    }
+
+    // All steps after current are complete → celebration
+    setState('complete');
+  }, [currentStep, items, selectedAgentId]);
+
+  // Navigate to the previous step
+  const handleBack = useCallback(() => {
+    const currentIndex = WIZARD_STEPS.findIndex((s) => s.id === currentStep);
+    if (currentIndex > 0) {
+      setCurrentStep(WIZARD_STEPS[currentIndex - 1].id);
+    }
+  }, [currentStep]);
+
+  // Check if Next button should be enabled
+  const isNextEnabled = useMemo(() => {
+    if (activeItemId || terminalConfig) return false;
+
+    if (currentStep === 'hosting') return true; // Always passable
+
+    if (currentStep === 'agent') {
+      if (!isAtLeastOneAgentReady(items)) return false;
+      const readyPairs = getReadyAgentPairs(items);
+      if (readyPairs.length > 1 && !selectedAgentId) return false;
+      return true;
+    }
+
+    return isWizardStepComplete(currentStep, items);
+  }, [currentStep, items, activeItemId, terminalConfig, selectedAgentId]);
+
+  // Get current step definition
+  const currentStepDef = WIZARD_STEPS.find((s) => s.id === currentStep)!;
+  const currentStepIndex = WIZARD_STEPS.findIndex((s) => s.id === currentStep);
+  const isFirstStep = currentStepIndex === 0;
+  const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
 
   if (state === 'loading') {
     return (
@@ -333,11 +400,6 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   if (state === 'complete') {
     return <CelebrationScreen onContinue={onComplete} />;
   }
-
-  // Calculate progress (only count required items)
-  const requiredItems = items.filter((item) => !OPTIONAL_ITEMS.has(item.id));
-  const readyCount = requiredItems.filter((item) => item.status === 'ready').length;
-  const totalCount = requiredItems.length;
 
   return (
     <div className="onboarding-screen">
@@ -359,13 +421,70 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
           </div>
         )}
 
-        <SetupChecklist
-          items={items}
-          onItemAction={(itemId) => void handleItemAction(itemId)}
-          onItemSkip={handleItemSkip}
-          activeItemId={activeItemId}
-          terminalActive={terminalConfig !== null}
-        />
+        <WizardStepIndicator currentStep={currentStep} completedSteps={completedSteps} />
+
+        <div className="wizard-step-container">
+          <div className="wizard-step-header">
+            <h2 className="wizard-step-title">{currentStepDef.title}</h2>
+            <p className="wizard-step-subtitle">{currentStepDef.subtitle}</p>
+          </div>
+
+          {currentStep === 'package-manager' && (
+            <PackageManagerStep
+              items={items}
+              onItemAction={(id) => void handleItemAction(id)}
+              activeItemId={activeItemId}
+              terminalActive={terminalConfig !== null}
+            />
+          )}
+
+          {currentStep === 'git-github' && (
+            <GitGitHubStep
+              items={items}
+              onItemAction={(id) => void handleItemAction(id)}
+              activeItemId={activeItemId}
+              terminalActive={terminalConfig !== null}
+            />
+          )}
+
+          {currentStep === 'agent' && (
+            <AgentStep
+              items={items}
+              onItemAction={(id) => void handleItemAction(id)}
+              activeItemId={activeItemId}
+              terminalActive={terminalConfig !== null}
+              onAgentSelect={setSelectedAgentId}
+              selectedAgentId={selectedAgentId}
+            />
+          )}
+
+          {currentStep === 'hosting' && (
+            <HostingStep
+              items={items}
+              onItemAction={(id) => void handleItemAction(id)}
+              activeItemId={activeItemId}
+              terminalActive={terminalConfig !== null}
+              onSkip={() => void handleNext()}
+            />
+          )}
+        </div>
+
+        {/* Navigation buttons */}
+        <div className="wizard-nav">
+          {!isFirstStep && (
+            <button className="wizard-nav-back" onClick={handleBack}>
+              Back
+            </button>
+          )}
+          <div className="wizard-nav-spacer" />
+          <button
+            className="wizard-nav-next"
+            onClick={() => void handleNext()}
+            disabled={!isNextEnabled}
+          >
+            {isLastStep ? 'Finish' : 'Next'}
+          </button>
+        </div>
 
         {/* Terminal modal for interactive commands */}
         {terminalConfig && (
@@ -387,18 +506,6 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
             </div>
           </div>
         )}
-
-        <div className="onboarding-progress">
-          <div className="onboarding-progress-bar">
-            <div
-              className="onboarding-progress-fill"
-              style={{ width: `${(readyCount / totalCount) * 100}%` }}
-            />
-          </div>
-          <span className="onboarding-progress-text">
-            {readyCount} of {totalCount} ready
-          </span>
-        </div>
 
         <div className="onboarding-slack-cta">
           <SlackIcon size={18} />

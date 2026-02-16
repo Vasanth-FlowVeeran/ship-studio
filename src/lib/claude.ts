@@ -1,43 +1,51 @@
 /**
- * Claude Code CLI integration utilities.
+ * Agent CLI integration utilities.
  *
  * Provides functions for:
- * - Checking Claude CLI installation status and version
- * - Installing the Claude CLI globally
+ * - Checking agent CLI installation status and version
+ * - Installing the agent CLI globally
  *
- * Claude Code is the AI assistant that powers the terminal experience.
+ * The active agent (currently Claude Code) powers the terminal experience.
  *
  * @module lib/claude
  */
 
 import { invoke } from '@tauri-apps/api/core';
 
-/** Claude CLI installation status */
-export interface ClaudeCliStatus {
-  /** Whether claude CLI is installed */
+/** Agent CLI installation status */
+export interface AgentCliStatus {
+  /** Whether agent CLI is installed */
   installed: boolean;
   /** Installed version string (e.g., "2.1.14") or null if not installed */
   version: string | null;
 }
 
-/**
- * Check Claude CLI installation status.
- * @returns CLI status with installed flag and version
- */
-export async function checkClaudeCliStatus(): Promise<ClaudeCliStatus> {
-  return invoke<ClaudeCliStatus>('check_claude_cli_status');
-}
+/** @deprecated Use AgentCliStatus instead */
+export type ClaudeCliStatus = AgentCliStatus;
 
 /**
- * Install the Claude CLI globally via npm.
- * Runs: npm install -g @anthropic-ai/claude-code
+ * Check agent CLI installation status.
+ * @returns CLI status with installed flag and version
  */
-export async function installClaudeCli(): Promise<void> {
+export async function checkAgentCliStatus(): Promise<AgentCliStatus> {
+  return invoke<AgentCliStatus>('check_claude_cli_status');
+}
+
+/** @deprecated Use checkAgentCliStatus instead */
+export const checkClaudeCliStatus = checkAgentCliStatus;
+
+/**
+ * Install the agent CLI globally.
+ */
+export async function installAgentCli(): Promise<void> {
   return invoke('install_claude_cli');
 }
 
-/** Represents a Claude skill (custom command) */
-export interface ClaudeSkill {
+/** @deprecated Use installAgentCli instead */
+export const installClaudeCli = installAgentCli;
+
+/** Represents an agent skill (custom command) */
+export interface AgentSkill {
   /** Skill name (command without the leading /) */
   name: string;
   /** Short description of what the skill does */
@@ -48,11 +56,21 @@ export interface ClaudeSkill {
   scope: string;
 }
 
+/** @deprecated Use AgentSkill instead */
+export type ClaudeSkill = AgentSkill;
+
 /**
- * List available Claude skills from installed plugins.
+ * List available agent skills from installed plugins.
  * @param projectPath - Optional project path to include project-level skills
+ * @param agentId - Optional agent ID to list skills for a specific agent
  * @returns Array of available skills
  */
-export async function listClaudeSkills(projectPath?: string): Promise<ClaudeSkill[]> {
-  return invoke<ClaudeSkill[]>('list_claude_skills', { projectPath });
+export async function listAgentSkills(
+  projectPath?: string,
+  agentId?: string
+): Promise<AgentSkill[]> {
+  return invoke<AgentSkill[]>('list_claude_skills', { projectPath, agentId });
 }
+
+/** @deprecated Use listAgentSkills instead */
+export const listClaudeSkills = listAgentSkills;

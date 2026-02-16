@@ -7,7 +7,6 @@
  * - Page navigation with route detection from Next.js app directory
  * - Screenshot capture functionality for Claude Code integration
  * - Region selection tool for cropping screenshots
- * - Sanity CMS integration with native webview modal
  * - Automatic dev server health checking with retry logic
  *
  * @module components/Preview
@@ -166,6 +165,8 @@ interface PreviewProps {
   onSendToClaude?: (prompt: string) => void;
   /** Callback for toast notifications */
   onToast?: (message: string, type?: 'success' | 'error') => void;
+  /** Plugin components rendered in the preview toolbar */
+  previewPlugins?: React.ReactNode;
 }
 
 /**
@@ -201,6 +202,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     toolbarExtra,
     onSendToClaude,
     onToast,
+    previewPlugins,
   },
   ref
 ) {
@@ -215,13 +217,8 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   // (page select, refresh, project change). Proxy messages update currentPage (display)
   // but NOT iframePath, so in-iframe client-side navigation doesn't cause a full reload.
   const [iframePath, setIframePath] = useState('/');
-  const [hasSanity, setHasSanity] = useState(false);
-  const [sanityMissingEnvKeys, setSanityMissingEnvKeys] = useState<string[]>([]);
-  const [showEnvWarning, setShowEnvWarning] = useState(false);
   const [showPageDropdown, setShowPageDropdown] = useState(false);
   const [pageSearch, setPageSearch] = useState('');
-  const [showCmsModal, setShowCmsModal] = useState(false);
-  const [cmsWebviewReady, setCmsWebviewReady] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [proxyPort, setProxyPort] = useState<number | null>(null);
 
@@ -234,7 +231,6 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   const iframeWrapperRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const cmsModalRef = useRef<HTMLDivElement>(null);
   const cropOverlayRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
@@ -256,13 +252,8 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     setCurrentPage('/');
     setIframePath('/');
     setPages([]);
-    setHasSanity(false);
-    setSanityMissingEnvKeys([]);
-    setShowEnvWarning(false);
     setShowPageDropdown(false);
     setPageSearch('');
-    setShowCmsModal(false);
-    setCmsWebviewReady(false);
     setCacheBuster(Date.now()); // New cache-buster for new project
 
     // Delay server check to allow old dev server to terminate
@@ -307,30 +298,6 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     const interval = setInterval(() => void loadPages(), PAGE_REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [projectPath, loadPages]);
-
-  // Check for Sanity CMS (on interval to detect when added)
-  useEffect(() => {
-    const checkSanity = async () => {
-      if (!projectPath) return;
-      try {
-        const installed = await invoke<boolean>('check_sanity_installed', { projectPath });
-        setHasSanity(installed);
-        if (installed) {
-          const missing = await invoke<string[]>('check_sanity_env_keys', { projectPath });
-          setSanityMissingEnvKeys(missing);
-        } else {
-          setSanityMissingEnvKeys([]);
-        }
-      } catch {
-        setHasSanity(false);
-        setSanityMissingEnvKeys([]);
-      }
-    };
-
-    void checkSanity();
-    const interval = setInterval(() => void checkSanity(), PAGE_REFRESH_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [projectPath]);
 
   // Close dropdown when clicking outside
   const closePageDropdown = useCallback(() => {
@@ -899,93 +866,9 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     [captureForClaude, captureFullPage, isCapturing, refresh, serverReady]
   );
 
-  // Open CMS modal with native webview
-  const handleOpenCms = () => {
-    setShowCmsModal(true);
-  };
-
-  // Close CMS modal and destroy webview
-  const handleCloseCms = async () => {
-    try {
-      await invoke('destroy_preview_webview');
-    } catch (error) {
-      console.error('Failed to destroy webview:', error);
-    }
-    setCmsWebviewReady(false);
-    setShowCmsModal(false);
-  };
-
-  // Create webview when CMS modal opens
-  useEffect(() => {
-    if (!showCmsModal || !cmsModalRef.current || !serverReady) return;
-
-    const createCmsWebview = async () => {
-      const TITLE_BAR_HEIGHT = 31;
-      const MAX_RETRIES = 20;
-      const RETRY_DELAY_MS = 50;
-
-      // Wait for modal to have valid dimensions (retry until rect is valid)
-      let rect: DOMRect | null = null;
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-        rect = cmsModalRef.current?.getBoundingClientRect() ?? null;
-
-        // Check if rect has valid dimensions
-        if (rect && rect.width > 0 && rect.height > 0) {
-          break;
-        }
-
-        // Wait before next retry
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-      }
-
-      if (!rect || rect.width === 0 || rect.height === 0) {
-        console.error('CMS modal never achieved valid dimensions');
-        return;
-      }
-
-      try {
-        // Load Sanity Studio (use dev server directly, not proxy)
-        await invoke('create_preview_webview', {
-          url: `${devServerUrl}/studio`,
-          x: rect.left,
-          y: rect.top + TITLE_BAR_HEIGHT,
-          width: rect.width,
-          height: rect.height + 2, // Small buffer to prevent gap at bottom
-        });
-        setCmsWebviewReady(true);
-      } catch (error) {
-        console.error('Failed to create CMS webview:', error);
-      }
-    };
-
-    void createCmsWebview();
-
-    // Handle resize
-    const handleResize = async () => {
-      if (!cmsModalRef.current) return;
-      const rect = cmsModalRef.current.getBoundingClientRect();
-      const TITLE_BAR_HEIGHT = 31;
-      try {
-        await invoke('resize_preview_webview', {
-          x: rect.left,
-          y: rect.top + TITLE_BAR_HEIGHT,
-          width: rect.width,
-          height: rect.height + 2,
-        });
-      } catch (error) {
-        console.error('Failed to resize webview:', error);
-      }
-    };
-
-    const wrappedHandleResize = () => void handleResize();
-    window.addEventListener('resize', wrappedHandleResize);
-    return () => window.removeEventListener('resize', wrappedHandleResize);
-  }, [showCmsModal, serverReady, devServerUrl]);
-
-  const filteredPages = pages
-    .filter((page) => page.route !== '/studio') // Hide Sanity Studio from page list
-    .filter((page) => page.route.toLowerCase().includes(pageSearch.toLowerCase()));
+  const filteredPages = pages.filter((page) =>
+    page.route.toLowerCase().includes(pageSearch.toLowerCase())
+  );
 
   if (isLoading) {
     return (
@@ -1099,48 +982,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
 
         {toolbarExtra && <div className="preview-toolbar-center">{toolbarExtra}</div>}
 
-        {hasSanity && (
-          <div className="cms-button-wrapper">
-            <button
-              className={`cms-button ${sanityMissingEnvKeys.length > 0 ? 'cms-button-warning' : ''}`}
-              onClick={() => {
-                if (sanityMissingEnvKeys.length > 0) {
-                  setShowEnvWarning(!showEnvWarning);
-                } else {
-                  handleOpenCms();
-                }
-              }}
-              title={
-                sanityMissingEnvKeys.length > 0 ? 'Sanity env vars missing' : 'Open Sanity Studio'
-              }
-            >
-              <svg width="14" height="14" viewBox="30 46 195 163" fill="currentColor">
-                <path d="M215.759 152.483L208.799 140.366L175.13 160.88L212.526 113.252L218.179 109.933L216.78 107.831L219.349 104.548L207.549 94.7227L202.147 101.608L93.1263 165.414L133.434 116.925L208.512 75.7566L201.379 61.963L160.486 84.3775L180.623 60.168L169.087 50L123.767 104.513L78.7575 129.206L113.217 83.6335L134.811 72.3909L127.953 58.4438L65.0424 91.2034L82.1978 68.4937L70.2143 58.8926L34 106.839L34.5619 107.288L41.3277 121.07L81.4753 100.155L44.8826 148.539L50.8801 153.345L54.4465 160.242L96.7156 137.06L50.1691 193.061L61.7054 203.229L64.0218 200.442L176.311 134.509L139.031 182.007L139.638 182.515L139.581 182.55L147.31 196.001L196.895 165.781L177.802 196.603L190.6 205L221 155.931L215.759 152.483Z" />
-              </svg>
-              {sanityMissingEnvKeys.length > 0 ? 'Sanity' : 'Open Sanity'}
-              {sanityMissingEnvKeys.length > 0 && <span className="cms-warning-badge">!</span>}
-            </button>
-            {showEnvWarning && sanityMissingEnvKeys.length > 0 && (
-              <div className="cms-env-warning">
-                <div className="cms-env-warning-header">
-                  <span>Missing Sanity Environment Variables</span>
-                  <button onClick={() => setShowEnvWarning(false)}>×</button>
-                </div>
-                <p>Add these keys to your environment variables:</p>
-                <ul>
-                  {sanityMissingEnvKeys.map((key) => (
-                    <li key={key}>
-                      <code>{key}</code>
-                    </li>
-                  ))}
-                </ul>
-                <p className="cms-env-warning-hint">
-                  Click the Env Vars button in the sidebar to configure.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+        {previewPlugins}
 
         <div className="preview-breakpoints" data-education-id="breakpoints">
           {(Object.keys(BREAKPOINTS) as Breakpoint[]).map((bp) => {
@@ -1239,38 +1081,6 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           <div className="preview-resize-handle-bar" />
         </div>
       </div>
-
-      {/* CMS Modal with native webview */}
-      {showCmsModal && (
-        <div className="cms-modal-overlay" onClick={() => void handleCloseCms()}>
-          <div className="cms-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="cms-modal-header">
-              <span className="cms-modal-title">Sanity Studio</span>
-              <button className="cms-modal-close" onClick={() => void handleCloseCms()}>
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div className="cms-modal-content" ref={cmsModalRef}>
-              {!cmsWebviewReady && (
-                <div className="cms-modal-loading">
-                  <div className="spinner" />
-                  <p>Loading Sanity Studio...</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 });

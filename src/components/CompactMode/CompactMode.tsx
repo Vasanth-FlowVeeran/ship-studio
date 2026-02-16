@@ -19,6 +19,7 @@ import { Terminal, TerminalHandle } from '../Terminal';
 import { CompactInfoBar } from './CompactInfoBar';
 import { CompactActionsRow } from './CompactActionsRow';
 import { exitCompactMode, setAlwaysOnTop, startWindowDrag, setWindowTitle } from '../../lib/window';
+import { getActiveAgent } from '../../lib/agent';
 import { logger } from '../../lib/logger';
 import '../../styles/compact-mode.css';
 
@@ -182,6 +183,7 @@ export function CompactMode({
       <div className="compact-terminal">
         <Terminal
           ref={terminalRef}
+          agent={getActiveAgent()}
           projectPath={projectPath}
           autoAcceptMode={autoAcceptMode}
           onExit={onTerminalExit}

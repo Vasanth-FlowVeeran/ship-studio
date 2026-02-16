@@ -13,7 +13,7 @@
  * Some state has been extracted into custom hooks for better organization:
  * - `useToasts` - Toast notification state (self-contained, no dependencies)
  * - `useTerminalManagement` - Terminal tabs and session state (self-contained)
- * - `useIntegrationStatus` - GitHub/Vercel/Claude integration state (complex reducer)
+ * - `useIntegrationStatus` - GitHub/Claude integration state (complex reducer)
  *
  * The following state intentionally remains in App.tsx:
  * - **Git/Branch state** (currentBranch, branches, openPRs, etc.) - Tightly coupled
@@ -30,12 +30,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useToasts } from './hooks/useToasts';
 import { useTerminalManagement } from './hooks/useTerminalManagement';
-import {
-  useIntegrationStatus,
-  GITHUB_STATUS_FALLBACK,
-  VERCEL_STATUS_FALLBACK,
-} from './hooks/useIntegrationStatus';
-import { Terminal, ClaudeStatus } from './components/Terminal';
+import { usePlugins } from './hooks/usePlugins';
+import { useIntegrationStatus, GITHUB_STATUS_FALLBACK } from './hooks/useIntegrationStatus';
+import { Terminal, AgentStatus } from './components/Terminal';
 import { DevServerLogs } from './components/DevServerLogs';
 import { Preview, PreviewHandle } from './components/Preview';
 import { ProjectList } from './components/ProjectList';
@@ -47,7 +44,6 @@ import { Changelog } from './components/Changelog';
 import { OnboardingScreen, OnboardingTerminal } from './components/setup';
 import { SplitPane } from './components/SplitPane';
 import { GitHubButton } from './components/GitHubButton';
-import { VercelButton } from './components/VercelButton';
 import { PublishBranchDropdown } from './components/PublishBranchDropdown';
 import { EnvEditor } from './components/EnvEditor';
 import { AssetsPanel } from './components/AssetsPanel';
@@ -68,6 +64,8 @@ import { NotificationSettingsModal } from './components/NotificationSettingsModa
 import { HelpModal } from './components/HelpModal';
 import { BackupsModal } from './components/BackupsModal';
 import { SkillsModal } from './components/SkillsModal';
+import { PluginManager } from './components/PluginManager';
+import { PluginSlot } from './components/PluginSlot';
 import { EducationOverlay } from './components/EducationOverlay';
 import {
   NotificationSettings,
@@ -107,24 +105,32 @@ import {
   PinIcon,
   ExpandIcon,
   ArrowLeftIcon,
-  HelpIcon,
   GraduationCapIcon,
-  ZapIcon,
-  BellIcon,
   ActivityIcon,
   HistoryIcon,
   DollarIcon,
+  PuzzleIcon,
+  ZapIcon,
+  DownloadIcon,
 } from './components/icons';
-import { startDevServer, Project, DevServerHandle, getAutoAcceptMode } from './lib/project';
+import { ToolbarDropdown } from './components/ToolbarDropdown';
+import { TerminalTabDropdown } from './components/TerminalTabDropdown';
+import {
+  startDevServer,
+  Project,
+  DevServerHandle,
+  getAutoAcceptMode,
+  setAutoAcceptMode as setAutoAcceptModeApi,
+} from './lib/project';
 import {
   detectProjectType,
   startStaticServer,
   stopStaticServer,
   ProjectType,
 } from './lib/static-server';
+import { getAgentById } from './lib/agent';
 import { getProjectGitHubStatus } from './lib/github';
 import { getChangedFiles, ChangedFile } from './lib/git';
-import { getProjectVercelStatus } from './lib/vercel';
 import {
   enterCompactMode,
   exitCompactMode,
@@ -137,9 +143,16 @@ import {
   getProjectWindow,
   focusWindowByLabel,
 } from './lib/window';
-import { getFullSetupStatus, quickSetupCheck, markSetupComplete } from './lib/setup';
+import {
+  getFullSetupStatus,
+  quickSetupCheck,
+  markSetupComplete,
+  getDefaultAgentId as fetchDefaultAgentId,
+} from './lib/setup';
+import { initDefaultAgent } from './lib/agent';
 import { UpdateBanner } from './components/UpdateBanner';
 import { invoke } from '@tauri-apps/api/core';
+import { installPlugin, listPlugins, VERCEL_PLUGIN_REPO } from './lib/plugins';
 import { logger } from './lib/logger';
 import './styles/index.css';
 
@@ -195,6 +208,8 @@ function App({ initialProjectPath }: AppProps) {
     resetTerminals,
     focusActiveTerminal,
     pasteToActiveTerminal,
+    switchTabAgent,
+    getActiveTabAgent,
   } = useTerminalManagement();
 
   // Compact mode state - starts false, set to true when Compact button is clicked
@@ -255,14 +270,11 @@ function App({ initialProjectPath }: AppProps) {
   const {
     integrations,
     isInitialCheckDone,
-    refreshVercelStatus,
     refreshAllCliStatuses,
     setProjectGitHubStatus,
-    setProjectVercelStatus,
     clearProjectStatuses,
     authTerminalConfig,
     handleGitHubConnect: handleGitHubConnectFromOverlay,
-    handleVercelConnect: handleVercelConnectFromOverlay,
     handleAuthTerminalExit,
     closeAuthTerminal,
   } = useIntegrationStatus();
@@ -325,8 +337,14 @@ function App({ initialProjectPath }: AppProps) {
   // Compact publish dropdown state - controlled mode for toggle behavior via the compact Publish button
   const [isCompactPublishOpen, setIsCompactPublishOpen] = useState(false);
 
-  // Vercel auto-connecting state (when linking after GitHub repo creation)
-  const [isVercelAutoConnecting, setIsVercelAutoConnecting] = useState(false);
+  // Plugin terminal modal state
+  const [pluginTerminal, setPluginTerminal] = useState<{
+    command: string;
+    args: string[];
+    title: string;
+    resolve: (exitCode: number | null) => void;
+  } | null>(null);
+  const [pluginTerminalExited, setPluginTerminalExited] = useState(false);
 
   // Branch management state
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
@@ -348,8 +366,25 @@ function App({ initialProjectPath }: AppProps) {
   // Help modal state
   const [showHelpModal, setShowHelpModal] = useState(false);
 
+  // Auto-accept warning modal state
+  const [showAutoAcceptWarning, setShowAutoAcceptWarning] = useState(false);
+
   // Skills modal state
   const [showSkillsModal, setShowSkillsModal] = useState(false);
+
+  // Plugin manager modal state
+  const [showPluginManager, setShowPluginManager] = useState(false);
+
+  // Plugin suggestion popup state (e.g. suggest Vercel plugin for .vercel projects)
+  const [pluginSuggestion, setPluginSuggestion] = useState<{
+    pluginName: string;
+    projectPath: string;
+    repoUrl: string;
+  } | null>(null);
+  const [pluginSuggestionInstalling, setPluginSuggestionInstalling] = useState(false);
+
+  // Plugin system
+  const { getSlotPlugins, reloadPlugins } = usePlugins(currentProject?.path ?? null);
 
   // Workspace tab state (preview/branches/prs)
   const [workspaceTab, setWorkspaceTab] = useState<'preview' | 'branches' | 'prs'>('preview');
@@ -411,6 +446,10 @@ function App({ initialProjectPath }: AppProps) {
   const checkSetup = useCallback(async (forceFullCheck = false) => {
     setView('loading');
     try {
+      // Hydrate default agent cache from backend
+      const defaultAgent = await fetchDefaultAgentId();
+      initDefaultAgent(defaultAgent);
+
       // Fast path: if setup was previously completed, try quick check first
       if (!forceFullCheck) {
         const quickCheck = await quickSetupCheck();
@@ -514,9 +553,6 @@ function App({ initialProjectPath }: AppProps) {
           void getProjectGitHubStatus(storedProjectPath)
             .catch(() => GITHUB_STATUS_FALLBACK)
             .then((status) => setProjectGitHubStatus(status));
-          void getProjectVercelStatus(storedProjectPath)
-            .catch(() => VERCEL_STATUS_FALLBACK)
-            .then((status) => setProjectVercelStatus(status));
         }
       } catch {
         // If backend check fails, let normal flow continue
@@ -596,8 +632,8 @@ function App({ initialProjectPath }: AppProps) {
     }
   };
 
-  // Handle capture for Claude - screenshot preview and paste path into terminal
-  const handleCaptureForClaude = useCallback(async () => {
+  // Handle capture for agent - screenshot preview and paste path into terminal
+  const handleCaptureScreenshot = useCallback(async () => {
     if (isCapturing || !previewRef.current) return;
 
     setIsCapturing(true);
@@ -875,13 +911,35 @@ function App({ initialProjectPath }: AppProps) {
     setHealthOutputVersion((v) => v + 1);
   }, []);
 
-  // Handle terminal exit (memoized to prevent re-spawning Claude on every render)
+  // Handle terminal exit (memoized to prevent re-spawning agent on every render)
   const handleTerminalExit = useCallback((code: number | null) => {
     logger.info('Terminal exited', { code });
   }, []);
 
-  // Track previous Claude status to detect transitions
-  const prevClaudeStatusRef = useRef<ClaudeStatus>('idle');
+  // Handle toolbar auto-accept toggle
+  const handleToolbarAutoAcceptToggle = useCallback(() => {
+    if (!autoAcceptMode) {
+      // Turning ON — always show confirmation
+      setShowAutoAcceptWarning(true);
+      return;
+    }
+    // Turning OFF — no confirmation needed
+    setAutoAcceptMode(false);
+    if (currentProject) {
+      void setAutoAcceptModeApi(currentProject.path, false);
+    }
+  }, [autoAcceptMode, currentProject]);
+
+  const handleAutoAcceptWarningAccept = useCallback(() => {
+    setAutoAcceptMode(true);
+    setShowAutoAcceptWarning(false);
+    if (currentProject) {
+      void setAutoAcceptModeApi(currentProject.path, true);
+    }
+  }, [currentProject]);
+
+  // Track previous agent status to detect transitions
+  const prevAgentStatusRef = useRef<AgentStatus>('idle');
 
   // Use ref for notification settings to avoid re-creating callback
   const notificationSettingsRef = useRef(notificationSettings);
@@ -889,17 +947,17 @@ function App({ initialProjectPath }: AppProps) {
     notificationSettingsRef.current = notificationSettings;
   }, [notificationSettings]);
 
-  // Handle Claude status changes - play sounds based on settings
-  const handleClaudeStatusChange = useCallback((status: ClaudeStatus, _title: string) => {
+  // Handle agent status changes - play sounds based on settings
+  const handleAgentStatusChange = useCallback((status: AgentStatus, _title: string) => {
     const settings = notificationSettingsRef.current;
-    const wasThinking = prevClaudeStatusRef.current === 'thinking';
+    const wasThinking = prevAgentStatusRef.current === 'thinking';
 
-    // When Claude transitions from thinking to waiting (finished processing)
+    // When agent transitions from thinking to waiting (finished processing)
     if (wasThinking && status === 'waiting' && settings.enabled) {
       void playSound(settings.sound);
     }
 
-    prevClaudeStatusRef.current = status;
+    prevAgentStatusRef.current = status;
   }, []);
 
   // Save notification settings when they change
@@ -1101,9 +1159,8 @@ function App({ initialProjectPath }: AppProps) {
       screenshotIntervalRef.current = null;
     }
 
-    // Reset publishing and auto-connecting state when switching projects
+    // Reset publishing state when switching projects
     setIsPublishing(false);
-    setIsVercelAutoConnecting(false);
 
     // Kill all terminals and reset tabs
     resetTerminals();
@@ -1199,24 +1256,11 @@ function App({ initialProjectPath }: AppProps) {
     setView('workspace');
     logger.info(`[OpenProject] Complete - Total: ${Math.round(performance.now() - totalStart)}ms`);
 
-    // Fetch GitHub and Vercel status in background (non-blocking for faster perceived load)
-    // Dispatch each independently so fast results (e.g. GitHub ~300ms) aren't blocked by slow ones (e.g. Vercel ~30s+)
+    // Fetch GitHub status in background (non-blocking for faster perceived load)
     void getProjectGitHubStatus(project.path)
       .catch(() => GITHUB_STATUS_FALLBACK)
       .then((ghStatus) => {
         setProjectGitHubStatus(ghStatus);
-      });
-    void getProjectVercelStatus(project.path)
-      .catch(() => VERCEL_STATUS_FALLBACK)
-      .then((vcStatus) => {
-        logger.info('[OpenProject] Vercel status received', {
-          project: project.name,
-          status: vcStatus.status,
-          project_name: vcStatus.project_name,
-          production_url: vcStatus.production_url,
-          staging_url: vcStatus.staging_url,
-        });
-        setProjectVercelStatus(vcStatus);
       });
 
     // Capture screenshots periodically - check ref to avoid stale closure
@@ -1228,6 +1272,31 @@ function App({ initialProjectPath }: AppProps) {
         void captureScreenshot(projectPath, captureSessionIdRef.current);
       }
     }, SCREENSHOT_INTERVAL_MS);
+
+    // Suggest Vercel plugin if project has .vercel config but plugin isn't installed
+    void (async () => {
+      try {
+        const sessionKey = `plugin-suggested-vercel-${project.path}`;
+        if (sessionStorage.getItem(sessionKey)) return;
+
+        const hasVercelConfig = await invoke<boolean>('has_vercel_config', {
+          projectPath: project.path,
+        });
+        if (!hasVercelConfig) return;
+
+        const installed = await listPlugins(project.path);
+        if (installed.some((p) => p.manifest.id === 'vercel')) return;
+
+        sessionStorage.setItem(sessionKey, '1');
+        setPluginSuggestion({
+          pluginName: 'Vercel',
+          projectPath: project.path,
+          repoUrl: VERCEL_PLUGIN_REPO,
+        });
+      } catch {
+        // Non-critical — silently ignore detection errors
+      }
+    })();
 
     // Clear the guard after completion
     openingProjectPathRef.current = null;
@@ -1292,9 +1361,8 @@ function App({ initialProjectPath }: AppProps) {
     // Cancel any pending screenshot captures by incrementing session ID
     captureSessionIdRef.current++;
 
-    // Reset publishing, auto-connecting, and auto-accept state
+    // Reset publishing and auto-accept state
     setIsPublishing(false);
-    setIsVercelAutoConnecting(false);
     setAutoAcceptMode(false);
 
     // Clear branch state
@@ -1495,55 +1563,61 @@ function App({ initialProjectPath }: AppProps) {
     }
   }, []);
 
-  const handleGitHubStatusChange = async (vercelDeployedUrl?: string) => {
-    // Refresh project GitHub and Vercel status after push/publish
+  const handleGitHubStatusChange = async () => {
+    // Refresh project GitHub status after push/publish
     if (currentProject) {
-      // If we have a vercel deployed URL, optimistically set Vercel as connected
-      // This avoids race conditions where the status check runs before Vercel's state propagates
-      if (vercelDeployedUrl) {
-        const ghStatus = await getProjectGitHubStatus(currentProject.path).catch(
-          () => GITHUB_STATUS_FALLBACK
-        );
-        setProjectGitHubStatus(ghStatus);
-        setProjectVercelStatus({
-          status: 'connected',
-          project_name: currentProject.name,
-          production_url: vercelDeployedUrl.replace(/^https?:\/\//, ''),
-          staging_url: null,
-          vercel_org: null,
-        });
-        return;
-      }
-
-      // Dispatch each independently so fast results aren't blocked by slow ones
       void getProjectGitHubStatus(currentProject.path)
         .catch(() => GITHUB_STATUS_FALLBACK)
         .then((status) => setProjectGitHubStatus(status));
-      void getProjectVercelStatus(currentProject.path)
-        .catch(() => VERCEL_STATUS_FALLBACK)
-        .then((status) => setProjectVercelStatus(status));
     }
   };
 
-  const handleVercelStatusChange = async (deployedUrl?: string) => {
-    // If we have a deployed URL from a successful deployment, use it directly
-    if (deployedUrl && currentProject) {
-      setProjectVercelStatus({
-        status: 'connected',
-        project_name: currentProject.name,
-        production_url: deployedUrl,
-        staging_url: integrations.projectVercel?.staging_url ?? null,
-        vercel_org: integrations.projectVercel?.vercel_org ?? null,
+  // Plugin data for PluginSlot components (defined before early returns so all views can use them)
+  const pluginProject = currentProject
+    ? {
+        name: currentProject.name,
+        path: currentProject.path,
+        currentBranch: currentBranch || 'main',
+        hasUncommittedChanges,
+        devServerUrl: `http://localhost:${devServerPort}`,
+      }
+    : null;
+
+  const pluginActions = {
+    showToast,
+    refreshGitStatus: () => {
+      if (currentProject) void fetchBranchInfo(currentProject.path);
+    },
+    refreshBranches: () => {
+      if (currentProject) void fetchBranchInfo(currentProject.path);
+    },
+    focusTerminal: focusActiveTerminal,
+    openUrl: (url: string) => {
+      void import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url));
+    },
+    openTerminal: (command: string, args: string[], options?: { title?: string }) => {
+      return new Promise<number | null>((resolve) => {
+        setPluginTerminalExited(false);
+        setPluginTerminal({ command, args, title: options?.title || command, resolve });
       });
-      return;
-    }
-    // Otherwise refresh project Vercel status
-    if (currentProject) {
-      const status = await getProjectVercelStatus(currentProject.path).catch(
-        () => VERCEL_STATUS_FALLBACK
-      );
-      setProjectVercelStatus(status);
-    }
+    },
+  };
+
+  const pluginTheme = {
+    bgPrimary: 'var(--bg-primary)',
+    bgSecondary: 'var(--bg-secondary)',
+    bgTertiary: 'var(--bg-tertiary)',
+    textPrimary: 'var(--text-primary)',
+    textSecondary: 'var(--text-secondary)',
+    textMuted: 'var(--text-muted)',
+    border: 'var(--border)',
+    accent: 'var(--accent, #10b981)',
+    accentHover: 'var(--accent-hover)',
+    action: 'var(--action)',
+    actionHover: 'var(--action-hover)',
+    actionText: 'var(--action-text)',
+    error: 'var(--error)',
+    success: 'var(--success)',
   };
 
   if (view === 'loading') {
@@ -1560,10 +1634,14 @@ function App({ initialProjectPath }: AppProps) {
 
   if (view === 'onboarding') {
     const handleOnboardingComplete = async () => {
+      // Re-hydrate default agent cache (may have been set during onboarding)
+      const defaultAgent = await fetchDefaultAgentId();
+      initDefaultAgent(defaultAgent);
       // Persist that setup is complete so future launches are fast
       await markSetupComplete();
-      // Force full check to update all CLI states
-      void checkSetup(true);
+      // Refresh CLI states and go to projects directly (don't re-enter onboarding)
+      await refreshAllCliStatuses();
+      setView('projects');
     };
 
     return (
@@ -1590,12 +1668,20 @@ function App({ initialProjectPath }: AppProps) {
               isGitHubAuthenticated={integrations.github.cliStatus.authenticated}
               onGitHubConnectForImport={() => void handleGitHubConnectFromOverlay()}
               onGitHubConnect={handleGitHubConnectFromOverlay}
-              onVercelConnect={handleVercelConnectFromOverlay}
               githubUsername={integrations.github.username}
               isAuthCheckDone={isInitialCheckDone}
               onLoadingChange={setProjectsLoading}
             />
             {!projectsLoading && <Changelog />}
+            {!projectsLoading && (
+              <PluginSlot
+                name="sidebar"
+                plugins={getSlotPlugins('sidebar')}
+                project={pluginProject}
+                actions={pluginActions}
+                theme={pluginTheme}
+              />
+            )}
           </div>
           {showCreateModal && (
             <CreateProject
@@ -1622,9 +1708,7 @@ function App({ initialProjectPath }: AppProps) {
             <div className="onboarding-terminal-overlay">
               <div className="onboarding-terminal-modal">
                 <div className="onboarding-terminal-header">
-                  <span className="onboarding-terminal-title">
-                    {authTerminalConfig.service === 'github' ? 'GitHub Account' : 'Vercel Account'}
-                  </span>
+                  <span className="onboarding-terminal-title">GitHub Account</span>
                   <button
                     className="onboarding-terminal-cancel"
                     onClick={() => closeAuthTerminal()}
@@ -1679,8 +1763,15 @@ function App({ initialProjectPath }: AppProps) {
           </button>
 
           <div className="workspace-header-actions">
+            <PluginSlot
+              name="toolbar"
+              plugins={getSlotPlugins('toolbar')}
+              project={pluginProject}
+              actions={pluginActions}
+              theme={pluginTheme}
+            />
             <button
-              className={`education-button ${isEducationMode ? 'active' : ''}`}
+              className={`toolbar-icon-btn ${isEducationMode ? 'active' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEducationMode(!isEducationMode);
@@ -1691,7 +1782,15 @@ function App({ initialProjectPath }: AppProps) {
               <GraduationCapIcon size={14} />
             </button>
             <button
-              className="assets-button"
+              className="toolbar-icon-btn"
+              onClick={() => setShowPluginManager(true)}
+              title="Manage Plugins"
+              data-education-id="plugin-manager"
+            >
+              <PuzzleIcon size={14} />
+            </button>
+            <button
+              className="toolbar-icon-btn"
               onClick={() => setShowAssetsPanel(true)}
               title="Assets"
               data-education-id="assets-button"
@@ -1704,7 +1803,7 @@ function App({ initialProjectPath }: AppProps) {
               onMouseLeave={() => setShowIdeDropdown(false)}
               data-education-id="ide-button"
             >
-              <button className="ide-button" title="Open in IDE">
+              <button className="toolbar-icon-btn" title="Open in IDE">
                 <CodeIcon size={14} />
               </button>
               {showIdeDropdown && (
@@ -1736,7 +1835,7 @@ function App({ initialProjectPath }: AppProps) {
               )}
             </div>
             <button
-              className="env-button"
+              className="toolbar-icon-btn"
               onClick={() => setShowEnvEditor(true)}
               title="Environment Variables"
               data-education-id="env-button"
@@ -1744,7 +1843,7 @@ function App({ initialProjectPath }: AppProps) {
               <DollarIcon size={14} />
             </button>
             <button
-              className="backups-button"
+              className="toolbar-icon-btn"
               onClick={() => setShowBackupsModal(true)}
               title="Backups"
               data-education-id="backups-button"
@@ -1754,7 +1853,6 @@ function App({ initialProjectPath }: AppProps) {
             <span data-education-id="github-button">
               <GitHubButton
                 githubState={integrations.github}
-                vercelState={integrations.vercel}
                 projectStatus={integrations.projectGithub}
                 projectPath={currentProject?.path || ''}
                 projectName={currentProject?.name || ''}
@@ -1762,32 +1860,11 @@ function App({ initialProjectPath }: AppProps) {
                 onGitHubConnect={handleGitHubConnectFromOverlay}
                 onModalClose={focusActiveTerminal}
                 onToast={showToast}
-                onVercelAutoConnectStart={() => setIsVercelAutoConnecting(true)}
-                onVercelAutoConnectEnd={() => setIsVercelAutoConnecting(false)}
               />
             </span>
-            {integrations.projectGithub?.status === 'connected' &&
-              integrations.projectGithub?.github_repo && (
-                <span data-education-id="vercel-button">
-                  <VercelButton
-                    vercelState={integrations.vercel}
-                    projectVercelStatus={integrations.projectVercel}
-                    projectGithubStatus={integrations.projectGithub}
-                    projectPath={currentProject?.path || ''}
-                    projectName={currentProject?.name || ''}
-                    onStatusChange={(deployedUrl) => void handleVercelStatusChange(deployedUrl)}
-                    onVercelConnect={() => void refreshVercelStatus()}
-                    onModalClose={focusActiveTerminal}
-                    onToast={showToast}
-                    isAutoConnecting={isVercelAutoConnecting}
-                    currentBranch={currentBranch || 'main'}
-                  />
-                </span>
-              )}
             <PublishBranchDropdown
               currentBranch={currentBranch || 'main'}
               projectGithubStatus={integrations.projectGithub}
-              projectVercelStatus={integrations.projectVercel}
               projectPath={currentProject?.path || ''}
               hasChangesToSync={hasUncommittedChanges}
               onStatusChange={() => {
@@ -1801,6 +1878,13 @@ function App({ initialProjectPath }: AppProps) {
               onPublishError={handlePublishError}
               forceOpen={forcePublishOpen}
               onForceOpenHandled={() => setForcePublishOpen(false)}
+            />
+            <PluginSlot
+              name="publish"
+              plugins={getSlotPlugins('publish')}
+              project={pluginProject}
+              actions={pluginActions}
+              theme={pluginTheme}
             />
           </div>
         </header>
@@ -1880,28 +1964,22 @@ function App({ initialProjectPath }: AppProps) {
                 >
                   <div className="terminal-tabs-bar">
                     <div className="terminal-tabs" data-education-id="terminal-tabs">
-                      {terminalTabs.map((tabId, index) => (
+                      {terminalTabs.map((tab, index) => (
                         <button
-                          key={tabId}
-                          className={`workspace-tab ${!showDevServerLogs && activeTerminalTab === tabId ? 'active' : ''}`}
+                          key={tab.id}
+                          className={`workspace-tab ${!showDevServerLogs && activeTerminalTab === tab.id ? 'active' : ''}`}
                           onClick={() => {
                             setShowDevServerLogs(false);
                             setShowHealthLogs(false);
-                            setActiveTerminalTab(tabId);
+                            setActiveTerminalTab(tab.id);
                           }}
                         >
                           <span className="terminal-tab-number">{index + 1}</span>
-                          {terminalTabs.length > 1 && (
-                            <span
-                              className="terminal-tab-close"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                closeTerminalTab(tabId);
-                              }}
-                            >
-                              <CloseIcon size={10} />
-                            </span>
-                          )}
+                          <TerminalTabDropdown
+                            currentAgent={getAgentById(tab.agentId)}
+                            onSwitchAgent={(agentId) => switchTabAgent(tab.id, agentId)}
+                            onClose={() => closeTerminalTab(tab.id)}
+                          />
                         </button>
                       ))}
                       {terminalTabs.length < maxTerminalTabs && (
@@ -1933,30 +2011,18 @@ function App({ initialProjectPath }: AppProps) {
                       >
                         <ActivityIcon size={12} />
                       </button>
-                      <button
-                        className="workspace-tab icon-only"
-                        onClick={() => setShowNotificationSettings(true)}
-                        title="Notification sounds"
-                        data-education-id="notification-settings"
-                      >
-                        <BellIcon size={12} />
-                      </button>
-                      <button
-                        className="workspace-tab icon-only"
-                        onClick={() => setShowSkillsModal(true)}
-                        title="Manage Skills"
-                        data-education-id="skills-manager"
-                      >
-                        <ZapIcon size={12} />
-                      </button>
-                      <button
-                        className="workspace-tab icon-only"
-                        onClick={() => setShowHelpModal(true)}
-                        title="Help & Commands"
-                        data-education-id="help-commands"
-                      >
-                        <HelpIcon size={12} />
-                      </button>
+                      <ToolbarDropdown
+                        agent={getActiveTabAgent()}
+                        autoAcceptMode={autoAcceptMode}
+                        onNotificationSettings={() => setShowNotificationSettings(true)}
+                        onSkills={() => setShowSkillsModal(true)}
+                        onAutoAcceptToggle={handleToolbarAutoAcceptToggle}
+                        onHelp={() => setShowHelpModal(true)}
+                        terminalPlugins={getSlotPlugins('terminal')}
+                        pluginProject={pluginProject}
+                        pluginActions={pluginActions}
+                        pluginTheme={pluginTheme}
+                      />
                     </div>
 
                     {/* Compact mode controls - visible only at narrow widths via CSS */}
@@ -1978,25 +2044,26 @@ function App({ initialProjectPath }: AppProps) {
                     </div>
                   </div>
                   <div className="terminal-content" data-education-id="claude-terminal">
-                    {terminalTabs.map((tabId) => (
+                    {terminalTabs.map((tab) => (
                       <div
-                        key={`session-${terminalSessionId}-tab-${tabId}`}
+                        key={`session-${terminalSessionId}-tab-${tab.id}`}
                         className="terminal-tab-content"
                         style={{
                           display:
-                            !showDevServerLogs && activeTerminalTab === tabId ? 'block' : 'none',
+                            !showDevServerLogs && activeTerminalTab === tab.id ? 'block' : 'none',
                         }}
                       >
                         <Terminal
                           ref={(ref) => {
                             if (ref) {
-                              terminalRefsMap.current.set(tabId, ref);
+                              terminalRefsMap.current.set(tab.id, ref);
                             }
                           }}
+                          agent={getAgentById(tab.agentId)}
                           projectPath={currentProject?.path || ''}
                           onExit={handleTerminalExit}
                           autoAcceptMode={autoAcceptMode}
-                          onStatusChange={handleClaudeStatusChange}
+                          onStatusChange={handleAgentStatusChange}
                         />
                       </div>
                     ))}
@@ -2196,11 +2263,20 @@ function App({ initialProjectPath }: AppProps) {
                       isDevServerRestarting={isRestartingDevServer}
                       onSendToClaude={sendToClaude}
                       onToast={showToast}
+                      previewPlugins={
+                        <PluginSlot
+                          name="preview"
+                          plugins={getSlotPlugins('preview')}
+                          project={pluginProject}
+                          actions={pluginActions}
+                          theme={pluginTheme}
+                        />
+                      }
                       toolbarExtra={
                         <div className="agent-toolbar">
                           <button
                             className="agent-capture-btn"
-                            onClick={() => void handleCaptureForClaude()}
+                            onClick={() => void handleCaptureScreenshot()}
                             disabled={isCapturing || isCropMode || isFullPageCapturing}
                             title="Screenshot preview for Claude"
                             data-education-id="screenshot-button"
@@ -2262,7 +2338,6 @@ function App({ initialProjectPath }: AppProps) {
                   ) : (
                     <div style={{ position: 'relative', flex: 1 }}>
                       <ConnectOverlay
-                        service="github"
                         title="Connect GitHub to manage branches"
                         description="Create branches, switch between versions, and collaborate with your team."
                         onConnect={() => void handleGitHubConnectFromOverlay()}
@@ -2287,7 +2362,6 @@ function App({ initialProjectPath }: AppProps) {
                   ) : (
                     <div style={{ position: 'relative', flex: 1 }}>
                       <ConnectOverlay
-                        service="github"
                         title="Connect GitHub to view pull requests"
                         description="Submit code for review, merge changes, and track your team's work."
                         onConnect={() => void handleGitHubConnectFromOverlay()}
@@ -2307,7 +2381,6 @@ function App({ initialProjectPath }: AppProps) {
             <PublishBranchDropdown
               currentBranch={currentBranch || 'main'}
               projectGithubStatus={integrations.projectGithub}
-              projectVercelStatus={integrations.projectVercel}
               projectPath={currentProject?.path || ''}
               hasChangesToSync={hasUncommittedChanges}
               onStatusChange={() => {
@@ -2442,6 +2515,7 @@ function App({ initialProjectPath }: AppProps) {
             settings={notificationSettings}
             onSave={handleSaveNotificationSettings}
             onClose={() => setShowNotificationSettings(false)}
+            agentDisplayName={getActiveTabAgent().displayName}
           />
         )}
 
@@ -2457,7 +2531,109 @@ function App({ initialProjectPath }: AppProps) {
           isOpen={showSkillsModal}
           onClose={() => setShowSkillsModal(false)}
           projectPath={currentProject?.path}
+          agentId={getActiveTabAgent().id}
+          agentDisplayName={getActiveTabAgent().displayName}
         />
+
+        {/* Plugin Manager */}
+        <PluginManager
+          isOpen={showPluginManager}
+          onClose={() => setShowPluginManager(false)}
+          onPluginsChanged={() => void reloadPlugins()}
+          projectPath={currentProject?.path ?? null}
+        />
+
+        {/* Plugin Suggestion Popup */}
+        {pluginSuggestion && (
+          <div className="modal-overlay" onClick={() => setPluginSuggestion(null)}>
+            <div className="modal plugin-suggestion-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="plugin-suggestion-icon">
+                <svg width={26} height={26} viewBox="0 0 76 65" fill="currentColor">
+                  <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" />
+                </svg>
+              </div>
+              <h3>Plugin Available</h3>
+              <p className="plugin-suggestion-desc">
+                This project uses <strong>{pluginSuggestion.pluginName}</strong>. Install the plugin
+                to see deployment information.
+              </p>
+              <div className="plugin-suggestion-actions">
+                <button
+                  className="plugin-suggestion-dismiss"
+                  onClick={() => setPluginSuggestion(null)}
+                >
+                  Not Now
+                </button>
+                <button
+                  className="plugin-suggestion-install"
+                  disabled={pluginSuggestionInstalling}
+                  onClick={() => {
+                    setPluginSuggestionInstalling(true);
+                    void (async () => {
+                      try {
+                        await installPlugin(pluginSuggestion.projectPath, pluginSuggestion.repoUrl);
+                        await reloadPlugins();
+                        setPluginSuggestion(null);
+                        showToast(`${pluginSuggestion.pluginName} plugin installed`, 'success');
+                      } catch (err) {
+                        showToast(
+                          `Failed to install plugin: ${err instanceof Error ? err.message : String(err)}`,
+                          'error'
+                        );
+                      } finally {
+                        setPluginSuggestionInstalling(false);
+                      }
+                    })();
+                  }}
+                >
+                  {pluginSuggestionInstalling ? (
+                    <>
+                      <span className="plugin-suggestion-spinner" />
+                      Installing…
+                    </>
+                  ) : (
+                    <>
+                      <DownloadIcon size={14} />
+                      Install Plugin
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Auto-Accept Warning Modal */}
+        {showAutoAcceptWarning && (
+          <div className="modal-overlay" onClick={() => setShowAutoAcceptWarning(false)}>
+            <div className="modal auto-accept-warning-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="auto-accept-warning-icon">
+                <ZapIcon size={32} />
+              </div>
+              <h3>Enable Auto-Accept Mode?</h3>
+              <p>
+                This mode allows {getActiveTabAgent().displayName} to execute commands{' '}
+                <strong>without asking for permission</strong>. {getActiveTabAgent().displayName}{' '}
+                will be able to:
+              </p>
+              <ul className="auto-accept-warning-list">
+                <li>Read and modify any files in your project</li>
+                <li>Run shell commands automatically</li>
+                <li>Make changes without confirmation</li>
+              </ul>
+              <p className="auto-accept-warning-disclaimer">
+                By enabling this mode, you acknowledge that Ship Studio and Anthropic are{' '}
+                <strong>not liable</strong> for any unintended changes or actions taken by the AI.
+              </p>
+              <div className="modal-actions">
+                <button onClick={() => setShowAutoAcceptWarning(false)}>Cancel</button>
+                <button className="btn-warning" onClick={handleAutoAcceptWarningAccept}>
+                  I understand, enable it
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Submit for Review Modal */}
         {showSubmitReview && (
@@ -2467,7 +2643,7 @@ function App({ initialProjectPath }: AppProps) {
             baseBranches={branches
               .filter((b) => b.isDefault || b.name === 'staging')
               .map((b) => b.name)}
-            claudeAvailable={integrations.claude.cliStatus.installed}
+            aiAvailable={integrations.claude.cliStatus.installed}
             onSuccess={() => {
               showToast('Pull request created', 'success');
               if (currentProject) void fetchBranchInfo(currentProject.path);
@@ -2506,14 +2682,12 @@ function App({ initialProjectPath }: AppProps) {
           />
         )}
 
-        {/* Auth Terminal Modal (for GitHub/Vercel connect from workspace) */}
+        {/* Auth Terminal Modal (for GitHub connect from workspace) */}
         {authTerminalConfig && (
           <div className="onboarding-terminal-overlay">
             <div className="onboarding-terminal-modal">
               <div className="onboarding-terminal-header">
-                <span className="onboarding-terminal-title">
-                  {authTerminalConfig.service === 'github' ? 'GitHub Account' : 'Vercel Account'}
-                </span>
+                <span className="onboarding-terminal-title">GitHub Account</span>
                 <button className="onboarding-terminal-cancel" onClick={() => closeAuthTerminal()}>
                   Cancel
                 </button>
@@ -2527,6 +2701,44 @@ function App({ initialProjectPath }: AppProps) {
           </div>
         )}
       </div>
+
+      {/* Plugin terminal modal — reuses OnboardingTerminal for interactive CLI commands */}
+      {pluginTerminal && (
+        <div className="onboarding-terminal-overlay">
+          <div className="onboarding-terminal-modal">
+            <div className="onboarding-terminal-header">
+              <span className="onboarding-terminal-title">{pluginTerminal.title}</span>
+              <button
+                className="onboarding-terminal-cancel"
+                onClick={() => {
+                  const resolve = pluginTerminal.resolve;
+                  setPluginTerminal(null);
+                  setPluginTerminalExited(false);
+                  resolve(null);
+                }}
+              >
+                {pluginTerminalExited ? 'Close' : 'Cancel'}
+              </button>
+            </div>
+            <OnboardingTerminal
+              command={pluginTerminal.command}
+              args={pluginTerminal.args}
+              cwd={currentProject?.path}
+              onExit={(exitCode) => {
+                setPluginTerminalExited(true);
+                const resolve = pluginTerminal.resolve;
+                // Small delay so the user can see the terminal output before it closes
+                setTimeout(() => {
+                  setPluginTerminal(null);
+                  setPluginTerminalExited(false);
+                  resolve(exitCode);
+                }, 1000);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <BugReportButton />
     </>
   );

@@ -129,15 +129,23 @@ fn read_skills_from_plugin(plugin_path: &str, plugin_name: &str, scope: &str) ->
 
 /// List all available Claude skills from installed plugins and skills directory
 #[tauri::command]
-pub fn list_claude_skills(project_path: Option<String>) -> Vec<ClaudeSkill> {
+pub fn list_claude_skills(
+    project_path: Option<String>,
+    agent_id: Option<String>,
+) -> Vec<ClaudeSkill> {
     let mut all_skills = Vec::new();
+    let agent = agent_id
+        .as_deref()
+        .map(crate::agent::get_agent_by_id)
+        .unwrap_or_else(crate::agent::get_active_agent);
 
     let Some(home) = dirs::home_dir() else {
         return all_skills;
     };
 
-    // 1. Check ~/.claude/skills/ for skills installed via skills CLI (user scope)
-    let skills_dir = home.join(".claude").join("skills");
+    // 1. Check ~/{auth_config_dir}/skills/ for skills installed via skills CLI (user scope)
+    let skills_dir_name = agent.skills_dir_name.unwrap_or("skills");
+    let skills_dir = home.join(agent.auth_config_dir).join(skills_dir_name);
     if skills_dir.exists() && skills_dir.is_dir() {
         if let Ok(entries) = fs::read_dir(&skills_dir) {
             for entry in entries.flatten() {
@@ -166,9 +174,11 @@ pub fn list_claude_skills(project_path: Option<String>) -> Vec<ClaudeSkill> {
         }
     }
 
-    // 2. Check project-level .claude/skills/ if project_path provided
+    // 2. Check project-level {auth_config_dir}/skills/ if project_path provided
     if let Some(ref proj_path) = project_path {
-        let project_skills_dir = PathBuf::from(proj_path).join(".claude").join("skills");
+        let project_skills_dir = PathBuf::from(proj_path)
+            .join(agent.auth_config_dir)
+            .join(skills_dir_name);
         if project_skills_dir.exists() && project_skills_dir.is_dir() {
             if let Ok(entries) = fs::read_dir(&project_skills_dir) {
                 for entry in entries.flatten() {
@@ -200,7 +210,7 @@ pub fn list_claude_skills(project_path: Option<String>) -> Vec<ClaudeSkill> {
 
     // 3. Check installed_plugins.json for legacy plugin-based skills
     let plugins_json = home
-        .join(".claude")
+        .join(agent.auth_config_dir)
         .join("plugins")
         .join("installed_plugins.json");
 
@@ -401,17 +411,23 @@ fn parse_skill_entry(line: &str) -> Option<SkillSearchResult> {
 }
 
 /// Install a skill using the Skills CLI
-/// Runs: npx skills add <package> -y --agent claude-code
+/// Runs: npx skills add <package> -y --agent <agent-id>
 #[tauri::command]
 pub async fn install_skill(
     package: String,
     scope: String,
     project_path: Option<String>,
+    agent_id: Option<String>,
 ) -> Result<(), String> {
+    let agent = agent_id
+        .as_deref()
+        .map(crate::agent::get_agent_by_id)
+        .unwrap_or_else(crate::agent::get_active_agent);
     let home = dirs::home_dir()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_default();
 
+    let skills_agent_id = agent.skills_agent_id.unwrap_or(agent.id);
     let mut cmd = create_command("npx");
     cmd.args([
         "--yes",
@@ -420,10 +436,13 @@ pub async fn install_skill(
         &package,
         "-y",
         "--agent",
-        "claude-code",
+        skills_agent_id,
     ])
     .env("PATH", get_extended_path())
-    .env("HOME", &home);
+    .env("HOME", &home)
+    .env_remove("npm_config__jsr-registry")
+    .env_remove("npm_config_npm-globalconfig")
+    .env_remove("npm_config_verify-deps-before-run");
 
     // Set working directory based on scope
     if scope == "project" {
@@ -443,24 +462,36 @@ pub async fn install_skill(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to install skill: {}", stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let details = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
+        return Err(format!("Failed to install skill: {}", details));
     }
 
     Ok(())
 }
 
 /// Remove a skill using the Skills CLI
-/// Runs: npx skills remove <package> --agent claude-code
+/// Runs: npx skills remove <package> --agent <agent-id>
 #[tauri::command]
 pub async fn remove_skill(
     package: String,
     scope: String,
     project_path: Option<String>,
+    agent_id: Option<String>,
 ) -> Result<(), String> {
+    let agent = agent_id
+        .as_deref()
+        .map(crate::agent::get_agent_by_id)
+        .unwrap_or_else(crate::agent::get_active_agent);
     let home = dirs::home_dir()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_default();
 
+    let skills_agent_id = agent.skills_agent_id.unwrap_or(agent.id);
     let mut cmd = create_command("npx");
     cmd.args([
         "--yes",
@@ -469,10 +500,13 @@ pub async fn remove_skill(
         &package,
         "-y",
         "--agent",
-        "claude-code",
+        skills_agent_id,
     ])
     .env("PATH", get_extended_path())
-    .env("HOME", &home);
+    .env("HOME", &home)
+    .env_remove("npm_config__jsr-registry")
+    .env_remove("npm_config_npm-globalconfig")
+    .env_remove("npm_config_verify-deps-before-run");
 
     // Set working directory based on scope
     if scope == "project" {
@@ -492,7 +526,13 @@ pub async fn remove_skill(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to remove skill: {}", stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let details = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
+        return Err(format!("Failed to remove skill: {}", details));
     }
 
     Ok(())

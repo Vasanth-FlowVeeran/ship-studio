@@ -2,7 +2,8 @@
 //!
 //! Commands for AI-powered features like PR description generation.
 
-use crate::commands::claude::find_claude_binary;
+use crate::agent::get_active_agent;
+use crate::commands::claude::find_agent_binary;
 use crate::types::GeneratedPR;
 use crate::utils::{create_command, get_extended_path, validate_project_path};
 use tracing::{debug, error, info, warn};
@@ -18,8 +19,12 @@ pub async fn generate_pr_description(
 ) -> Result<GeneratedPR, String> {
     let validated_path = validate_project_path(&project_path)?;
 
-    let claude_path = find_claude_binary().ok_or_else(|| {
-        "Claude CLI is not installed. Install Claude Code to use AI generation.".to_string()
+    let agent = get_active_agent();
+    let agent_path = find_agent_binary().ok_or_else(|| {
+        format!(
+            "{} CLI is not installed. Install {} to use AI generation.",
+            agent.display_name, agent.display_name
+        )
     })?;
 
     info!(
@@ -67,19 +72,22 @@ pub async fn generate_pr_description(
         &truncated_diff,
     );
 
-    debug!("Calling Claude CLI for PR generation");
+    debug!("Calling {} CLI for PR generation", agent.display_name);
 
-    let output = create_command(&claude_path)
-        .args(["--print", "-p", &prompt])
+    let mut args: Vec<&str> = agent.print_mode_flags.to_vec();
+    args.push(&prompt);
+
+    let output = create_command(&agent_path)
+        .args(&args)
         .env("PATH", get_extended_path())
         .current_dir(&validated_path)
         .output()
-        .map_err(|e| format!("Failed to run Claude CLI: {}", e))?;
+        .map_err(|e| format!("Failed to run {} CLI: {}", agent.display_name, e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        error!("Claude CLI failed: {}", stderr);
-        return Err(format!("Claude CLI failed: {}", stderr));
+        error!("{} CLI failed: {}", agent.display_name, stderr);
+        return Err(format!("{} CLI failed: {}", agent.display_name, stderr));
     }
 
     let response = String::from_utf8_lossy(&output.stdout).to_string();

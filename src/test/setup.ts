@@ -74,7 +74,6 @@ beforeAll(() => {
           { name: 'npm', available: true, path: '/usr/local/bin/npm' },
           { name: 'git', available: true, path: '/usr/bin/git' },
           { name: 'gh', available: true, path: '/usr/local/bin/gh' },
-          { name: 'vercel', available: true, path: '/usr/local/bin/vercel' },
           { name: 'claude', available: true, path: '/usr/local/bin/claude' },
         ];
       case 'get_current_branch':

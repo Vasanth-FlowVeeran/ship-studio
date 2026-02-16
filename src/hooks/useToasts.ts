@@ -14,7 +14,7 @@
 import { useState, useRef, useCallback } from 'react';
 
 /** Toast notification type */
-export type ToastType = 'success' | 'error';
+export type ToastType = 'success' | 'error' | 'info';
 
 /** Toast notification data */
 export interface Toast {

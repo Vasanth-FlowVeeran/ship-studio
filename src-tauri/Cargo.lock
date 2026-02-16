@@ -4128,6 +4128,7 @@ dependencies = [
  "objc2 0.5.2",
  "objc2-foundation 0.2.2",
  "once_cell",
+ "semver",
  "serde",
  "serde_json",
  "tauri",

@@ -2,7 +2,7 @@
  * ImportTypePicker component - modal with two import options.
  *
  * Presents:
- * - GitHub Repository — Clone from GitHub + link Vercel (existing flow)
+ * - GitHub Repository — Clone from GitHub (existing flow)
  * - Local Folder — Open an existing project from the computer
  *
  * @module components/ImportTypePicker
@@ -40,7 +40,7 @@ export function ImportTypePicker({
             </div>
             <div className="import-picker-text">
               <span className="import-picker-title">GitHub Repository</span>
-              <span className="import-picker-subtitle">Clone from GitHub + link Vercel</span>
+              <span className="import-picker-subtitle">Clone from GitHub</span>
             </div>
           </button>
           <button className="import-picker-card" onClick={onSelectLocalFolder}>

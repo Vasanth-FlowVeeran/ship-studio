@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { CloseIcon } from './icons';
-import { listClaudeSkills, ClaudeSkill } from '../lib/claude';
+import { listAgentSkills, AgentSkill } from '../lib/claude';
 
 interface HelpModalProps {
   isOpen: boolean;
@@ -19,7 +19,7 @@ interface HelpModalProps {
 }
 
 export function HelpModal({ isOpen, onClose, projectPath }: HelpModalProps) {
-  const [skills, setSkills] = useState<ClaudeSkill[]>([]);
+  const [skills, setSkills] = useState<AgentSkill[]>([]);
   const [isLoadingSkills, setIsLoadingSkills] = useState(false);
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
 
@@ -54,7 +54,7 @@ export function HelpModal({ isOpen, onClose, projectPath }: HelpModalProps) {
     if (!isOpen) return;
 
     setIsLoadingSkills(true);
-    listClaudeSkills(projectPath)
+    listAgentSkills(projectPath)
       .then(setSkills)
       .catch((err) => {
         console.error('Failed to load skills:', err);

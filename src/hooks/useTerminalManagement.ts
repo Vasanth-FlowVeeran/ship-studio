@@ -13,14 +13,22 @@
 
 import { useState, useRef, useCallback } from 'react';
 import type { TerminalHandle } from '../components/Terminal';
+import { getAgentById, getDefaultAgentId } from '../lib/agent';
+import type { AgentConfig } from '../lib/agent';
 
 /** Maximum number of terminal tabs allowed */
 const MAX_TERMINAL_TABS = 5;
 
+/** A terminal tab with its own agent assignment. */
+export interface TerminalTab {
+  id: number;
+  agentId: string;
+}
+
 /** Return type for useTerminalManagement hook */
 export interface UseTerminalManagementReturn {
-  /** Array of terminal tab IDs */
-  terminalTabs: number[];
+  /** Array of terminal tabs */
+  terminalTabs: TerminalTab[];
   /** Currently active terminal tab ID */
   activeTerminalTab: number;
   /** Session ID that changes when project changes (forces terminal remount) */
@@ -45,6 +53,10 @@ export interface UseTerminalManagementReturn {
   focusActiveTerminal: () => void;
   /** Paste text into the active terminal */
   pasteToActiveTerminal: (text: string) => void;
+  /** Switch the agent for a specific tab (kills PTY and remounts) */
+  switchTabAgent: (tabId: number, agentId: string) => void;
+  /** Get the agent config for the currently active tab */
+  getActiveTabAgent: () => AgentConfig;
 }
 
 /**
@@ -73,7 +85,9 @@ export interface UseTerminalManagementReturn {
  * @returns Terminal management state and control functions
  */
 export function useTerminalManagement(): UseTerminalManagementReturn {
-  const [terminalTabs, setTerminalTabs] = useState<number[]>([1]);
+  const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([
+    { id: 1, agentId: getDefaultAgentId() },
+  ]);
   const [activeTerminalTab, setActiveTerminalTab] = useState(1);
   const [terminalSessionId, setTerminalSessionId] = useState(1);
   const terminalRefsMap = useRef<Map<number, TerminalHandle | null>>(new Map());
@@ -89,7 +103,7 @@ export function useTerminalManagement(): UseTerminalManagementReturn {
   const addTerminalTab = useCallback(() => {
     if (terminalTabs.length >= MAX_TERMINAL_TABS) return;
     const newTabId = ++terminalTabCounterRef.current;
-    setTerminalTabs((prev) => [...prev, newTabId]);
+    setTerminalTabs((prev) => [...prev, { id: newTabId, agentId: getDefaultAgentId() }]);
     setActiveTerminalTab(newTabId);
   }, [terminalTabs.length]);
 
@@ -105,12 +119,12 @@ export function useTerminalManagement(): UseTerminalManagementReturn {
       }
 
       setTerminalTabs((prev) => {
-        const newTabs = prev.filter((id) => id !== tabId);
+        const newTabs = prev.filter((t) => t.id !== tabId);
         // If we're closing the active tab, switch to the previous one or the first
         if (tabId === activeTerminalTab) {
-          const closedIndex = prev.indexOf(tabId);
+          const closedIndex = prev.findIndex((t) => t.id === tabId);
           const newActiveIndex = Math.max(0, closedIndex - 1);
-          setActiveTerminalTab(newTabs[newActiveIndex]);
+          setActiveTerminalTab(newTabs[newActiveIndex].id);
         }
         return newTabs;
       });
@@ -123,7 +137,7 @@ export function useTerminalManagement(): UseTerminalManagementReturn {
   const resetTerminals = useCallback(() => {
     killAllTerminals();
     terminalTabCounterRef.current = 1;
-    setTerminalTabs([1]);
+    setTerminalTabs([{ id: 1, agentId: getDefaultAgentId() }]);
     setActiveTerminalTab(1);
     setTerminalSessionId((prev) => prev + 1);
   }, [killAllTerminals]);
@@ -143,6 +157,26 @@ export function useTerminalManagement(): UseTerminalManagementReturn {
     [activeTerminalTab]
   );
 
+  const switchTabAgent = useCallback((tabId: number, agentId: string) => {
+    // Kill the existing PTY for this tab
+    const ref = terminalRefsMap.current.get(tabId);
+    if (ref) {
+      ref.kill();
+    }
+    terminalRefsMap.current.delete(tabId);
+
+    // Update the tab's agent
+    setTerminalTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, agentId } : t)));
+
+    // Increment session ID to force remount of the terminal
+    setTerminalSessionId((prev) => prev + 1);
+  }, []);
+
+  const getActiveTabAgent = useCallback((): AgentConfig => {
+    const tab = terminalTabs.find((t) => t.id === activeTerminalTab);
+    return tab ? getAgentById(tab.agentId) : getAgentById(getDefaultAgentId());
+  }, [terminalTabs, activeTerminalTab]);
+
   return {
     terminalTabs,
     activeTerminalTab,
@@ -157,5 +191,7 @@ export function useTerminalManagement(): UseTerminalManagementReturn {
     getActiveTerminalRef,
     focusActiveTerminal,
     pasteToActiveTerminal,
+    switchTabAgent,
+    getActiveTabAgent,
   };
 }

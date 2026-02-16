@@ -48,13 +48,15 @@ export async function searchSkills(query: string): Promise<SkillSearchResult[]> 
  * @param pkg - Package identifier (e.g., "owner/repo")
  * @param scope - Installation scope: "user" or "project"
  * @param projectPath - Required for project-scoped installation
+ * @param agentId - Optional agent ID to install for a specific agent
  */
 export async function installSkill(
   pkg: string,
   scope: 'user' | 'project',
-  projectPath?: string
+  projectPath?: string,
+  agentId?: string
 ): Promise<void> {
-  return invoke('install_skill', { package: pkg, scope, projectPath });
+  return invoke('install_skill', { package: pkg, scope, projectPath, agentId });
 }
 
 /**
@@ -62,11 +64,13 @@ export async function installSkill(
  * @param pkg - Package identifier (e.g., "owner/repo")
  * @param scope - Installation scope: "user" or "project"
  * @param projectPath - Required for project-scoped removal
+ * @param agentId - Optional agent ID to remove for a specific agent
  */
 export async function removeSkill(
   pkg: string,
   scope: 'user' | 'project',
-  projectPath?: string
+  projectPath?: string,
+  agentId?: string
 ): Promise<void> {
-  return invoke('remove_skill', { package: pkg, scope, projectPath });
+  return invoke('remove_skill', { package: pkg, scope, projectPath, agentId });
 }

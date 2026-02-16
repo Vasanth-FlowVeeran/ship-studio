@@ -7,7 +7,7 @@
  * - Git
  * - GitHub CLI + auth
  * - Claude Code + auth
- * - Vercel CLI + auth
+ * - Codex + auth
  *
  * @module lib/setup
  */
@@ -17,9 +17,10 @@ import { invoke } from '@tauri-apps/api/core';
 /** Platform detection helpers using navigator.userAgent as fallback */
 const getPlatform = (): string => {
   // Use navigator.userAgent for client-side platform detection
+  // Check darwin/mac BEFORE win because 'darwin' contains 'win' as a substring
   const userAgent = navigator.userAgent.toLowerCase();
+  if (userAgent.includes('darwin') || userAgent.includes('mac')) return 'macos';
   if (userAgent.includes('win')) return 'windows';
-  if (userAgent.includes('mac')) return 'macos';
   if (userAgent.includes('linux')) return 'linux';
   return 'unknown';
 };
@@ -64,26 +65,38 @@ export interface SetupItem {
   errorMessage?: string;
 }
 
-/** Optional authentication status (GitHub and Vercel can be skipped during onboarding) */
+/** Optional authentication status (GitHub can be skipped during onboarding) */
 export interface OptionalAuths {
   /** Whether GitHub is authenticated */
   githubAuthenticated: boolean;
-  /** Whether Vercel is authenticated */
-  vercelAuthenticated: boolean;
 }
 
 /** Full setup status from backend */
 export interface FullSetupStatus {
-  /** All required items are ready (excludes optional auth items) */
+  /** All required items are ready (base tools + at least one agent pair) */
   allReady: boolean;
   /** Individual item statuses */
   items: SetupItem[];
   /** Status of optional authentication items */
   optionalAuths: OptionalAuths;
+  /** Agent IDs that are fully set up (installed + authenticated) */
+  detectedAgents: string[];
 }
 
-/** Items that are optional and can be skipped during onboarding */
-export const OPTIONAL_ITEMS = new Set(['gh_auth', 'vercel_auth']);
+/**
+ * Items that are optional and can be skipped during onboarding.
+ * Individual agent items are "optional" because each one individually is not required,
+ * but the backend `allReady` enforces "at least one agent pair".
+ */
+export const OPTIONAL_ITEMS = new Set([
+  'gh_auth',
+  'claude',
+  'claude_auth',
+  'codex',
+  'codex_auth',
+  'vercel',
+  'vercel_auth',
+]);
 
 /** Quick setup check result (fast Tier-1 check) */
 export interface QuickSetupCheck {
@@ -103,8 +116,6 @@ export interface SetupProgress {
 
 /** Dependency graph: which items must be ready before each item can be installed */
 export function getSetupDependencies(): Record<string, string[]> {
-  const isWin = isWindows();
-
   return {
     homebrew: [],
     node: ['homebrew'],
@@ -114,7 +125,9 @@ export function getSetupDependencies(): Record<string, string[]> {
     gh_auth: ['gh'],
     claude: [], // Uses its own installer
     claude_auth: ['claude'],
-    vercel: isWin ? ['node'] : ['homebrew'], // Windows: npm install, macOS: brew install
+    codex: [], // Uses npm global install
+    codex_auth: ['codex'],
+    vercel: [], // Uses npm global install
     vercel_auth: ['vercel'],
   };
 }
@@ -132,6 +145,8 @@ export const SETUP_ITEM_ORDER = [
   'gh_auth',
   'claude',
   'claude_auth',
+  'codex',
+  'codex_auth',
   'vercel',
   'vercel_auth',
 ];
@@ -146,6 +161,8 @@ export const SETUP_FRIENDLY_NAMES: Record<string, string> = {
   gh_auth: 'GitHub Account',
   claude: 'Claude Code',
   claude_auth: 'Claude Account',
+  codex: 'Codex',
+  codex_auth: 'Codex Account',
   vercel: 'Vercel CLI',
   vercel_auth: 'Vercel Account',
 };
@@ -160,6 +177,8 @@ export const SETUP_PROGRESS_MESSAGES: Record<string, string> = {
   gh_auth: 'Connecting to GitHub...',
   claude: 'Installing Claude Code...',
   claude_auth: 'Connecting to Claude...',
+  codex: 'Installing Codex...',
+  codex_auth: 'Connecting to Codex...',
   vercel: 'Installing Vercel CLI...',
   vercel_auth: 'Connecting to Vercel...',
 };
@@ -174,9 +193,42 @@ export const SETUP_TIME_ESTIMATES: Record<string, string> = {
   gh_auth: '~15 sec',
   claude: '~10 sec',
   claude_auth: '~15 sec',
-  vercel: '~1 min',
+  codex: '~15 sec',
+  codex_auth: '~15 sec',
+  vercel: '~10 sec',
   vercel_auth: '~15 sec',
 };
+
+// ============ Agent Pair Helpers ============
+
+/** Agent item pairs: binary item ID + auth item ID */
+export const AGENT_ITEM_PAIRS = [
+  { binaryId: 'claude', authId: 'claude_auth' },
+  { binaryId: 'codex', authId: 'codex_auth' },
+] as const;
+
+/** Agent item IDs (all binary + auth IDs) */
+export const AGENT_ITEM_IDS: Set<string> = new Set(
+  AGENT_ITEM_PAIRS.flatMap((p) => [p.binaryId, p.authId])
+);
+
+/**
+ * Returns agent pairs that have both binary and auth ready.
+ */
+export function getReadyAgentPairs(items: SetupItem[]): (typeof AGENT_ITEM_PAIRS)[number][] {
+  return AGENT_ITEM_PAIRS.filter((pair) => {
+    const binary = items.find((i) => i.id === pair.binaryId);
+    const auth = items.find((i) => i.id === pair.authId);
+    return binary?.status === 'ready' && auth?.status === 'ready';
+  });
+}
+
+/**
+ * Returns true if at least one agent pair (binary + auth) is fully ready.
+ */
+export function isAtLeastOneAgentReady(items: SetupItem[]): boolean {
+  return getReadyAgentPairs(items).length > 0;
+}
 
 /**
  * Check if an item's dependencies are all ready.
@@ -200,6 +252,117 @@ export function getBlockingDependencies(itemId: string, items: SetupItem[]): str
       return dep?.status !== 'ready';
     })
     .map((depId) => SETUP_FRIENDLY_NAMES[depId] || depId);
+}
+
+/**
+ * Merge plugin-contributed setup items into the base dependency graph.
+ *
+ * Plugin items are prefixed with their plugin ID to avoid key collisions.
+ * Existing setup items are untouched — this is purely additive.
+ */
+export function mergePluginSetupItems(
+  baseDeps: Record<string, string[]>,
+  pluginItems: Array<{ pluginId: string; id: string; depends_on: string[] }>
+): Record<string, string[]> {
+  const merged = { ...baseDeps };
+
+  for (const item of pluginItems) {
+    const key = `${item.pluginId}:${item.id}`;
+    // Prefix dependency IDs with pluginId if they don't already contain ':'
+    const deps = item.depends_on.map((d) => (d.includes(':') ? d : `${item.pluginId}:${d}`));
+    merged[key] = deps;
+  }
+
+  return merged;
+}
+
+// ============ Wizard Step Definitions ============
+
+export type WizardStepId = 'package-manager' | 'git-github' | 'agent' | 'hosting';
+
+export interface WizardStepDef {
+  id: WizardStepId;
+  title: string;
+  subtitle: string;
+  itemIds: string[];
+  skippable: boolean;
+}
+
+export const WIZARD_STEPS: WizardStepDef[] = [
+  {
+    id: 'package-manager',
+    title: 'Package Manager & Node.js',
+    subtitle: 'Install the tools needed to manage dependencies',
+    itemIds: ['homebrew', 'node', 'npm_fix'],
+    skippable: false,
+  },
+  {
+    id: 'git-github',
+    title: 'Git & GitHub',
+    subtitle: 'Set up version control and repository hosting',
+    itemIds: ['git', 'gh', 'gh_auth'],
+    skippable: false,
+  },
+  {
+    id: 'agent',
+    title: 'AI Agent',
+    subtitle: 'Install at least one AI coding assistant',
+    itemIds: ['claude', 'claude_auth', 'codex', 'codex_auth'],
+    skippable: false,
+  },
+  {
+    id: 'hosting',
+    title: 'Hosting Provider',
+    subtitle: 'Deploy your projects to the web',
+    itemIds: ['vercel', 'vercel_auth'],
+    skippable: true,
+  },
+];
+
+/**
+ * Get the items for a wizard step, filtering out items not present in the current status.
+ */
+export function getStepItems(stepId: WizardStepId, items: SetupItem[]): SetupItem[] {
+  const step = WIZARD_STEPS.find((s) => s.id === stepId);
+  if (!step) return [];
+  return step.itemIds
+    .map((id) => items.find((i) => i.id === id))
+    .filter((i): i is SetupItem => i !== undefined);
+}
+
+/**
+ * Check if a wizard step is complete.
+ * - package-manager / git-github: all present items must be ready
+ * - agent: at least one agent pair (binary + auth) must be ready
+ * - hosting: always complete (placeholder)
+ */
+export function isWizardStepComplete(stepId: WizardStepId, items: SetupItem[]): boolean {
+  if (stepId === 'hosting') {
+    // Hosting is complete when both vercel and vercel_auth are ready.
+    // If items aren't present (e.g. backend hasn't reported them), treat as incomplete
+    // so the step shows up rather than being silently skipped.
+    const stepItems = getStepItems(stepId, items);
+    return stepItems.length > 0 && stepItems.every((i) => i.status === 'ready');
+  }
+
+  if (stepId === 'agent') {
+    return isAtLeastOneAgentReady(items);
+  }
+
+  const stepItems = getStepItems(stepId, items);
+  return stepItems.length > 0 && stepItems.every((i) => i.status === 'ready');
+}
+
+/**
+ * Find the first incomplete wizard step. Returns null if all are complete.
+ */
+export function findFirstIncompleteStep(items: SetupItem[]): WizardStepId | null {
+  for (const step of WIZARD_STEPS) {
+    if (!isWizardStepComplete(step.id, items)) {
+      return step.id;
+    }
+  }
+  return null;
 }
 
 // ============ Backend API ============
@@ -255,18 +418,20 @@ export async function installClaude(): Promise<void> {
 }
 
 /**
- * Start Claude authentication flow.
+ * Start agent authentication flow.
+ * If agentId is provided, authenticate that specific agent.
  * Returns a message to display to the user.
  */
-export async function startClaudeAuth(): Promise<string> {
-  return invoke<string>('start_claude_auth');
+export async function startClaudeAuth(agentId?: string): Promise<string> {
+  return invoke<string>('start_claude_auth', { agentId: agentId ?? null });
 }
 
 /**
- * Check if Claude is authenticated.
+ * Check if an agent is authenticated.
+ * If agentId is provided, check that specific agent.
  */
-export async function checkClaudeAuthStatus(): Promise<boolean> {
-  return invoke<boolean>('check_claude_auth_status');
+export async function checkClaudeAuthStatus(agentId?: string): Promise<boolean> {
+  return invoke<boolean>('check_claude_auth_status', { agentId: agentId ?? null });
 }
 
 /**
@@ -293,12 +458,18 @@ export async function resetSetupState(): Promise<void> {
 }
 
 /**
- * Install Vercel CLI.
- * On Windows: installs via npm
- * On macOS: installs via Homebrew
+ * Get the default agent ID from persisted AppState.
+ * Returns null if not set (falls back to Claude Code).
  */
-export async function installVercel(): Promise<void> {
-  return invoke('install_vercel_cli');
+export async function getDefaultAgentId(): Promise<string | null> {
+  return invoke<string | null>('get_default_agent_id');
+}
+
+/**
+ * Set the default agent ID. Persists to AppState and updates in-memory cache.
+ */
+export async function setDefaultAgentId(agentId: string): Promise<void> {
+  return invoke('set_default_agent_id', { agentId });
 }
 
 /**
@@ -306,7 +477,7 @@ export async function installVercel(): Promise<void> {
  * This is faster than individual installs because auto-update only runs once
  * and Homebrew can download bottles in parallel.
  *
- * @param packages - Array of item IDs to install (e.g., ['node', 'git', 'gh', 'vercel'])
+ * @param packages - Array of item IDs to install (e.g., ['node', 'git', 'gh'])
  */
 export async function installBrewPackages(packages: string[]): Promise<void> {
   return invoke('install_brew_packages', { packages });
@@ -337,10 +508,10 @@ export async function installPackages(packages: string[]): Promise<void> {
 }
 
 /** Brew-installed packages that can be batched */
-export const BREW_PACKAGES = new Set(['node', 'git', 'gh', 'vercel']);
+export const BREW_PACKAGES = new Set(['node', 'git', 'gh']);
 
 /** Package manager-installed packages (Homebrew on macOS, Winget on Windows) */
-export const PKG_MGR_PACKAGES = new Set(['node', 'git', 'gh', ...(isWindows() ? [] : ['vercel'])]);
+export const PKG_MGR_PACKAGES = new Set(['node', 'git', 'gh']);
 
 /**
  * Check if the npm cache directory (~/.npm) is writable.
@@ -348,14 +519,6 @@ export const PKG_MGR_PACKAGES = new Set(['node', 'git', 'gh', ...(isWindows() ? 
  */
 export async function checkNpmCachePermissions(): Promise<string> {
   return invoke<string>('check_npm_cache_permissions');
-}
-
-/**
- * Start Vercel authentication flow (opens browser).
- * Returns a message to display to the user.
- */
-export async function startVercelAuth(): Promise<string> {
-  return invoke<string>('start_vercel_auth');
 }
 
 // ============ Terminal Commands ============
@@ -403,6 +566,18 @@ export function getTerminalCommands(): Record<string, TerminalCommand> {
       claude_auth: {
         command: 'claude',
         args: [],
+      },
+      codex: {
+        command: 'npm',
+        args: ['install', '-g', '@openai/codex'],
+      },
+      codex_auth: {
+        command: 'codex',
+        args: [],
+      },
+      vercel: {
+        command: 'npm',
+        args: ['install', '-g', 'vercel'],
       },
       vercel_auth: {
         command: 'vercel',
@@ -455,6 +630,18 @@ export function getTerminalCommands(): Record<string, TerminalCommand> {
         command: 'claude',
         args: [],
       },
+      codex: {
+        command: '/bin/bash',
+        args: ['-c', 'npm install -g @openai/codex'],
+      },
+      codex_auth: {
+        command: 'codex',
+        args: [],
+      },
+      vercel: {
+        command: '/bin/bash',
+        args: ['-c', 'npm install -g vercel'],
+      },
       vercel_auth: {
         command: 'vercel',
         args: ['login'],
@@ -473,5 +660,8 @@ export const USES_TERMINAL = new Set([
   'gh_auth',
   'claude',
   'claude_auth',
+  'codex',
+  'codex_auth',
+  'vercel',
   'vercel_auth',
 ]);

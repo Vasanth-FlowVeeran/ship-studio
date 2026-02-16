@@ -25,15 +25,6 @@ import {
 } from '../lib/github';
 import { getWindowLabel } from '../lib/window';
 import { checkNpmCachePermissions } from '../lib/setup';
-import {
-  checkVercelCliStatus,
-  getVercelUsername,
-  getVercelTeams,
-  listVercelProjects,
-  writeVercelProjectJson,
-  VercelTeam,
-  VercelProject,
-} from '../lib/vercel';
 
 /** Props for the ImportProject component */
 interface ImportProjectProps {
@@ -44,7 +35,7 @@ interface ImportProjectProps {
 }
 
 /** Form wizard steps before import starts */
-type FormStep = 'select-account' | 'select-repo' | 'select-vercel';
+type FormStep = 'select-account' | 'select-repo';
 /** Import progress steps */
 type Step = 'clone' | 'install' | 'setup' | 'done';
 
@@ -80,16 +71,6 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
   const [importedProjectPath, setImportedProjectPath] = useState<string | null>(null);
   const [importedPackageManager, setImportedPackageManager] = useState<string>('npm');
 
-  // Vercel state
-  const [vercelAuthenticated, setVercelAuthenticated] = useState(false);
-  const [vercelUsername, setVercelUsername] = useState<string | null>(null);
-  const [vercelTeams, setVercelTeams] = useState<VercelTeam[]>([]);
-  const [selectedVercelScope, setSelectedVercelScope] = useState<string>('');
-  const [vercelProjects, setVercelProjects] = useState<VercelProject[]>([]);
-  const [loadingVercelProjects, setLoadingVercelProjects] = useState(false);
-  const [selectedVercelProject, setSelectedVercelProject] = useState<VercelProject | null>(null);
-  const [vercelSearchQuery, setVercelSearchQuery] = useState('');
-
   // Load user and orgs on mount
   useEffect(() => {
     void loadAccounts();
@@ -103,18 +84,6 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       setOrgs(orgList);
       // Auto-select personal account
       setSelectedOwner(user);
-
-      // Also check Vercel status
-      const vercelStatus = await checkVercelCliStatus();
-      setVercelAuthenticated(vercelStatus.authenticated);
-      if (vercelStatus.authenticated) {
-        const [vcUsername, vcTeams] = await Promise.all([
-          getVercelUsername().catch(() => null),
-          getVercelTeams().catch(() => []),
-        ]);
-        setVercelUsername(vcUsername);
-        setVercelTeams(vcTeams);
-      }
     } catch {
       setError('Failed to load GitHub accounts. Please check your authentication.');
     } finally {
@@ -128,13 +97,6 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       void loadRepos(selectedOwner);
     }
   }, [selectedOwner]);
-
-  // Load Vercel projects when scope changes
-  useEffect(() => {
-    if (formStep === 'select-vercel' && vercelAuthenticated) {
-      void loadVercelProjects(selectedVercelScope);
-    }
-  }, [selectedVercelScope, formStep, vercelAuthenticated]);
 
   const loadRepos = async (owner: string) => {
     setLoadingRepos(true);
@@ -152,20 +114,6 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       setError(`Failed to load repositories: ${String(e)}`);
     } finally {
       setLoadingRepos(false);
-    }
-  };
-
-  const loadVercelProjects = async (scope: string) => {
-    setLoadingVercelProjects(true);
-    setVercelProjects([]);
-    setSelectedVercelProject(null);
-    try {
-      const projects = await listVercelProjects(scope);
-      setVercelProjects(projects);
-    } catch (e) {
-      console.error('Failed to load Vercel projects:', e);
-    } finally {
-      setLoadingVercelProjects(false);
     }
   };
 
@@ -323,15 +271,6 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       // Ensure .shipstudio is gitignored
       await invoke('ensure_gitignore_has_shipstudio', { projectPath });
 
-      // Write .vercel/project.json if a Vercel project was selected
-      if (selectedVercelProject) {
-        await writeVercelProjectJson(
-          projectPath,
-          selectedVercelProject.id,
-          selectedVercelProject.orgId
-        );
-      }
-
       setCurrentStep('done');
 
       // Small delay before opening
@@ -361,12 +300,6 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
     );
   });
 
-  // Filter Vercel projects based on search
-  const filteredVercelProjects = vercelProjects.filter((project) => {
-    if (!vercelSearchQuery) return true;
-    return project.name.toLowerCase().includes(vercelSearchQuery.toLowerCase());
-  });
-
   const handleOwnerSelect = (owner: string) => {
     setSelectedOwner(owner);
     setFormStep('select-repo');
@@ -378,26 +311,11 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
     setSelectedRepo(repo);
   };
 
-  const handleContinueToVercel = () => {
-    if (vercelAuthenticated) {
-      setFormStep('select-vercel');
-      setVercelSearchQuery('');
-      // Projects will be loaded by the useEffect watching formStep === 'select-vercel'
-    } else {
-      // Skip Vercel step if not authenticated
-      void handleImport();
-    }
-  };
-
   const handleBack = () => {
     if (formStep === 'select-repo') {
       setFormStep('select-account');
       setSelectedRepo(null);
       setSearchQuery('');
-    } else if (formStep === 'select-vercel') {
-      setFormStep('select-repo');
-      setSelectedVercelProject(null);
-      setVercelSearchQuery('');
     }
   };
 
@@ -655,131 +573,16 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
               type="button"
               className="btn-primary"
               disabled={!selectedRepo}
-              onClick={handleContinueToVercel}
+              onClick={() => void handleImport()}
             >
-              {vercelAuthenticated ? 'Continue' : 'Import Project'}
+              Import Project
             </button>
           </div>
         </div>
       );
     }
 
-    // Vercel project selection step
-    return (
-      <div className="create-modal-content import-repo-step">
-        <div className="create-modal-header">
-          <div>
-            <h2>Link to Vercel</h2>
-            <p className="template-context">
-              Importing <strong>{selectedRepo?.name}</strong>
-            </p>
-          </div>
-          <button className="create-modal-close" onClick={onCancel} type="button">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Vercel scope selector */}
-        <div className="import-vercel-scope">
-          <label>Vercel Account</label>
-          <div className="import-scope-buttons">
-            <button
-              className={`import-scope-btn ${selectedVercelScope === '' ? 'selected' : ''}`}
-              onClick={() => setSelectedVercelScope('')}
-            >
-              {vercelUsername || 'Personal'}
-            </button>
-            {vercelTeams.map((team) => (
-              <button
-                key={team.id}
-                className={`import-scope-btn ${selectedVercelScope === team.id ? 'selected' : ''}`}
-                onClick={() => setSelectedVercelScope(team.id)}
-              >
-                {team.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="import-search">
-          <input
-            type="text"
-            placeholder="Search Vercel projects..."
-            value={vercelSearchQuery}
-            onChange={(e) => setVercelSearchQuery(e.target.value)}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-          />
-        </div>
-
-        <div className="import-repo-list">
-          {loadingVercelProjects ? (
-            <div className="import-repo-loading">
-              <div className="checklist-spinner" />
-              <span>Loading Vercel projects...</span>
-            </div>
-          ) : filteredVercelProjects.length === 0 ? (
-            <div className="import-repo-empty">
-              {vercelSearchQuery ? (
-                <p>No projects found matching "{vercelSearchQuery}"</p>
-              ) : (
-                <p>No Vercel projects found</p>
-              )}
-            </div>
-          ) : (
-            filteredVercelProjects.map((project) => (
-              <button
-                key={project.id}
-                className={`import-repo-item ${selectedVercelProject?.id === project.id ? 'selected' : ''}`}
-                onClick={() => setSelectedVercelProject(project)}
-              >
-                <div className="import-repo-header">
-                  <span className="import-repo-name">{project.name}</span>
-                </div>
-              </button>
-            ))
-          )}
-        </div>
-
-        {error && <p className="error">{error}</p>}
-
-        <div className="create-actions">
-          <button type="button" onClick={handleBack}>
-            Back
-          </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => {
-              setSelectedVercelProject(null);
-              void handleImport();
-            }}
-          >
-            Skip
-          </button>
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={!selectedVercelProject}
-            onClick={() => void handleImport()}
-          >
-            Import Project
-          </button>
-        </div>
-      </div>
-    );
+    return null;
   };
 
   return (

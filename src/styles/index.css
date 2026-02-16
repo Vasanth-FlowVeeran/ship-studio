@@ -10,10 +10,8 @@
 @import './workspace.css';
 @import './toolbar.css';
 @import './preview.css';
-@import './cms.css';
 @import './modal.css';
 @import './github.css';
-@import './vercel.css';
 @import './publish.css';
 @import './env-editor.css';
 @import './assets-panel.css';
@@ -29,5 +27,6 @@
 @import './help-modal.css';
 @import './backups-modal.css';
 @import './skills-modal.css';
+@import './plugins.css';
 @import './education-mode.css';
 @import './changelog.css';

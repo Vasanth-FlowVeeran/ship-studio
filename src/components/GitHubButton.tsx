@@ -13,17 +13,14 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { GitHubState, VercelState } from '../hooks/useIntegrationStatus';
+import { GitHubState } from '../hooks/useIntegrationStatus';
 import { ProjectGitHubStatus, pushToGitHub, getGitHubOrgs } from '../lib/github';
-import { linkToVercel } from '../lib/vercel';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 /** Props for the GitHubButton component */
 interface GitHubButtonProps {
   /** Global GitHub authentication state */
   githubState: GitHubState;
-  /** Global Vercel authentication state (for auto-connect feature) */
-  vercelState?: VercelState;
   /** Current project's GitHub status (remote, branch, pending changes) */
   projectStatus: ProjectGitHubStatus | null;
   /** Absolute path to the project directory */
@@ -31,22 +28,17 @@ interface GitHubButtonProps {
   /** Project name (used as default repo name) */
   projectName: string;
   /** Callback to refresh project status after changes */
-  onStatusChange: (vercelDeployedUrl?: string) => Promise<void> | void;
+  onStatusChange: () => Promise<void> | void;
   /** Callback to initiate GitHub CLI authentication */
   onGitHubConnect: () => void;
   /** Optional callback when modal is closed */
   onModalClose?: () => void;
   /** Optional callback to show toast notifications */
   onToast?: (message: string, type?: 'success' | 'error') => void;
-  /** Optional callback when Vercel auto-connect starts */
-  onVercelAutoConnectStart?: () => void;
-  /** Optional callback when Vercel auto-connect completes */
-  onVercelAutoConnectEnd?: () => void;
 }
 
 export function GitHubButton({
   githubState,
-  vercelState,
   projectStatus,
   projectPath,
   projectName,
@@ -54,8 +46,6 @@ export function GitHubButton({
   onGitHubConnect,
   onModalClose,
   onToast,
-  onVercelAutoConnectStart,
-  onVercelAutoConnectEnd,
 }: GitHubButtonProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [repoName, setRepoName] = useState(projectName);
@@ -283,41 +273,6 @@ export function GitHubButton({
                       setShowCreateModal(false);
                       setIsLoading(false);
                       onModalClose?.();
-
-                      // Auto-connect to Vercel if authenticated (don't block, but refresh status when done)
-                      if (vercelState?.cliStatus.authenticated) {
-                        onVercelAutoConnectStart?.();
-                        void linkToVercel({
-                          projectPath,
-                          githubRepo: fullRepoName,
-                        })
-                          .then(async (deployedUrl) => {
-                            // Refresh status first, then end connecting state to avoid flash of "Connect Vercel"
-                            await onStatusChange(deployedUrl);
-                            onVercelAutoConnectEnd?.();
-                            // Show toast with the live domain
-                            if (deployedUrl) {
-                              const domain = deployedUrl.replace(/^https?:\/\//, '');
-                              onToast?.(`Live at ${domain}`, 'success');
-                            }
-                          })
-                          .catch(async (e) => {
-                            console.error('Failed to auto-connect to Vercel:', e);
-                            // Surface the error to the user so they can fix it
-                            const errorMsg = String(e);
-                            if (errorMsg.includes('GitHub connection failed')) {
-                              onToast?.(errorMsg, 'error');
-                            } else {
-                              onToast?.(
-                                'Failed to connect Vercel to GitHub. Click the Vercel button to retry.',
-                                'error'
-                              );
-                            }
-                            // Still refresh status even on error to show correct state
-                            await onStatusChange();
-                            onVercelAutoConnectEnd?.();
-                          });
-                      }
 
                       // Refresh status - this will clear isCreatingRepo when status updates
                       await onStatusChange();

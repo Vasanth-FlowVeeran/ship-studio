@@ -6,11 +6,11 @@
 //! - **Project Management**: Create, list, delete projects in ~/ShipStudio
 //! - **Dev Server & Terminal**: PTY management for Claude Code terminal
 //! - **GitHub Integration**: Check status, create repos, commit and push
-//! - **Vercel Integration**: Check status, deploy projects
 //! - **Environment Variables**: Read/write .env files with validation
 //! - **Native Webview**: Child webview for Sanity CMS (OAuth support)
 //! - **Utilities**: Screenshots, IDE launcher, prerequisite checks
 
+pub mod agent;
 pub mod cache;
 pub mod commands;
 pub mod logging;
@@ -25,30 +25,31 @@ use tauri::Manager;
 #[cfg(unix)]
 use std::process::Command;
 
-// Kill orphaned Claude processes spawned by this app
-fn cleanup_claude_processes() {
+// Kill orphaned agent processes spawned by this app
+fn cleanup_agent_processes() {
     #[cfg(unix)]
     {
-        // Get current process's children and kill them
         let pid = std::process::id();
-        let _ = Command::new("pkill")
-            .args(["-P", &pid.to_string(), "claude"])
-            .output();
 
-        // Kill any orphaned claude processes (parent is init/launchd - PID 1)
-        let _ = Command::new("sh")
-            .args([
-                "-c",
+        // Iterate ALL agents to kill children and orphans for each
+        for ag in agent::ALL_AGENTS {
+            let _ = Command::new("pkill")
+                .args(["-P", &pid.to_string(), ag.process_name])
+                .output();
+
+            let kill_script = format!(
                 r#"
-                for pid in $(pgrep -x claude 2>/dev/null); do
-                    ppid=$(ps -o ppid= -p $pid 2>/dev/null | tr -d ' ')
-                    if [ "$ppid" = "1" ]; then
-                        kill $pid 2>/dev/null
-                    fi
-                done
-            "#,
-            ])
-            .output();
+                    for pid in $(pgrep -x {} 2>/dev/null); do
+                        ppid=$(ps -o ppid= -p $pid 2>/dev/null | tr -d ' ')
+                        if [ "$ppid" = "1" ]; then
+                            kill $pid 2>/dev/null
+                        fi
+                    done
+                "#,
+                ag.process_name
+            );
+            let _ = Command::new("sh").args(["-c", &kill_script]).output();
+        }
 
         // Also kill orphaned node processes running next-server (from dev server)
         let _ = Command::new("sh")
@@ -76,9 +77,13 @@ pub fn run() {
 
     tracing::info!("Ship Studio starting up");
 
-    // Clean up any orphaned Claude processes from previous crashed sessions
-    cleanup_claude_processes();
-    tracing::debug!("Orphaned Claude processes cleaned up");
+    // Clean up any orphaned agent processes from previous crashed sessions
+    cleanup_agent_processes();
+    tracing::debug!("Orphaned agent processes cleaned up");
+
+    // Hydrate the default agent cache from persisted AppState
+    let app_state = commands::setup::read_app_state();
+    agent::init_default_agent(app_state.default_agent_id.as_deref());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -123,7 +128,7 @@ pub fn run() {
                         is_main,
                         remaining_windows
                     );
-                    cleanup_claude_processes();
+                    cleanup_agent_processes();
                     commands::setup::cleanup_auth_processes_sync();
                     proxy::stop_all_proxies();
                     static_server::stop_all_static_servers();
@@ -160,11 +165,11 @@ pub fn run() {
             commands::projects::list_projects,
             commands::projects::get_dashboard_projects,
             commands::projects::list_pages,
-            commands::projects::check_sanity_installed,
             commands::projects::open_in_finder,
             commands::projects::read_project_metadata,
             commands::projects::write_project_metadata,
             commands::projects::mark_project_opened,
+            commands::projects::has_vercel_config,
             commands::projects::get_branch_prefix_preference,
             commands::projects::set_branch_prefix_preference,
             commands::projects::ensure_gitignore_has_shipstudio,
@@ -188,7 +193,6 @@ pub fn run() {
             commands::env::write_env_file,
             commands::env::create_env_file,
             commands::env::delete_env_file,
-            commands::env::check_sanity_env_keys,
             // IDE & Webviews
             commands::ide::check_ide_availability,
             commands::ide::open_in_ide,
@@ -222,18 +226,20 @@ pub fn run() {
             commands::skills::search_skills,
             commands::skills::install_skill,
             commands::skills::remove_skill,
-            // Vercel integration
-            commands::vercel::check_vercel_cli_status,
-            commands::vercel::get_vercel_username,
-            commands::vercel::get_vercel_teams,
-            commands::vercel::list_vercel_projects,
-            commands::vercel::write_vercel_project_json,
-            commands::vercel::get_project_vercel_status,
-            commands::vercel::link_to_vercel,
-            commands::vercel::install_vercel_cli,
-            commands::vercel::deploy_to_vercel,
-            commands::vercel::get_vercel_deployments,
-            commands::vercel::get_deployment_status,
+            // Plugins
+            commands::plugins::list_plugins,
+            commands::plugins::install_plugin,
+            commands::plugins::uninstall_plugin,
+            commands::plugins::update_plugin,
+            commands::plugins::check_plugin_update,
+            commands::plugins::read_plugin_bundle,
+            commands::plugins::read_plugin_manifest,
+            commands::plugins::toggle_plugin,
+            commands::plugins::exec_plugin_shell,
+            commands::plugins::read_plugin_storage,
+            commands::plugins::write_plugin_storage,
+            commands::plugins::link_dev_plugin,
+            commands::plugins::unlink_dev_plugin,
             // GitHub integration
             commands::github::check_github_cli_status,
             commands::github::get_github_username,
@@ -292,13 +298,14 @@ pub fn run() {
             commands::setup::start_claude_auth,
             commands::setup::check_claude_auth_status,
             commands::setup::check_npm_cache_permissions,
-            commands::setup::start_vercel_auth,
             commands::setup::cleanup_auth_processes,
             commands::setup::get_system_arch,
             commands::setup::install_version,
             commands::setup::quick_setup_check,
             commands::setup::mark_setup_complete,
             commands::setup::reset_setup_state,
+            commands::setup::get_default_agent_id,
+            commands::setup::set_default_agent_id,
             // Assets
             commands::assets::list_assets,
             commands::assets::upload_asset,

@@ -1,16 +1,14 @@
 /**
- * Overlay component displayed when a feature requires GitHub or Vercel authentication.
+ * Overlay component displayed when a feature requires GitHub authentication.
  *
  * Shows a full-tab overlay with service icon, title, description, and connect button.
  *
  * @module components/ConnectOverlay
  */
 
-import { GitHubIcon, VercelIcon } from './icons';
+import { GitHubIcon } from './icons';
 
 interface ConnectOverlayProps {
-  /** The service that needs to be connected */
-  service: 'github' | 'vercel';
   /** Title text explaining what connection enables */
   title: string;
   /** Description text with more details */
@@ -22,25 +20,21 @@ interface ConnectOverlayProps {
 }
 
 export function ConnectOverlay({
-  service,
   title,
   description,
   onConnect,
   isConnecting,
 }: ConnectOverlayProps) {
-  const ServiceIcon = service === 'github' ? GitHubIcon : VercelIcon;
-  const serviceName = service === 'github' ? 'GitHub' : 'Vercel';
-
   return (
     <div className="connect-overlay">
       <div className="connect-overlay-content">
         <div className="connect-overlay-icon">
-          <ServiceIcon size={48} />
+          <GitHubIcon size={48} />
         </div>
         <h3 className="connect-overlay-title">{title}</h3>
         <p className="connect-overlay-description">{description}</p>
         <button className="connect-overlay-btn" onClick={onConnect} disabled={isConnecting}>
-          {isConnecting ? 'Connecting...' : `Connect ${serviceName}`}
+          {isConnecting ? 'Connecting...' : 'Connect GitHub'}
         </button>
       </div>
     </div>
