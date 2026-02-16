@@ -169,6 +169,7 @@ pub fn run() {
             commands::projects::read_project_metadata,
             commands::projects::write_project_metadata,
             commands::projects::mark_project_opened,
+            commands::projects::has_vercel_config,
             commands::projects::get_branch_prefix_preference,
             commands::projects::set_branch_prefix_preference,
             commands::projects::ensure_gitignore_has_shipstudio,

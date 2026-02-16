@@ -966,6 +966,13 @@ pub async fn mark_project_opened(project_path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Checks whether a project has a `.vercel/project.json` config file.
+#[tauri::command]
+pub async fn has_vercel_config(project_path: String) -> Result<bool, String> {
+    let project = validate_project_path(&project_path)?;
+    Ok(project.join(".vercel").join("project.json").exists())
+}
+
 /// Gets the branch prefix username preference (defaults to true if not set)
 #[tauri::command]
 pub async fn get_branch_prefix_preference(project_path: String) -> Result<bool, String> {

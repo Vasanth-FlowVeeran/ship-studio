@@ -63,6 +63,9 @@ export interface PluginRegistryEntry {
   icon?: string;
 }
 
+/** Official Vercel plugin repository URL */
+export const VERCEL_PLUGIN_REPO = 'https://github.com/ship-studio/plugin-vercel';
+
 const REGISTRY_URL =
   'https://raw.githubusercontent.com/ship-studio/plugin-registry/main/registry.json';
 

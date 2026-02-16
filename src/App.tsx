@@ -111,6 +111,7 @@ import {
   DollarIcon,
   PuzzleIcon,
   ZapIcon,
+  DownloadIcon,
 } from './components/icons';
 import { ToolbarDropdown } from './components/ToolbarDropdown';
 import { TerminalTabDropdown } from './components/TerminalTabDropdown';
@@ -151,6 +152,7 @@ import {
 import { initDefaultAgent } from './lib/agent';
 import { UpdateBanner } from './components/UpdateBanner';
 import { invoke } from '@tauri-apps/api/core';
+import { installPlugin, listPlugins, VERCEL_PLUGIN_REPO } from './lib/plugins';
 import { logger } from './lib/logger';
 import './styles/index.css';
 
@@ -363,6 +365,14 @@ function App({ initialProjectPath }: AppProps) {
 
   // Plugin manager modal state
   const [showPluginManager, setShowPluginManager] = useState(false);
+
+  // Plugin suggestion popup state (e.g. suggest Vercel plugin for .vercel projects)
+  const [pluginSuggestion, setPluginSuggestion] = useState<{
+    pluginName: string;
+    projectPath: string;
+    repoUrl: string;
+  } | null>(null);
+  const [pluginSuggestionInstalling, setPluginSuggestionInstalling] = useState(false);
 
   // Plugin system
   const { getSlotPlugins, reloadPlugins } = usePlugins(currentProject?.path ?? null);
@@ -1253,6 +1263,31 @@ function App({ initialProjectPath }: AppProps) {
         void captureScreenshot(projectPath, captureSessionIdRef.current);
       }
     }, SCREENSHOT_INTERVAL_MS);
+
+    // Suggest Vercel plugin if project has .vercel config but plugin isn't installed
+    void (async () => {
+      try {
+        const sessionKey = `plugin-suggested-vercel-${project.path}`;
+        if (sessionStorage.getItem(sessionKey)) return;
+
+        const hasVercelConfig = await invoke<boolean>('has_vercel_config', {
+          projectPath: project.path,
+        });
+        if (!hasVercelConfig) return;
+
+        const installed = await listPlugins(project.path);
+        if (installed.some((p) => p.manifest.id === 'vercel')) return;
+
+        sessionStorage.setItem(sessionKey, '1');
+        setPluginSuggestion({
+          pluginName: 'Vercel',
+          projectPath: project.path,
+          repoUrl: VERCEL_PLUGIN_REPO,
+        });
+      } catch {
+        // Non-critical — silently ignore detection errors
+      }
+    })();
 
     // Clear the guard after completion
     openingProjectPathRef.current = null;
@@ -2491,6 +2526,66 @@ function App({ initialProjectPath }: AppProps) {
           onPluginsChanged={() => void reloadPlugins()}
           projectPath={currentProject?.path ?? null}
         />
+
+        {/* Plugin Suggestion Popup */}
+        {pluginSuggestion && (
+          <div className="modal-overlay" onClick={() => setPluginSuggestion(null)}>
+            <div className="modal plugin-suggestion-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="plugin-suggestion-icon">
+                <svg width={26} height={26} viewBox="0 0 76 65" fill="currentColor">
+                  <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" />
+                </svg>
+              </div>
+              <h3>Plugin Available</h3>
+              <p className="plugin-suggestion-desc">
+                This project uses <strong>{pluginSuggestion.pluginName}</strong>. Install the plugin
+                to see deployment information.
+              </p>
+              <div className="plugin-suggestion-actions">
+                <button
+                  className="plugin-suggestion-dismiss"
+                  onClick={() => setPluginSuggestion(null)}
+                >
+                  Not Now
+                </button>
+                <button
+                  className="plugin-suggestion-install"
+                  disabled={pluginSuggestionInstalling}
+                  onClick={() => {
+                    setPluginSuggestionInstalling(true);
+                    void (async () => {
+                      try {
+                        await installPlugin(pluginSuggestion.projectPath, pluginSuggestion.repoUrl);
+                        await reloadPlugins();
+                        setPluginSuggestion(null);
+                        showToast(`${pluginSuggestion.pluginName} plugin installed`, 'success');
+                      } catch (err) {
+                        showToast(
+                          `Failed to install plugin: ${err instanceof Error ? err.message : String(err)}`,
+                          'error'
+                        );
+                      } finally {
+                        setPluginSuggestionInstalling(false);
+                      }
+                    })();
+                  }}
+                >
+                  {pluginSuggestionInstalling ? (
+                    <>
+                      <span className="plugin-suggestion-spinner" />
+                      Installing…
+                    </>
+                  ) : (
+                    <>
+                      <DownloadIcon size={14} />
+                      Install Plugin
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Auto-Accept Warning Modal */}
         {showAutoAcceptWarning && (

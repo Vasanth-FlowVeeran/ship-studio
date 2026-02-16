@@ -870,6 +870,10 @@
   color: var(--text-primary);
 }
 
+.toast.toast-info .toast-icon {
+  color: var(--action);
+}
+
 @keyframes toast-slide-in {
   from {
     transform: translateX(100%);
