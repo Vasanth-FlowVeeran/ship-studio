@@ -23,6 +23,17 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.1',
+    items: [
+      'MCP Server Manager for adding custom tool servers',
+      'Terminal tabs highlight green when waiting for user input',
+      'Instant search in installed skills tab',
+      '"View PR" navigates to PRs tab instead of opening GitHub',
+      'Sync success shows hint to create a PR on feature branches',
+      'PR number shown next to title in PRs tab',
+    ],
+  },
+  {
     version: '0.4.0',
     items: [
       'Plugin system - install extensions from the Plugin Library',
