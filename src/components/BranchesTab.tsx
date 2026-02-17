@@ -25,7 +25,6 @@ import {
   formatRelativeTime,
 } from '../lib/branches';
 import { invoke } from '@tauri-apps/api/core';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import { BranchIcon, PlusIcon } from './icons';
 import { UnsavedChangesModal } from './UnsavedChangesModal';
 
@@ -44,6 +43,8 @@ interface BranchesTabProps {
   onBranchSwitch: (branchName: string) => void;
   /** Callback to open submit for review modal */
   onSubmitForReview: (branchName: string) => void;
+  /** Callback to navigate to the PRs tab */
+  onViewPR?: () => void;
   /** Callback to refresh branch list */
   onRefresh: () => void;
   /** Callback for toast notifications */
@@ -58,6 +59,7 @@ export function BranchesTab({
   openPRs,
   onBranchSwitch,
   onSubmitForReview,
+  onViewPR,
   onRefresh,
   onToast,
 }: BranchesTabProps) {
@@ -224,7 +226,7 @@ export function BranchesTab({
                   return existingPR ? (
                     <button
                       className="branch-card-action"
-                      onClick={() => void openUrl(existingPR.url)}
+                      onClick={() => onViewPR?.()}
                       title={`PR #${existingPR.number}: ${existingPR.title}`}
                     >
                       View PR #{existingPR.number}

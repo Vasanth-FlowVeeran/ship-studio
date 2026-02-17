@@ -38,6 +38,8 @@ interface PublishBranchDropdownProps {
     error: string,
     errorType: 'push_rejected' | 'auth_error' | 'merge_conflict' | 'generic'
   ) => void;
+  /** Callback to open the Create PR modal */
+  onCreatePR?: () => void;
   /** Force the dropdown to open (controlled from parent) */
   forceOpen?: boolean;
   /** Callback when forceOpen has been handled */
@@ -70,6 +72,7 @@ export function PublishBranchDropdown({
   isPublishing,
   setIsPublishing,
   onPublishError,
+  onCreatePR,
   forceOpen,
   onForceOpenHandled,
   excludeClickOutsideSelector,
@@ -218,6 +221,27 @@ export function PublishBranchDropdown({
                 <SuccessIcon />
                 <span>{isMainBranch ? 'Published!' : 'Changes synced'}</span>
               </div>
+              {!isMainBranch && (
+                <div className="publish-branch-hint">
+                  This change has been synced to the <strong>{currentBranch}</strong> branch.
+                  {onCreatePR && (
+                    <>
+                      {' '}
+                      To make the changes live,{' '}
+                      <button
+                        className="publish-create-pr-link"
+                        onClick={() => {
+                          handleDone();
+                          onCreatePR();
+                        }}
+                      >
+                        create a PR
+                      </button>
+                      .
+                    </>
+                  )}
+                </div>
+              )}
               <div className="publish-actions publish-actions-center">
                 <button className="publish-done" onClick={handleDone}>
                   Done

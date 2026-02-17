@@ -1286,6 +1286,13 @@
   text-overflow: ellipsis;
 }
 
+.pr-card-number {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 .pr-card-meta {
   font-size: 12px;
   color: var(--text-secondary);

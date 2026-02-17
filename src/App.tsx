@@ -1899,6 +1899,7 @@ function App({ initialProjectPath }: AppProps) {
               isPublishing={isPublishing}
               setIsPublishing={setIsPublishing}
               onPublishError={handlePublishError}
+              onCreatePR={() => setShowSubmitReview(currentBranch || 'main')}
               forceOpen={forcePublishOpen}
               onForceOpenHandled={() => setForcePublishOpen(false)}
             />
@@ -2164,6 +2165,7 @@ function App({ initialProjectPath }: AppProps) {
                             setCompactView('terminal'); // Return to terminal after switching
                           }}
                           onSubmitForReview={(branchName) => setShowSubmitReview(branchName)}
+                          onViewPR={() => setCompactView('prs')}
                           onRefresh={() => void fetchBranchInfo(currentProject.path)}
                           onToast={showToast}
                         />
@@ -2363,6 +2365,7 @@ function App({ initialProjectPath }: AppProps) {
                       openPRs={openPRs}
                       onBranchSwitch={(branchName) => void handleBranchSwitch(branchName)}
                       onSubmitForReview={(branchName) => setShowSubmitReview(branchName)}
+                      onViewPR={() => setWorkspaceTab('prs')}
                       onRefresh={() => void fetchBranchInfo(currentProject.path)}
                       onToast={showToast}
                     />
@@ -2426,6 +2429,7 @@ function App({ initialProjectPath }: AppProps) {
               isPublishing={isPublishing}
               setIsPublishing={setIsPublishing}
               onPublishError={handlePublishError}
+              onCreatePR={() => setShowSubmitReview(currentBranch || 'main')}
               forceOpen={isCompactPublishOpen}
               onForceOpenHandled={() => {}}
               excludeClickOutsideSelector=".compact-publish-btn"

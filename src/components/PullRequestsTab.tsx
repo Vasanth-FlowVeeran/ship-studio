@@ -263,6 +263,7 @@ function PrCard({ pr, isOwn, isMerging, onMerge, onResolveConflicts }: PrCardPro
         <div className="pr-card-header">
           <div className={`pr-card-status ${pr.state.toLowerCase()}`} />
           <div className="pr-card-title">{pr.title}</div>
+          <span className="pr-card-number">#{pr.number}</span>
         </div>
 
         <div className="pr-card-meta">

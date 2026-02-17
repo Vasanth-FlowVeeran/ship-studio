@@ -379,6 +379,28 @@
   line-height: 1.5;
 }
 
+.publish-branch-hint {
+  padding: 0 16px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.publish-create-pr-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--action);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.publish-create-pr-link:hover {
+  color: var(--accent);
+}
+
 .publish-elapsed {
   margin-left: auto;
   font-size: 13px;
