@@ -6,6 +6,10 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.2
+
+- **Activity calendar toggle** - Hide the GitHub contribution calendar from the dashboard via Settings or the inline eye icon
+
 ## What's New in v0.4.1
 
 - **MCP Server Manager** - Add and manage custom MCP tool servers

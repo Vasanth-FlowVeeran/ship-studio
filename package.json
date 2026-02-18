@@ -1,7 +1,7 @@
 {
   "name": "ship-studio",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Ship Studio - Launch Claude Code for marketing sites",
   "type": "module",
   "scripts": {
