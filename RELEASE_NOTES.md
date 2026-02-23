@@ -6,6 +6,15 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.5
+
+- **Compact template selector** - Replaced template card grid with a dropdown, plus a "Set as default" option
+- **Plugin Manager search** - Filter plugins by name in the Plugin Manager modal
+- **Custom dev commands** - Configure custom dev server commands for generic projects
+- **Vercel plugin pre-installed** - Built-in templates now come with the Vercel plugin ready to go
+- **Plugin reactivity** - Plugins now detect GitHub repo changes without needing a restart
+
+
 ## What's New in v0.4.4
 
 - **Settings toggle fix** - Toggle now uses green instead of white
