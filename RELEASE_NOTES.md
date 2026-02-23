@@ -8,8 +8,8 @@ Write clear, user-friendly notes about what changed in this version.
 
 ## What's New in v0.4.6
 
-- **Code browser** - Browse your project files with syntax highlighting and a collapsible file tree
-- **Copy to agent** - Select lines in the code viewer and send them directly to the active terminal with one click
+- **Code browser** - Browse project files with syntax highlighting and a collapsible file tree
+- **Copy to agent** - Select lines in the code viewer and send them directly to the active terminal
 
 ## What's New in v0.4.5
 
