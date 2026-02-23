@@ -14,9 +14,10 @@ import { ResetIcon } from './icons';
 interface CodeTabProps {
   projectPath: string;
   onToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
+  onSendToAgent?: (text: string) => void;
 }
 
-export function CodeTab({ projectPath, onToast }: CodeTabProps) {
+export function CodeTab({ projectPath, onToast, onSendToAgent }: CodeTabProps) {
   const {
     tree,
     expandedPaths,
@@ -99,6 +100,7 @@ export function CodeTab({ projectPath, onToast }: CodeTabProps) {
           isLoading={isLoadingFile}
           error={fileError}
           onToast={onToast}
+          onSendToAgent={onSendToAgent}
         />
       </div>
     </div>

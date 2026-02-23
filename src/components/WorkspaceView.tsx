@@ -1019,7 +1019,11 @@ export function WorkspaceView({
                 )}
                 {workspaceTab === 'code' && (
                   <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-                    <CodeTab projectPath={currentProject.path} onToast={showToast} />
+                    <CodeTab
+                      projectPath={currentProject.path}
+                      onToast={showToast}
+                      onSendToAgent={sendToClaude}
+                    />
                   </div>
                 )}
                 {(workspaceTab === 'branches' || (!isWebProject && workspaceTab === 'preview')) &&

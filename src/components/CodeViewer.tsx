@@ -20,6 +20,7 @@ interface CodeViewerProps {
   isLoading: boolean;
   error: string | null;
   onToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
+  onSendToAgent?: (text: string) => void;
 }
 
 interface SelectionInfo {
@@ -70,6 +71,7 @@ export function CodeViewer({
   isLoading,
   error,
   onToast,
+  onSendToAgent,
 }: CodeViewerProps) {
   const [highlightedHtml, setHighlightedHtml] = useState<string>('');
   const codeRef = useRef<HTMLDivElement>(null);
@@ -244,9 +246,14 @@ export function CodeViewer({
 
     const formatted = parts.join('\n');
 
-    void navigator.clipboard.writeText(formatted).then(() => {
-      onToast?.('Copied to clipboard', 'success');
-    });
+    if (onSendToAgent) {
+      onSendToAgent(formatted);
+      onToast?.('Sent to agent', 'success');
+    } else {
+      void navigator.clipboard.writeText(formatted).then(() => {
+        onToast?.('Copied to clipboard', 'success');
+      });
+    }
 
     // Close popover but keep highlight visible briefly
     setSelectionInfo(null);
@@ -256,7 +263,7 @@ export function CodeViewer({
       setHighlightedLines(null);
       highlightTimerRef.current = null;
     }, 2000);
-  }, [selectionInfo, filePath, fileContent?.language, question, onToast]);
+  }, [selectionInfo, filePath, fileContent?.language, question, onToast, onSendToAgent]);
 
   // Cleanup timer and drag listeners on unmount
   useEffect(() => {
@@ -532,7 +539,7 @@ export function CodeViewer({
               </button>
               <button className="code-selection-copy" onClick={handleCopy}>
                 <CopyIcon size={12} />
-                Copy
+                Copy to agent
               </button>
             </div>
           </div>,
