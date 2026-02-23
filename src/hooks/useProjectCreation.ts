@@ -13,6 +13,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { trackError } from '../lib/analytics';
 import { getWindowLabel } from '../lib/window';
 import { checkNpmCachePermissions } from '../lib/setup';
+import { installPlugin, VERCEL_PLUGIN_REPO } from '../lib/plugins';
 
 // ---------------------------------------------------------------------------
 // Types & Constants
@@ -315,6 +316,9 @@ export function useProjectCreation({ onComplete, onCancel }: UseProjectCreationP
 
       // Ensure .shipstudio/ is gitignored to prevent phantom changes
       await invoke('ensure_gitignore_has_shipstudio', { projectPath: projectPath });
+
+      // Pre-install Vercel plugin (fire-and-forget, don't block creation)
+      installPlugin(projectPath, VERCEL_PLUGIN_REPO).catch(() => {});
 
       // Install dependencies (skip for HTML-only templates with no package.json)
       setCreatedProjectPath(projectPath);
