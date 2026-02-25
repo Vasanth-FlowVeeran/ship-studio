@@ -6,6 +6,15 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.8
+
+- **PR checkout & close** - Pull and close pull requests directly from the app
+- **Checkout indicator** - See which PR branch you're currently on
+- **Auto-restart dev server** - Dev server restarts after checking out a PR
+- **Scrollbar crash fix** - Fixed removeChild crash from OverlayScrollbars DOM relocation
+- **Toast layout fix** - Toast notifications no longer stretch to widest sibling
+
+
 ## What's New in v0.4.7
 
 - **Custom scrollbars** - Dark themed OverlayScrollbars replace native scrollbars throughout the app
