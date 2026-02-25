@@ -124,6 +124,8 @@
   gap: 6px;
   margin-bottom: 16px;
   padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 .import-repo-item {

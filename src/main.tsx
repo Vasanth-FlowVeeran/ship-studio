@@ -31,6 +31,7 @@ const OS_OPTS = { scrollbars: { theme: 'os-theme-shipstudio', autoHide: 'move' a
 
 function initScrollbars() {
   document.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    if (el.closest('.modal-overlay')) return;
     if (el.hasAttribute(OS_ATTR)) return;
     const style = getComputedStyle(el);
     if (style.scrollbarWidth === 'none') return;
