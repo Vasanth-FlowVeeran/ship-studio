@@ -38,7 +38,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Saving a port value persists it to `.shipstudio/project.json` and survives app restart
   4. After saving, the dev server restarts and the preview connects on the new port
   5. No project source files are modified when changing the port setting
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 02-01-PLAN.md — Backend data layer (ProjectMetadata field, Tauri commands) and ProjectSettingsModal component
+- [ ] 02-02-PLAN.md — Wire settings cog, thread props, load saved port, restart dev server on save
 
 ## Progress
 
@@ -48,4 +50,4 @@ Phases execute in numeric order: 1 → 2
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Toolbar Cleanup | 0/1 | Complete    | 2026-02-28 |
-| 2. Project Settings | 0/TBD | Not started | - |
+| 2. Project Settings | 0/2 | Not started | - |
