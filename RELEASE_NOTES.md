@@ -6,6 +6,12 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.10
+
+- **Project Settings modal** - New settings modal accessible via the cog icon in the toolbar for configuring dev server port and command
+- **Cleaner toolbar** - Restart button is now icon-only with a settings cog button added to the toolbar
+
+
 ## What's New in v0.4.9
 
 - **PR confirmation modals** - Pull, merge, and close actions now show confirmation dialogs explaining what will happen

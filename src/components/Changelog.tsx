@@ -24,6 +24,13 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.10',
+    items: [
+      'Project Settings modal for dev server port and command',
+      'Cleaner toolbar with icon-only restart and settings cog',
+    ],
+  },
+  {
     version: '0.4.9',
     items: [
       'Confirmation modals for PR pull, merge, and close actions',
