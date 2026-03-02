@@ -45,6 +45,7 @@ import { Project } from './lib/project';
 import { markSetupComplete, getDefaultAgentId as fetchDefaultAgentId } from './lib/setup';
 import { initDefaultAgent } from './lib/agent';
 import { UpdateBanner } from './components/UpdateBanner';
+import { SuccessIcon, InfoIcon, CloseIcon } from './components/icons';
 import { logger } from './lib/logger';
 import { trackEvent } from './lib/analytics';
 import type { AppView } from './lib/types';
@@ -867,31 +868,48 @@ function App({ initialProjectPath }: AppProps) {
 
   if (view === 'projects') {
     return (
-      <ProjectsView
-        onSelectProject={handleSelectProjectCallback}
-        onCreateProject={handleCreateProject}
-        onImportProject={handleImportProject}
-        onImportLocalFolder={handleImportLocalFolderCallback}
-        isGitHubAuthenticated={integrations.github.cliStatus.authenticated}
-        githubUsername={integrations.github.username}
-        isAuthCheckDone={isInitialCheckDone}
-        onGitHubConnect={handleGitHubConnectFromOverlay}
-        showCreateModal={showCreateModal}
-        onCloseCreateModal={handleCloseCreateModal}
-        onProjectCreated={handleProjectCreated}
-        importView={importView}
-        setImportView={setImportView}
-        onProjectImported={handleProjectImported}
-        authTerminalConfig={authTerminalConfig}
-        closeAuthTerminal={closeAuthTerminal}
-        onAuthTerminalExit={handleAuthTerminalExitForProjects}
-        pluginProject={pluginProject}
-        pluginActions={pluginActions}
-        pluginTheme={pluginTheme}
-        getSlotPlugins={getSlotPlugins}
-        projectsLoading={projectsLoading}
-        onLoadingChange={setProjectsLoading}
-      />
+      <>
+        <ProjectsView
+          onSelectProject={handleSelectProjectCallback}
+          onCreateProject={handleCreateProject}
+          onImportProject={handleImportProject}
+          onImportLocalFolder={handleImportLocalFolderCallback}
+          isGitHubAuthenticated={integrations.github.cliStatus.authenticated}
+          githubUsername={integrations.github.username}
+          isAuthCheckDone={isInitialCheckDone}
+          onGitHubConnect={handleGitHubConnectFromOverlay}
+          showCreateModal={showCreateModal}
+          onCloseCreateModal={handleCloseCreateModal}
+          onProjectCreated={handleProjectCreated}
+          importView={importView}
+          setImportView={setImportView}
+          onProjectImported={handleProjectImported}
+          authTerminalConfig={authTerminalConfig}
+          closeAuthTerminal={closeAuthTerminal}
+          onAuthTerminalExit={handleAuthTerminalExitForProjects}
+          pluginProject={pluginProject}
+          pluginActions={pluginActions}
+          pluginTheme={pluginTheme}
+          getSlotPlugins={getSlotPlugins}
+          projectsLoading={projectsLoading}
+          onLoadingChange={setProjectsLoading}
+        />
+        {toasts.length > 0 && (
+          <div className="toast-container">
+            {toasts.map((t) => (
+              <div key={t.id} className={`toast toast-${t.type}`}>
+                <span className="toast-icon">
+                  {t.type === 'success' ? <SuccessIcon size={16} /> : <InfoIcon size={16} />}
+                </span>
+                <span className="toast-message">{t.message}</span>
+                <button className="toast-close" onClick={() => dismissToast(t.id)}>
+                  <CloseIcon size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </>
     );
   }
 

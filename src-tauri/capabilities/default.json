@@ -20,6 +20,7 @@
     "updater:default",
     "process:allow-restart",
     "process:allow-exit",
+    "dialog:default",
     {
       "identifier": "fs:allow-read-file",
       "allow": [

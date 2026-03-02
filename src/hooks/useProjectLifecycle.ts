@@ -26,7 +26,7 @@ import {
 } from '../lib/window';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../lib/logger';
-import { trackEvent } from '../lib/analytics';
+import { trackEvent, trackError } from '../lib/analytics';
 
 import type { AppView } from '../lib/types';
 
@@ -423,7 +423,8 @@ export function useProjectLifecycle({
         void handleSelectProject({ name: projectName, path, thumbnail: null });
       }
     } catch (error) {
-      alert(String(error));
+      trackError('local_folder_import', error, 'Dashboard');
+      showToast(String(error), 'error');
     }
   };
 

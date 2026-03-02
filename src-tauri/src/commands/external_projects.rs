@@ -93,11 +93,49 @@ pub async fn register_external_project(app: AppHandle) -> Result<Option<String>,
     };
 
     // Validate project has package.json or HTML files
-    if !folder_path.join("package.json").exists()
-        && !crate::commands::projects::has_html_files(&folder_path)
-    {
+    let is_valid_project = folder_path.join("package.json").exists()
+        || crate::commands::projects::has_html_files(&folder_path);
+
+    if !is_valid_project {
+        // Check one level deep for a nested project
+        let mut nested_projects: Vec<String> = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&folder_path) {
+            for entry in entries.flatten() {
+                if entry.file_type().map_or(false, |ft| ft.is_dir()) {
+                    let sub = entry.path();
+                    // Skip hidden dirs
+                    if entry
+                        .file_name()
+                        .to_str()
+                        .map_or(false, |n| n.starts_with('.'))
+                    {
+                        continue;
+                    }
+                    if sub.join("package.json").exists()
+                        || crate::commands::projects::has_html_files(&sub)
+                    {
+                        if let Some(name) = entry.file_name().to_str() {
+                            nested_projects.push(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        if nested_projects.len() == 1 {
+            return Err(format!(
+                "The project appears to be inside the \"{}\" subfolder. Please select that folder instead.",
+                nested_projects[0]
+            ));
+        } else if nested_projects.len() > 1 {
+            return Err(format!(
+                "This folder contains multiple projects inside it: {}. Please select the specific project folder you want to import.",
+                nested_projects.join(", ")
+            ));
+        }
+
         return Err(
-            "Selected folder is not a valid project: no package.json or .html files found."
+            "Selected folder doesn't appear to be a project — no package.json or .html files found."
                 .to_string(),
         );
     }
