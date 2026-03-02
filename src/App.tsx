@@ -756,6 +756,25 @@ function App({ initialProjectPath }: AppProps) {
     [loadedPlugins, getSlotPlugins, reloadPlugins]
   );
 
+  // Stable wrappers for async callbacks passed to ProjectsView (prevents memo-busting)
+  const handleSelectProjectCallback = useCallback(
+    (project: Project) => {
+      void handleSelectProject(project);
+    },
+    [handleSelectProject]
+  );
+
+  const handleImportLocalFolderCallback = useCallback(() => {
+    void handleImportLocalFolder();
+  }, [handleImportLocalFolder]);
+
+  const handleCloseCreateModal = useCallback(() => setShowCreateModal(false), [setShowCreateModal]);
+
+  const handleAuthTerminalExitForProjects = useCallback(
+    (exitCode: number | null) => void handleAuthTerminalExit(exitCode, currentProject?.path),
+    [handleAuthTerminalExit, currentProject?.path]
+  );
+
   const handleSaveDevCommand = useCallback(
     (cmd: string | null) => {
       if (currentProject) void saveCustomDevCommand(currentProject.path, cmd);
@@ -849,25 +868,23 @@ function App({ initialProjectPath }: AppProps) {
   if (view === 'projects') {
     return (
       <ProjectsView
-        onSelectProject={(project) => void handleSelectProject(project)}
+        onSelectProject={handleSelectProjectCallback}
         onCreateProject={handleCreateProject}
         onImportProject={handleImportProject}
-        onImportLocalFolder={() => void handleImportLocalFolder()}
+        onImportLocalFolder={handleImportLocalFolderCallback}
         isGitHubAuthenticated={integrations.github.cliStatus.authenticated}
         githubUsername={integrations.github.username}
         isAuthCheckDone={isInitialCheckDone}
         onGitHubConnect={handleGitHubConnectFromOverlay}
         showCreateModal={showCreateModal}
-        onCloseCreateModal={() => setShowCreateModal(false)}
+        onCloseCreateModal={handleCloseCreateModal}
         onProjectCreated={handleProjectCreated}
         importView={importView}
         setImportView={setImportView}
         onProjectImported={handleProjectImported}
         authTerminalConfig={authTerminalConfig}
         closeAuthTerminal={closeAuthTerminal}
-        onAuthTerminalExit={(exitCode) =>
-          void handleAuthTerminalExit(exitCode, currentProject?.path)
-        }
+        onAuthTerminalExit={handleAuthTerminalExitForProjects}
         pluginProject={pluginProject}
         pluginActions={pluginActions}
         pluginTheme={pluginTheme}

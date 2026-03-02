@@ -8,7 +8,7 @@
  * @module components/GitHubCalendar
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { GitHubCalendar as GitHubCalendarLib } from 'react-github-calendar';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
@@ -65,7 +65,15 @@ function CalendarSkeleton() {
   );
 }
 
-export function GitHubCalendar({
+// Stable renderBlock callback — avoids creating a new function reference every render,
+// which would cause react-github-calendar to re-render all 365+ SVG blocks.
+const renderBlock = (block: React.ReactElement, activity: Activity) => (
+  <g data-tooltip-id="github-calendar-tooltip" data-tooltip-content={formatTooltip(activity)}>
+    {block}
+  </g>
+);
+
+export const GitHubCalendar = memo(function GitHubCalendar({
   username,
   isAuthenticated,
   isAuthCheckDone,
@@ -78,6 +86,17 @@ export function GitHubCalendar({
   useEffect(() => {
     setDataLoaded(false); // eslint-disable-line react-hooks/set-state-in-effect -- intentional: reset loading state when username prop changes
   }, [username]);
+
+  // Stable transformData callback — prevents the library from re-fetching/re-processing
+  // data on every parent re-render (unstable function refs trigger library effects).
+  const handleTransformData = useCallback(
+    (data: Array<{ date: string; count: number; level: 0 | 1 | 2 | 3 | 4 }>) => {
+      // Called when data is loaded
+      setDataLoaded(true);
+      return data;
+    },
+    []
+  );
 
   // Only hide after auth check is DONE and confirmed NOT authenticated
   if (isAuthCheckDone && !isAuthenticated) {
@@ -113,23 +132,12 @@ export function GitHubCalendar({
             showColorLegend={false}
             showTotalCount={false}
             year={currentYear}
-            renderBlock={(block, activity) => (
-              <g
-                data-tooltip-id="github-calendar-tooltip"
-                data-tooltip-content={formatTooltip(activity)}
-              >
-                {block}
-              </g>
-            )}
-            transformData={(data) => {
-              // Called when data is loaded
-              setTimeout(() => setDataLoaded(true), 0);
-              return data;
-            }}
+            renderBlock={renderBlock}
+            transformData={handleTransformData}
           />
         </div>
       )}
       <Tooltip id="github-calendar-tooltip" className="github-calendar-tooltip" />
     </div>
   );
-}
+});

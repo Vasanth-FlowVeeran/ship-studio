@@ -45,13 +45,39 @@ Node.prototype.removeChild = function <T extends Node>(child: T): T {
 const OS_ATTR = 'data-os-init';
 const OS_OPTS = { scrollbars: { theme: 'os-theme-shipstudio', autoHide: 'move' as const } };
 
+// Elements that should never get OverlayScrollbars (use CSS class matching)
+const OS_SKIP_SELECTOR = [
+  '[class*="-modal"]',
+  '[class*="-overlay"]',
+  '[class*="-dropdown"]',
+  '.branches-tab',
+  '.prs-tab',
+].join(', ');
+
 function initScrollbars() {
   document.querySelectorAll<HTMLElement>('*').forEach((el) => {
-    // TODO: Substring class matching is fragile — could false-positive on classes like "bimodal-chart". Use explicit class list or data attributes instead.
-    if (el.closest('[class*="-modal"], [class*="-overlay"], [class*="-dropdown"]')) return;
-    if (el.matches('.branches-tab, .prs-tab')) return;
+    // Skip elements already processed
     if (el.hasAttribute(OS_ATTR)) return;
+    // Skip OverlayScrollbars internal elements (viewport, content, scrollbar wrappers).
+    // This is CRITICAL: OS creates a viewport with overflow:scroll inside the host.
+    // Without this guard, initScrollbars would detect that viewport, init OS on it,
+    // creating another viewport inside it — an infinite nesting loop that causes
+    // 100% CPU and ever-growing memory.
+    if (
+      el.hasAttribute('data-overlayscrollbars-viewport') ||
+      el.hasAttribute('data-overlayscrollbars-padding') ||
+      el.hasAttribute('data-overlayscrollbars-content') ||
+      el.hasAttribute('data-overlayscrollbars') ||
+      el.closest('[data-overlayscrollbars]')
+    )
+      return;
+    // Skip elements inside modals, overlays, dropdowns
+    if (el.closest(OS_SKIP_SELECTOR)) return;
+    // Skip non-HTML elements (SVG, etc.)
+    if (!(el instanceof HTMLElement)) return;
+
     const style = getComputedStyle(el);
+    // Skip elements that intentionally hide scrollbars
     if (style.scrollbarWidth === 'none') return;
     const oy = style.overflowY;
     if (oy === 'auto' || oy === 'scroll') {
@@ -72,9 +98,19 @@ requestAnimationFrame(() => {
   }
 
   let timer: number;
+  let running = false;
   const observer = new MutationObserver(() => {
+    // Don't re-schedule if already running (prevents cascading mutations from re-triggering)
+    if (running) return;
     clearTimeout(timer);
-    timer = window.setTimeout(initScrollbars, 150);
+    timer = window.setTimeout(() => {
+      running = true;
+      initScrollbars();
+      // Delay clearing the flag so mutations caused by initScrollbars itself are ignored
+      requestAnimationFrame(() => {
+        running = false;
+      });
+    }, 250);
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
   (window as any).__scrollbarObserver = observer;

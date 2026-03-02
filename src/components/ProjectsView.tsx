@@ -7,6 +7,7 @@
  * @module components/ProjectsView
  */
 
+import { memo } from 'react';
 import { ProjectList } from './ProjectList';
 import { CreateProject } from './CreateProject';
 import { ImportProject } from './ImportProject';
@@ -55,7 +56,7 @@ interface ProjectsViewProps {
   onLoadingChange: (loading: boolean) => void;
 }
 
-export function ProjectsView({
+export const ProjectsView = memo(function ProjectsView({
   onSelectProject,
   onCreateProject,
   onImportProject,
@@ -142,4 +143,4 @@ export function ProjectsView({
       </div>
     </>
   );
-}
+});
