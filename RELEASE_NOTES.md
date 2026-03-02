@@ -6,6 +6,12 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.12
+
+- **Dashboard performance fix** — Fixed scrollbar engine causing 100% CPU usage on the projects page
+- **Layout fix** — Fixed What's New sidebar being pushed below project cards
+- **Smoother animations** — Hover effects on project and folder cards are now buttery smooth
+
 ## What's New in v0.4.11
 
 - **Performance** - Major reduction in CPU and energy usage via React memoization, background git fetch, and polling optimizations
