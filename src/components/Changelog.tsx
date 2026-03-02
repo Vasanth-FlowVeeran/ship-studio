@@ -24,6 +24,14 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.12',
+    items: [
+      'Fixed scrollbar engine causing 100% CPU on the dashboard',
+      'Fixed "What\'s New" sidebar layout on the projects page',
+      'Smoother hover animations on project and folder cards',
+    ],
+  },
+  {
     version: '0.4.11',
     items: [
       'Major performance improvements — reduced CPU and energy usage',
