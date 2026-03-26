@@ -24,6 +24,16 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.17',
+    items: [
+      'External projects no longer hit "forbidden path" errors when starting dev server',
+      'Cmd+W closes the active terminal tab instead of quitting the app',
+      'Cmd+Q now shows a quit confirmation dialog',
+      'Dashboard UI cleanup — settings and new folder moved out of header',
+      'Failed session resume now auto-starts a fresh Claude Code session',
+    ],
+  },
+  {
     version: '0.4.16',
     items: [
       'Terminal sessions now persist — reopen a project and your conversations resume',
