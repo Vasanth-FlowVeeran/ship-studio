@@ -20,7 +20,10 @@ pub mod static_server;
 pub mod types;
 pub mod utils;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+#[cfg(target_os = "macos")]
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 
 #[cfg(unix)]
 use std::process::Command;
@@ -98,6 +101,75 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            // Build a custom menu on macOS that replaces Cmd+W (Close Window)
+            // with a custom "Close Tab" action that emits an event to the frontend
+            #[cfg(target_os = "macos")]
+            {
+                let close_tab = MenuItemBuilder::with_id("close_tab", "Close Tab")
+                    .accelerator("CmdOrCtrl+W")
+                    .build(app)?;
+
+                let quit_item = MenuItemBuilder::with_id("confirm_quit", "Quit Ship Studio")
+                    .accelerator("CmdOrCtrl+Q")
+                    .build(app)?;
+
+                let app_menu = SubmenuBuilder::new(app, "Ship Studio")
+                    .about(None)
+                    .separator()
+                    .services()
+                    .separator()
+                    .hide()
+                    .hide_others()
+                    .show_all()
+                    .separator()
+                    .item(&quit_item)
+                    .build()?;
+
+                let file_menu = SubmenuBuilder::new(app, "File").item(&close_tab).build()?;
+
+                let edit_menu = SubmenuBuilder::new(app, "Edit")
+                    .undo()
+                    .redo()
+                    .separator()
+                    .cut()
+                    .copy()
+                    .paste()
+                    .select_all()
+                    .build()?;
+
+                let view_menu = SubmenuBuilder::new(app, "View").fullscreen().build()?;
+
+                let window_menu = SubmenuBuilder::new(app, "Window")
+                    .minimize()
+                    .maximize()
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .item(&app_menu)
+                    .item(&file_menu)
+                    .item(&edit_menu)
+                    .item(&view_menu)
+                    .item(&window_menu)
+                    .build()?;
+
+                app.set_menu(menu)?;
+
+                // Handle custom menu items
+                let app_handle = app.handle().clone();
+                app.on_menu_event(move |_app, event| {
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        if event.id() == "close_tab" {
+                            let _ = window.emit("close-tab", ());
+                        } else if event.id() == "confirm_quit" {
+                            let _ = window.emit("confirm-quit", ());
+                        }
+                    }
+                });
+            }
+
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 let label = window.label().to_string();

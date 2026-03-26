@@ -11,6 +11,7 @@
  */
 
 import { memo, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { Terminal } from './Terminal';
 import { DevServerLogs } from './DevServerLogs';
 import { Preview } from './Preview';
@@ -524,10 +525,19 @@ export const WorkspaceView = memo(function WorkspaceView({
     []
   );
 
-  // Cmd/Ctrl+1-5 to switch terminal tabs, Cmd/Ctrl+T to add new tab
+  // Cmd/Ctrl+1-5 to switch terminal tabs, Cmd/Ctrl+T to add new tab, Cmd/Ctrl+W to close tab
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+
+      // Cmd+W — close active terminal tab (instead of closing the window)
+      if (e.key === 'w') {
+        e.preventDefault();
+        if (terminalTabs.length > 1) {
+          closeTerminalTab(activeTerminalTab);
+        }
+        return;
+      }
 
       // Cmd+T — new tab
       if (e.key === 't') {
@@ -549,7 +559,26 @@ export const WorkspaceView = memo(function WorkspaceView({
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [terminalTabs, setActiveTerminalTab, showToast, addTerminalTab]);
+  }, [
+    terminalTabs,
+    activeTerminalTab,
+    setActiveTerminalTab,
+    showToast,
+    addTerminalTab,
+    closeTerminalTab,
+  ]);
+
+  // Listen for native menu "Close Tab" (Cmd+W) event from Tauri
+  useEffect(() => {
+    const unlisten = listen('close-tab', () => {
+      if (terminalTabs.length > 1) {
+        closeTerminalTab(activeTerminalTab);
+      }
+    });
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, [terminalTabs, activeTerminalTab, closeTerminalTab]);
 
   // Hide terminal content briefly during tab switch to avoid showing the skinny state.
   // Uses direct DOM manipulation to avoid cascading React renders.

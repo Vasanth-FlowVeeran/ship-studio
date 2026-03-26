@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { SearchIcon, SettingsIcon, FolderPlusIcon } from './icons';
+import { SearchIcon } from './icons';
 import { trackEvent, trackSearch } from '../lib/analytics';
 
 interface DashboardHeaderProps {
@@ -19,8 +19,6 @@ interface DashboardHeaderProps {
   onSearchChange: (query: string) => void;
   onCreateProject: () => void;
   onImportProject?: () => void;
-  onOpenSettings?: () => void;
-  onCreateFolder?: () => void;
   /** Whether GitHub is authenticated (import requires GitHub) */
   isGitHubAuthenticated?: boolean;
   /** Callback when user tries to import without GitHub auth */
@@ -32,8 +30,6 @@ export function DashboardHeader({
   onSearchChange,
   onCreateProject,
   onImportProject,
-  onOpenSettings,
-  onCreateFolder,
   isGitHubAuthenticated = true,
   onGitHubConnectForImport,
 }: DashboardHeaderProps) {
@@ -74,18 +70,6 @@ export function DashboardHeader({
         <span className="dashboard-search-shortcut">⌘K</span>
       </div>
       <div className="dashboard-header-actions">
-        {onCreateFolder && (
-          <button
-            className="btn-secondary btn-icon"
-            onClick={() => {
-              void trackEvent('new_folder_clicked', { $screen_name: 'Dashboard' });
-              onCreateFolder();
-            }}
-            title="New Folder"
-          >
-            <FolderPlusIcon size={14} />
-          </button>
-        )}
         {onImportProject && (
           <button
             className="btn-secondary"
@@ -111,18 +95,6 @@ export function DashboardHeader({
         >
           + New Project
         </button>
-        {onOpenSettings && (
-          <button
-            className="dashboard-settings-btn"
-            onClick={() => {
-              void trackEvent('settings_opened', { $screen_name: 'Dashboard' });
-              onOpenSettings();
-            }}
-            title="Settings"
-          >
-            <SettingsIcon size={14} />
-          </button>
-        )}
       </div>
     </div>
   );

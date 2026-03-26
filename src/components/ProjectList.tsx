@@ -47,7 +47,14 @@ import { MoveFolderModal } from './MoveFolderModal';
 import { SettingsModal } from './SettingsModal';
 import { GitHubCalendar } from './GitHubCalendar';
 import { getCalendarHidden, setCalendarHidden as persistCalendarHidden } from '../lib/settings';
-import { ChevronIcon, CheckIcon, ArrowLeftIcon, SlackIcon } from './icons';
+import {
+  ChevronIcon,
+  CheckIcon,
+  ArrowLeftIcon,
+  SlackIcon,
+  FolderPlusIcon,
+  SettingsIcon,
+} from './icons';
 import { useClickOutside } from '../hooks/useClickOutside';
 
 /** Basic project info for selection callback */
@@ -467,8 +474,6 @@ export function ProjectList({
           onSearchChange={setSearchQuery}
           onCreateProject={onCreateProject}
           onImportProject={onImportProject}
-          onCreateFolder={() => setShowNewFolderModal(true)}
-          onOpenSettings={() => setShowSettings(true)}
           isGitHubAuthenticated={isGitHubAuthenticated}
           onGitHubConnectForImport={onGitHubConnectForImport}
         />
@@ -516,6 +521,16 @@ export function ProjectList({
                 </div>
               )}
             </div>
+            <button
+              className="btn-secondary btn-icon"
+              onClick={() => {
+                void trackEvent('new_folder_clicked', { $screen_name: 'Dashboard' });
+                setShowNewFolderModal(true);
+              }}
+              title="New Folder"
+            >
+              <FolderPlusIcon size={14} />
+            </button>
           </div>
         </div>
 
@@ -573,6 +588,17 @@ export function ProjectList({
             ))}
           </div>
         )}
+
+        <button
+          className="dashboard-settings-row"
+          onClick={() => {
+            void trackEvent('settings_opened', { $screen_name: 'Dashboard' });
+            setShowSettings(true);
+          }}
+        >
+          <SettingsIcon size={14} />
+          <span>Settings</span>
+        </button>
 
         <IntegrationBar onGitHubConnect={onGitHubConnect} />
 

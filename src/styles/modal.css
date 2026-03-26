@@ -59,6 +59,35 @@
   cursor: not-allowed;
 }
 
+/* Quit Confirmation Modal */
+.quit-confirm-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 360px;
+  width: 90%;
+  text-align: center;
+}
+
+.quit-confirm-modal p {
+  color: var(--text-primary);
+  font-size: 14px;
+  margin: 0 0 20px;
+}
+
+.quit-confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.quit-confirm-actions button {
+  min-width: 80px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
 /* Plugin Suggestion Modal */
 .plugin-suggestion-modal {
   max-width: 380px;

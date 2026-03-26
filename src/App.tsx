@@ -25,6 +25,8 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { exit } from '@tauri-apps/plugin-process';
 import { useToasts } from './hooks/useToasts';
 import { useTerminalManagement } from './hooks/useTerminalManagement';
 import { usePlugins } from './hooks/usePlugins';
@@ -67,6 +69,7 @@ function App({ initialProjectPath }: AppProps) {
   const [view, setView] = useState<AppView>('loading');
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [cleanupStatus, setCleanupStatus] = useState<string | null>(null);
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const previewRef = useRef<import('./components/Preview').PreviewHandle | null>(null);
   const currentProjectPathRef = useRef<string | null>(null);
 
@@ -87,6 +90,16 @@ function App({ initialProjectPath }: AppProps) {
     getActiveTabAgent,
     restoreTerminalTabs,
   } = useTerminalManagement();
+
+  // Listen for Cmd+Q quit confirmation from native menu
+  useEffect(() => {
+    const unlisten = listen('confirm-quit', () => {
+      setShowQuitConfirm(true);
+    });
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, []);
 
   // Cleanup dev server when window is closed (prevents orphaned processes)
   useEffect(() => {
@@ -846,12 +859,38 @@ function App({ initialProjectPath }: AppProps) {
     ]
   );
 
+  const quitConfirmModal = showQuitConfirm && (
+    <div
+      className="modal-overlay"
+      onClick={() => setShowQuitConfirm(false)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setShowQuitConfirm(false);
+        if (e.key === 'Enter') void exit(0);
+      }}
+    >
+      <div className="quit-confirm-modal" onClick={(e) => e.stopPropagation()}>
+        <p>Are you sure you want to quit Ship Studio?</p>
+        <div className="quit-confirm-actions">
+          <button className="btn-secondary" onClick={() => setShowQuitConfirm(false)}>
+            Cancel
+          </button>
+          <button className="btn-primary quit-confirm-btn" onClick={() => void exit(0)} autoFocus>
+            Quit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (view === 'loading') {
     return (
-      <div className="app loading">
-        <img src="/ship_studio_full_noshadow.svg" alt="Ship Studio" className="app-logo" />
-        <div className="spinner" />
-      </div>
+      <>
+        <div className="app loading">
+          <img src="/ship_studio_full_noshadow.svg" alt="Ship Studio" className="app-logo" />
+          <div className="spinner" />
+        </div>
+        {quitConfirmModal}
+      </>
     );
   }
 
@@ -868,10 +907,13 @@ function App({ initialProjectPath }: AppProps) {
     };
 
     return (
-      <div className="app">
-        <UpdateBanner />
-        <OnboardingScreen onComplete={() => void handleOnboardingComplete()} />
-      </div>
+      <>
+        <div className="app">
+          <UpdateBanner />
+          <OnboardingScreen onComplete={() => void handleOnboardingComplete()} />
+        </div>
+        {quitConfirmModal}
+      </>
     );
   }
 
@@ -919,48 +961,58 @@ function App({ initialProjectPath }: AppProps) {
             ))}
           </div>
         )}
+        {quitConfirmModal}
       </>
     );
   }
 
   if (view === 'project-loading') {
     return (
-      <div className="app loading">
-        <div className="spinner" />
-        <p>Opening {currentProject?.name}...</p>
-      </div>
+      <>
+        <div className="app loading">
+          <div className="spinner" />
+          <p>Opening {currentProject?.name}...</p>
+        </div>
+        {quitConfirmModal}
+      </>
     );
   }
 
   // Workspace view (guard against null during back-navigation transition)
   if (!currentProject) {
     return (
-      <div className="app loading">
-        <div className="spinner" />
-      </div>
+      <>
+        <div className="app loading">
+          <div className="spinner" />
+        </div>
+        {quitConfirmModal}
+      </>
     );
   }
   return (
-    <WorkspaceView
-      currentProject={currentProject}
-      previewRef={previewRef}
-      terminal={terminalProps}
-      devServer={devServerProps}
-      notifications={notificationsProps}
-      integrationStatus={integrationStatusProps}
-      screenshots={screenshotsProps}
-      layout={layoutProps}
-      pluginState={pluginStateProps}
-      modals={modalsProps}
-      toasts={toastsProps}
-      branchMgmt={branchMgmtProps}
-      plugins={pluginsProps}
-      lifecycle={lifecycleProps}
-      pluginProject={pluginProject}
-      pluginActions={pluginActions}
-      pluginTheme={pluginTheme}
-      handleEnterCompactMode={handleEnterCompactMode}
-    />
+    <>
+      <WorkspaceView
+        currentProject={currentProject}
+        previewRef={previewRef}
+        terminal={terminalProps}
+        devServer={devServerProps}
+        notifications={notificationsProps}
+        integrationStatus={integrationStatusProps}
+        screenshots={screenshotsProps}
+        layout={layoutProps}
+        pluginState={pluginStateProps}
+        modals={modalsProps}
+        toasts={toastsProps}
+        branchMgmt={branchMgmtProps}
+        plugins={pluginsProps}
+        lifecycle={lifecycleProps}
+        pluginProject={pluginProject}
+        pluginActions={pluginActions}
+        pluginTheme={pluginTheme}
+        handleEnterCompactMode={handleEnterCompactMode}
+      />
+      {quitConfirmModal}
+    </>
   );
 }
 

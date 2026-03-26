@@ -206,28 +206,6 @@
   padding: 6px;
 }
 
-.dashboard-settings-btn {
-  padding: 6px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.dashboard-settings-btn:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-}
-
 /* Dashboard Section Header */
 .dashboard-section-header {
   display: flex;
@@ -246,6 +224,52 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.dashboard-section-controls .btn-icon {
+  padding: 6px 7px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.dashboard-section-controls .btn-icon:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.dashboard-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-bottom: 0;
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
+  border-bottom: none;
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s;
+  margin-bottom: 16px;
+}
+
+.dashboard-settings-row:hover {
+  color: var(--text-primary);
+}
+
+.dashboard-settings-row svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 /* Sort Dropdown */
@@ -464,10 +488,7 @@
 
 /* Integration Bar */
 .integration-bar {
-  margin-top: 32px;
-  padding-top: 24px;
   padding-bottom: 24px;
-  border-top: 1px solid var(--border);
 }
 
 .integration-bar-toggle {
