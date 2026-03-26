@@ -565,14 +565,11 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
             agent: agent.id,
             exitCode,
             receivedOutput,
+            outputBufferLen: outputBuffer.length,
+            outputSnippet: outputBuffer.slice(0, 200),
           });
 
-          // If resume failed because session doesn't exist, retry as fresh session
-          if (
-            attemptResume &&
-            agent.id === 'claude-code' &&
-            outputBuffer.includes('No conversation found')
-          ) {
+          const retryFreshSession = () => {
             logger.info('[Terminal] Resume failed, retrying as fresh session');
             terminalRef.current?.write(
               '\r\n\x1b[33mSession not found, starting fresh...\x1b[0m\r\n'
@@ -590,6 +587,31 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
             // Retry without --resume
             attemptResume = false;
             void setupPty(0);
+          };
+
+          // If resume failed because session doesn't exist, retry as fresh session.
+          // Check immediately, then also after a short delay in case data arrives
+          // after exit (PTY can deliver data and exit events out of order).
+          if (attemptResume && agent.id === 'claude-code') {
+            const isResumeFail = () =>
+              outputBuffer.includes('No conversation found') ||
+              outputBuffer.includes('no conversation found') ||
+              outputBuffer.includes('session not found') ||
+              outputBuffer.includes('Session not found');
+
+            if (isResumeFail()) {
+              retryFreshSession();
+              return;
+            }
+            // Data may arrive after exit event — wait briefly and check again
+            setTimeout(() => {
+              if (isResumeFail()) {
+                retryFreshSession();
+              } else {
+                terminalRef.current?.write('\r\n[Process exited]\r\n');
+                onExitRef.current?.(exitCode);
+              }
+            }, 200);
             return;
           }
 
