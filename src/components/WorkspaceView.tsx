@@ -36,7 +36,6 @@ import {
   CameraIcon,
   CodeIcon,
   CropIcon,
-  FullPageIcon,
   BranchIcon,
   PullRequestIcon,
   EyeIcon,
@@ -393,13 +392,11 @@ export const WorkspaceView = memo(function WorkspaceView({
     isCropMode,
     setIsCropMode,
     isCropCapturing,
-    isFullPageCapturing,
     screenshotPreviewPath,
     setScreenshotPreviewPath,
     showScreenshotModal,
     setShowScreenshotModal,
     handleCaptureScreenshot,
-    handleCaptureFullPage,
     handleCropStart,
     handleCropComplete,
     handleCropCancel,
@@ -507,6 +504,26 @@ export const WorkspaceView = memo(function WorkspaceView({
     handleAutoAcceptWarningAccept,
     handleSaveDevCommand,
   } = lifecycle;
+
+  // Cmd+Shift+3 — capture viewport screenshot, Cmd+Shift+4 — toggle crop mode
+  useEffect(() => {
+    function handleScreenshotKeys(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+      if (e.key === '3') {
+        e.preventDefault();
+        if (!isCapturing && !isCropMode) {
+          void handleCaptureScreenshot();
+        }
+      } else if (e.key === '4') {
+        e.preventDefault();
+        if (!isCapturing && !isCropCapturing) {
+          setIsCropMode(!isCropMode);
+        }
+      }
+    }
+    window.addEventListener('keydown', handleScreenshotKeys);
+    return () => window.removeEventListener('keydown', handleScreenshotKeys);
+  }, [isCapturing, isCropMode, isCropCapturing, handleCaptureScreenshot, setIsCropMode]);
 
   // Generic projects (Tauri apps, CLI tools, etc.) don't have a web preview
   const isWebProject = projectType !== 'generic';
@@ -1076,8 +1093,8 @@ export const WorkspaceView = memo(function WorkspaceView({
                           <button
                             className="agent-capture-btn"
                             onClick={() => void handleCaptureScreenshot()}
-                            disabled={isCapturing || isCropMode || isFullPageCapturing}
-                            title="Screenshot preview for Claude"
+                            disabled={isCapturing || isCropMode}
+                            title="Screenshot preview for Claude (⌘⇧3)"
                             data-education-id="screenshot-button"
                           >
                             {isCapturing ? (
@@ -1089,29 +1106,14 @@ export const WorkspaceView = memo(function WorkspaceView({
                           <button
                             className={`agent-capture-btn ${isCropMode ? 'active' : ''}`}
                             onClick={() => setIsCropMode(!isCropMode)}
-                            disabled={isCapturing || isCropCapturing || isFullPageCapturing}
-                            title="Crop screenshot for Claude"
+                            disabled={isCapturing || isCropCapturing}
+                            title="Crop screenshot for Claude (⌘⇧4)"
                             data-education-id="crop-button"
                           >
                             {isCropCapturing ? (
                               <div className="capture-spinner" />
                             ) : (
                               <CropIcon size={14} />
-                            )}
-                          </button>
-                          <button
-                            className="agent-capture-btn"
-                            onClick={() => void handleCaptureFullPage()}
-                            disabled={
-                              isCapturing || isCropCapturing || isFullPageCapturing || isCropMode
-                            }
-                            title="Full page screenshot for Claude"
-                            data-education-id="fullpage-button"
-                          >
-                            {isFullPageCapturing ? (
-                              <div className="capture-spinner" />
-                            ) : (
-                              <FullPageIcon size={14} />
                             )}
                           </button>
                         </div>
