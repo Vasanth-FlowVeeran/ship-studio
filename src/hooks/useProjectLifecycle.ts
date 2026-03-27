@@ -569,18 +569,10 @@ export function useProjectLifecycle({
     // If the user opens a new project during cleanup, we must stop immediately
     // to avoid killing the new project's dev server or PTY processes.
 
-    let t = performance.now();
-    logger.info('[BackToProjects] calling unregister_project_from_window...');
     try {
       await invoke('unregister_project_from_window', { windowLabel });
-      logger.info('[BackToProjects] unregister_project_from_window done', {
-        ms: Math.round(performance.now() - t),
-      });
-    } catch (e) {
-      logger.error('[BackToProjects] unregister_project_from_window FAILED', {
-        ms: Math.round(performance.now() - t),
-        error: String(e),
-      });
+    } catch {
+      // Ignore - non-critical
     }
 
     // Bail if user already opened another project
@@ -606,13 +598,9 @@ export function useProjectLifecycle({
     resetLayout();
 
     // Yield to browser so the projects view renders before heavy terminal cleanup
-    logger.info('[BackToProjects] yielding before resetTerminals');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    logger.info('[BackToProjects] yield complete, calling resetTerminals');
 
-    t = performance.now();
     resetTerminals();
-    logger.info('[BackToProjects] resetTerminals done', { ms: Math.round(performance.now() - t) });
 
     // Check again before destructive server/process cleanup
     if (navigationVersionRef.current !== backNavVersion) {
@@ -626,9 +614,7 @@ export function useProjectLifecycle({
     setCleanupStatus('Stopping server...');
     // Yield again so the status update renders
     await new Promise((resolve) => setTimeout(resolve, 0));
-    t = performance.now();
     await Promise.race([stopServer(), new Promise((resolve) => setTimeout(resolve, 5000))]);
-    logger.info('[BackToProjects] stopServer', { ms: Math.round(performance.now() - t) });
 
     // Check again — stopServer may have taken a while
     if (navigationVersionRef.current !== backNavVersion) {
@@ -644,7 +630,6 @@ export function useProjectLifecycle({
     setCleanupStatus('Cleaning up processes...');
     try {
       // Run all cleanup in parallel with a 5-second hard timeout
-      t = performance.now();
       const actualPort = await invoke<number | null>('get_reserved_port_for_window', {
         windowLabel: currentWindowLabel,
       });
@@ -656,7 +641,6 @@ export function useProjectLifecycle({
         ]),
         new Promise((resolve) => setTimeout(resolve, 5000)),
       ]);
-      logger.info('[BackToProjects] process cleanup', { ms: Math.round(performance.now() - t) });
     } catch {
       // Ignore cleanup errors
     }
