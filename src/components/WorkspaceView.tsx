@@ -1102,6 +1102,9 @@ export const WorkspaceView = memo(function WorkspaceView({
                             ) : (
                               <CameraIcon size={14} />
                             )}
+                            <span className="capture-shortcut">
+                              <span className="capture-shortcut-cmd">&#8984;</span>&#8679;3
+                            </span>
                           </button>
                           <button
                             className={`agent-capture-btn ${isCropMode ? 'active' : ''}`}
@@ -1115,6 +1118,9 @@ export const WorkspaceView = memo(function WorkspaceView({
                             ) : (
                               <CropIcon size={14} />
                             )}
+                            <span className="capture-shortcut">
+                              <span className="capture-shortcut-cmd">&#8984;</span>&#8679;4
+                            </span>
                           </button>
                         </div>
                       }

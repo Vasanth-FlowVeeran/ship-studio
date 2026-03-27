@@ -24,6 +24,7 @@
 
 .agent-capture-btn {
   padding: 6px 8px;
+  gap: 4px;
   background: transparent;
   border-radius: 4px;
   color: var(--text-muted);
@@ -53,6 +54,19 @@
 
 .agent-capture-btn svg {
   display: block;
+}
+
+.capture-shortcut {
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.capture-shortcut-cmd {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 12px;
 }
 
 .terminal-capture {
