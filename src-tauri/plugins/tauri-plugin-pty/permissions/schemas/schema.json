@@ -365,6 +365,12 @@
           "type": "string",
           "const": "deny-write",
           "markdownDescription": "Denies the write command without any pre-configured scope."
+        },
+        {
+          "description": "Allows all PTY commands\n#### This default permission set includes:\n\n- `allow-spawn`\n- `allow-read`\n- `allow-write`\n- `allow-resize`\n- `allow-kill`\n- `allow-exitstatus`",
+          "type": "string",
+          "const": "default",
+          "markdownDescription": "Allows all PTY commands\n#### This default permission set includes:\n\n- `allow-spawn`\n- `allow-read`\n- `allow-write`\n- `allow-resize`\n- `allow-kill`\n- `allow-exitstatus`"
         }
       ]
     }

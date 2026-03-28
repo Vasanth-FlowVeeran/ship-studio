@@ -1,0 +1,2 @@
+patchedDependencies:
+  tauri-pty: patches/tauri-pty.patch

@@ -1,3 +1,16 @@
+## Default Permission
+
+Allows all PTY commands
+
+#### This default permission set includes the following:
+
+- `allow-spawn`
+- `allow-read`
+- `allow-write`
+- `allow-resize`
+- `allow-kill`
+- `allow-exitstatus`
+
 ## Permission Table
 
 <table>
