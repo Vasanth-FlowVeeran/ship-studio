@@ -4,11 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  tauri-pty:
-    hash: d1eaa5c3bbf77277127c9383eaf251d697665426ee127a6dc1373903e0f3c3fb
-    path: patches/tauri-pty.patch
-
 importers:
 
   .:
@@ -66,7 +61,7 @@ importers:
         version: 2.2.0
       tauri-pty:
         specifier: ^0.2.0
-        version: 0.2.1(patch_hash=d1eaa5c3bbf77277127c9383eaf251d697665426ee127a6dc1373903e0f3c3fb)
+        version: 0.2.1
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.2
@@ -4908,7 +4903,7 @@ snapshots:
     dependencies:
       '@tauri-apps/api': 2.9.1
 
-  tauri-pty@0.2.1(patch_hash=d1eaa5c3bbf77277127c9383eaf251d697665426ee127a6dc1373903e0f3c3fb):
+  tauri-pty@0.2.1:
     dependencies:
       '@tauri-apps/api': 2.9.1
 
