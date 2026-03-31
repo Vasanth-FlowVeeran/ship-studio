@@ -26,11 +26,10 @@ pub fn find_binary_by_name(binary_name: &str) -> Option<std::path::PathBuf> {
         return Some(path);
     }
 
-    let _exe_name = format!("{binary_name}.exe");
-    let _cmd_name = format!("{binary_name}.cmd");
-
     #[cfg(windows)]
     {
+        let exe_name = format!("{binary_name}.exe");
+        let cmd_name = format!("{binary_name}.cmd");
         // On Windows, also try with .exe extension
         if let Ok(path) = which::which(&exe_name) {
             return Some(path);
