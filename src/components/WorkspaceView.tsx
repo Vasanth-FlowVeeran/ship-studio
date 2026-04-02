@@ -729,27 +729,31 @@ export const WorkspaceView = memo(function WorkspaceView({
                     )
                   }
                   toolbarRight={
-                    isPreviewHidden && isWebProject ? (
+                    isPreviewHidden ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <button
-                          className="show-preview-btn icon-only"
-                          onClick={() => void handleEnterCompactMode()}
-                          title="Compact Mode"
-                          data-education-id="compact-button"
-                        >
-                          <CompactIcon size={12} />
-                        </button>
-                        <span data-education-id="browser-button">
-                          <BrowserDropdown
-                            url={`http://localhost:${devServerPort}`}
-                            buttonClassName="show-preview-btn icon-only"
-                            iconOnly
-                          />
-                        </span>
+                        {isWebProject && (
+                          <>
+                            <button
+                              className="show-preview-btn icon-only"
+                              onClick={() => void handleEnterCompactMode()}
+                              title="Compact Mode"
+                              data-education-id="compact-button"
+                            >
+                              <CompactIcon size={12} />
+                            </button>
+                            <span data-education-id="browser-button">
+                              <BrowserDropdown
+                                url={`http://localhost:${devServerPort}`}
+                                buttonClassName="show-preview-btn icon-only"
+                                iconOnly
+                              />
+                            </span>
+                          </>
+                        )}
                         <button
                           className="show-preview-btn icon-only"
                           onClick={() => setIsPreviewHidden(false)}
-                          title="Show Preview"
+                          title="Show Panel"
                           data-education-id="show-preview"
                         >
                           <PanelRightIcon size={12} />
