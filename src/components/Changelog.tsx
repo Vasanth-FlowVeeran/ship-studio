@@ -24,6 +24,16 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.22',
+    items: [
+      'New "Blank Project" template — start from scratch with just a terminal',
+      'Non-web projects default to Code tab instead of empty Preview',
+      'Hide panel button now available on all project types',
+      'Compact mode: toolbar buttons align with macOS traffic lights',
+      'Dashboard buttons no longer overlap traffic lights at narrow widths',
+    ],
+  },
+  {
     version: '0.4.21',
     items: [
       'Fixed terminal freeze when switching between tabs',
