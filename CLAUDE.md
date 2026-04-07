@@ -246,14 +246,9 @@ The Content Security Policy in `src-tauri/tauri.conf.json` MUST be set to `null`
 
 Use `scripts/release.sh` to automate the release process. The script bumps the version in all 3 files (`package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`), updates `Cargo.lock`, commits, and tags.
 
-### Quick Release
-
 ```bash
 # Patch bump with release notes (most common)
 ./scripts/release.sh -n "**Fixed bug X** - Description"
-
-# Multiple notes
-./scripts/release.sh -n "**Feature A** - Description" -n "**Fix B** - Description"
 
 # Minor or major bump
 ./scripts/release.sh minor -n "**New feature** - Description"
@@ -264,49 +259,8 @@ git push origin main && git push origin vX.Y.Z
 
 The `-n` flag automatically adds notes to `RELEASE_NOTES.md`. Without `-n`, you must update `RELEASE_NOTES.md` manually before running the script.
 
-### Dashboard Changelog
+**IMPORTANT:** Also update the changelog data in `src/components/Changelog.tsx` before each release — it displays "What's New" on the dashboard sidebar.
 
-**IMPORTANT:** Update the changelog data in `src/components/Changelog.tsx` before each release. This displays "What's New" on the dashboard sidebar. Add the new version at the top of the `CHANGELOG` array with a brief list of user-facing changes.
+For Windows builds, tag with a `-win` suffix (e.g. `v0.5.0-win`) — this triggers a separate workflow independent from the macOS pipeline.
 
-### What Happens After Push
-
-1. GitHub Actions builds for ARM64 + Intel, signs with Apple Developer ID, and notarizes
-2. Uploads artifacts to the private repo as a **draft** release
-3. Auto-publishes to the public `ship-studio/releases` repo (updater bundles + DMGs + `latest.json`)
-4. **You must manually publish the draft** in the main repo at https://github.com/ship-studio/ship-studio/releases
-
-### Auto-Update Flow
-
-The app checks `latest.json` from the public releases repo. When a newer version is found, `UpdateBanner` shows release notes with a download button. The update is verified using minisign signatures before installing.
-
-### Two-Repo Strategy
-
-- **`ship-studio/ship-studio`** (private) — source code, draft releases
-- **`ship-studio/releases`** (public) — update bundles (`.tar.gz` + `.sig`), DMGs, `latest.json`
-
-DMG download links for the marketing site:
-- ARM64: `https://github.com/ship-studio/releases/releases/latest/download/ShipStudio_darwin-aarch64.dmg`
-- Intel: `https://github.com/ship-studio/releases/releases/latest/download/ShipStudio_darwin-x86_64.dmg`
-
-### Required GitHub Secrets
-
-| Secret | Purpose |
-|--------|---------|
-| `APPLE_CERTIFICATE` | Base64-encoded .p12 Developer ID Application certificate |
-| `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 |
-| `APPLE_API_ISSUER` | App Store Connect API issuer ID (for notarization) |
-| `APPLE_API_KEY` | App Store Connect API key ID (for notarization) |
-| `APPLE_API_KEY_CONTENT` | Base64-encoded .p8 private key file (for notarization) |
-| `TAURI_SIGNING_PRIVATE_KEY` | Minisign private key for update bundle signing |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the signing key |
-| `RELEASES_PAT` | GitHub PAT with `public_repo` scope for cross-repo publishing |
-
-### Windows Builds
-
-Windows releases use a separate workflow triggered by tags ending in `-win` (e.g. `v0.5.0-win`). The macOS workflow excludes these tags, so the two pipelines are independent. Push a `-win` tag to produce a draft Windows release with an NSIS/MSI installer. See `RELEASING.md` for details.
-
-### Local Notarized Build (for testing)
-
-Use `scripts/build-notarized.sh` with the Apple env vars set to build, sign, and notarize locally. See the script for required environment variables.
-
-See `RELEASING.md` for full details.
+See `RELEASING.md` for the full process: secrets, two-repo strategy, auto-update flow, troubleshooting, and Windows release details.
