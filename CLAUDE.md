@@ -301,6 +301,10 @@ DMG download links for the marketing site:
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the signing key |
 | `RELEASES_PAT` | GitHub PAT with `public_repo` scope for cross-repo publishing |
 
+### Windows Builds
+
+Windows releases use a separate workflow triggered by tags ending in `-win` (e.g. `v0.5.0-win`). The macOS workflow excludes these tags, so the two pipelines are independent. Push a `-win` tag to produce a draft Windows release with an NSIS/MSI installer. See `RELEASING.md` for details.
+
 ### Local Notarized Build (for testing)
 
 Use `scripts/build-notarized.sh` with the Apple env vars set to build, sign, and notarize locally. See the script for required environment variables.
