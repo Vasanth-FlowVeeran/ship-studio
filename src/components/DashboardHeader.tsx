@@ -50,7 +50,7 @@ export function DashboardHeader({
 
   return (
     <div className="dashboard-header">
-      <div className="dashboard-search">
+      <div className="dashboard-search" data-education-id="search-projects">
         <SearchIcon />
         <input
           ref={searchInputRef}
@@ -73,6 +73,7 @@ export function DashboardHeader({
         {onImportProject && (
           <button
             className="btn-secondary"
+            data-education-id="import-button"
             onClick={() => {
               void trackEvent('import_button_clicked', { $screen_name: 'Dashboard' });
               if (isGitHubAuthenticated) {
@@ -88,6 +89,7 @@ export function DashboardHeader({
         )}
         <button
           className="btn-primary"
+          data-education-id="new-project-button"
           onClick={() => {
             void trackEvent('new_project_clicked', { $screen_name: 'Dashboard' });
             onCreateProject();

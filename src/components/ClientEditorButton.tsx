@@ -26,6 +26,7 @@ export function ClientEditorButton({ projectPath }: ClientEditorButtonProps) {
     return (
       <button
         className="toolbar-icon-btn"
+        data-education-id="client-editor-button"
         onClick={() => void openUrl(DASHBOARD_URL)}
         title="Manage client editor"
       >
@@ -38,6 +39,7 @@ export function ClientEditorButton({ projectPath }: ClientEditorButtonProps) {
     <>
       <button
         className="toolbar-icon-btn"
+        data-education-id="client-editor-button"
         onClick={() => {
           setStep(0);
           setShowModal(true);

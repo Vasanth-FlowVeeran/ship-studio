@@ -713,6 +713,7 @@ export const WorkspaceView = memo(function WorkspaceView({
                         )}
                         <button
                           className="show-preview-btn icon-only"
+                          data-education-id="project-settings-button"
                           onClick={() => modals.openProjectSettings()}
                           title="Project settings"
                         >
@@ -722,6 +723,7 @@ export const WorkspaceView = memo(function WorkspaceView({
                     ) : (
                       <button
                         className="show-preview-btn icon-only"
+                        data-education-id="project-settings-button"
                         onClick={() => modals.openProjectSettings()}
                         title="Project settings"
                       >

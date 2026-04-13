@@ -215,6 +215,18 @@ export function WorkspaceHeader({
         {/* Left side — utility buttons + plugin toolbar slots */}
         <div className="workspace-header-left">
           <button
+            className={`toolbar-icon-btn ${isEducationMode ? 'active' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleEducationMode();
+            }}
+            title="Learn Mode"
+            data-education-id="education-button"
+          >
+            <GraduationCapIcon size={12} />
+            <span>Learn Mode</span>
+          </button>
+          <button
             className="toolbar-icon-btn"
             onClick={onOpenBackupsModal}
             title="Backups"
@@ -245,17 +257,6 @@ export function WorkspaceHeader({
             data-education-id="assets-button"
           >
             <ImageIcon size={12} />
-          </button>
-          <button
-            className={`toolbar-icon-btn ${isEducationMode ? 'active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleEducationMode();
-            }}
-            title="Education Mode"
-            data-education-id="education-button"
-          >
-            <GraduationCapIcon size={12} />
           </button>
           <button
             className="toolbar-icon-btn"

@@ -479,7 +479,7 @@ export function ProjectList({
       />
       <div className="project-list dashboard">
         {!slackCtaHidden && (
-          <div className="slack-cta">
+          <div className="slack-cta" data-education-id="slack-cta">
             <div className="slack-cta-content">
               <SlackIcon />
               <span>
@@ -543,7 +543,7 @@ export function ProjectList({
             {currentFolderId ? 'Projects' : 'All Projects'} {totalCount > 0 && `(${totalCount})`}
           </span>
           <div className="dashboard-section-controls">
-            <div className="sort-dropdown" ref={sortDropdownRef}>
+            <div className="sort-dropdown" ref={sortDropdownRef} data-education-id="sort-projects">
               <button
                 className="sort-dropdown-btn"
                 onClick={() => setShowSortDropdown(!showSortDropdown)}
@@ -571,6 +571,7 @@ export function ProjectList({
             </div>
             <button
               className="btn-secondary btn-icon"
+              data-education-id="new-folder-button"
               onClick={() => {
                 void trackEvent('new_folder_clicked', { $screen_name: 'Dashboard' });
                 setShowNewFolderModal(true);
@@ -639,6 +640,7 @@ export function ProjectList({
 
         <button
           className="dashboard-settings-row"
+          data-education-id="settings-button"
           onClick={() => {
             void trackEvent('settings_opened', { $screen_name: 'Dashboard' });
             setShowSettings(true);

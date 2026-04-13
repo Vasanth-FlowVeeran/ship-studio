@@ -174,7 +174,12 @@ export function PublishBranchDropdown({
   if (projectGithubStatus === null) {
     return (
       <div className="publish-dropdown" ref={dropdownRef}>
-        <button className="publish-button publish-checking" disabled title="Checking status...">
+        <button
+          className="publish-button publish-checking"
+          data-education-id="publish-button"
+          disabled
+          title="Checking status..."
+        >
           Checking...
           <ChevronIcon />
         </button>
@@ -188,6 +193,7 @@ export function PublishBranchDropdown({
       <div className="publish-dropdown" ref={dropdownRef}>
         <button
           className="publish-button publish-disabled"
+          data-education-id="publish-button"
           disabled
           title="Create a GitHub repository first"
         >
@@ -202,9 +208,10 @@ export function PublishBranchDropdown({
   const canSync = hasChangesToSync || isPublishing || publishState.status !== 'idle';
 
   return (
-    <div className="publish-dropdown" ref={dropdownRef} data-education-id="publish-button">
+    <div className="publish-dropdown" ref={dropdownRef}>
       <button
         className={`publish-button ${isPublishing ? 'publishing' : ''} ${!canSync ? 'synced' : ''}`}
+        data-education-id="publish-button"
         onClick={() => setIsOpen(!isOpen)}
       >
         {isPublishing

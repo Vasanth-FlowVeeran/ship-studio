@@ -395,7 +395,7 @@ export function Changelog({ className = '' }: ChangelogProps) {
   const isWorking = rewindStage === 'downloading' || rewindStage === 'installing';
 
   return (
-    <div className={`changelog ${className}`}>
+    <div className={`changelog ${className}`} data-education-id="changelog-sidebar">
       <div className="changelog-header">
         <h3>What's New</h3>
         <span className="changelog-subtitle">Recent updates</span>
