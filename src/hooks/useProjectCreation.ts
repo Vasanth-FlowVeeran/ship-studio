@@ -626,6 +626,10 @@ export function useProjectCreation({ onComplete, onCancel }: UseProjectCreationP
     handleFileSelect,
     handleRemoveZip,
 
+    // Zip state setters (for community template download flow)
+    setZipPath,
+    setZipFileName,
+
     // Default template
     saveDefaultTemplate,
     defaultTemplateId,

@@ -388,6 +388,9 @@ pub fn run() {
             commands::pty::get_system_env,
             commands::pty::register_external_pty,
             commands::pty::unregister_external_pty,
+            // Community Templates
+            commands::templates::fetch_community_templates,
+            commands::templates::download_template_zip,
             // Setup/Onboarding
             commands::setup::get_full_setup_status,
             commands::setup::install_homebrew,

@@ -39,7 +39,7 @@
   border: 1px solid var(--border);
   border-radius: 16px;
   width: 90%;
-  max-width: 520px;
+  max-width: 580px;
   max-height: 90vh;
   overflow-y: auto;
   animation: slideUp 0.2s ease-out;
@@ -96,6 +96,101 @@
 .create-modal-close:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+/* Tabs */
+.create-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.create-tab {
+  flex: 1;
+  padding: 10px 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.create-tab:hover {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.create-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
+  background: transparent;
+}
+
+/* Stack Grid (Start from Scratch) */
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.stack-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.stack-card:hover {
+  border-color: var(--text-muted);
+  background: var(--bg-tertiary);
+}
+
+.stack-card-selected {
+  border-color: var(--action);
+}
+
+.stack-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stack-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.stack-card-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--action);
+  color: var(--action-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Form styles */
@@ -246,111 +341,13 @@
   margin: 0;
 }
 
-/* Template Selection Dropdown */
-.template-select-wrapper {
-  position: relative;
-  margin-bottom: 0;
-}
-
-.template-select-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 12px 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: 15px;
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-  text-align: left;
-}
-
-.template-select-trigger:hover {
-  border-color: var(--text-muted);
-}
-
-.template-select-trigger.dimmed {
-  color: var(--text-muted);
-}
-
-.template-select-trigger svg {
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
-.template-select-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  max-height: 200px;
-  overflow-y: auto;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 10;
-}
-
-.template-select-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 10px 14px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: var(--text-primary);
-  transition: background 0.1s;
-}
-
-.template-select-option:hover {
-  background: var(--bg-tertiary);
-}
-
-.template-select-option.selected {
-  color: var(--accent);
-}
-
-.template-select-option svg {
-  flex-shrink: 0;
-  color: var(--accent);
-}
-
-.template-option-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.template-option-name {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.template-option-desc {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.template-select-option.selected .template-option-desc {
-  color: var(--text-secondary);
-}
-
 .template-default-toggle {
   width: 100%;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 14px;
-  margin-top: 8px;
+  margin-top: 16px;
   margin-bottom: 0;
   font-size: 13px;
   color: var(--text-muted);
@@ -498,4 +495,285 @@
 .template-zip-remove:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+/* ── Template Gallery ── */
+
+.tg-container {
+  margin-bottom: 4px;
+}
+
+.tg-search-wrapper {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.tg-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.create-modal-content input.tg-search-input {
+  width: 100%;
+  padding: 10px 34px 10px 40px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.create-modal-content input.tg-search-input:focus {
+  outline: none;
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+
+.create-modal-content input.tg-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.tg-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.tg-search-clear:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Carousel */
+
+.tg-carousel-wrapper {
+  position: relative;
+}
+
+.tg-carousel {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px 0;
+}
+
+.tg-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.tg-scroll-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.tg-scroll-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.tg-scroll-left {
+  left: -14px;
+}
+
+.tg-scroll-right {
+  right: -14px;
+}
+
+/* Cards */
+
+.tg-card {
+  flex: 0 0 calc((100% - 20px) / 3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    box-shadow 0.15s;
+  text-align: left;
+  padding: 0;
+  position: relative;
+}
+
+.tg-card:hover {
+  border-color: var(--text-muted);
+  background: var(--bg-tertiary);
+}
+
+.tg-card-selected {
+  border-color: var(--action);
+}
+
+.tg-card-thumb {
+  width: 100%;
+  height: 80px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tg-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tg-card-thumb-placeholder {
+  color: var(--text-muted);
+}
+
+.tg-card-body {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tg-card-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tg-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+.tg-card-author {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.tg-card-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--action);
+  color: var(--action-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Skeleton */
+
+@keyframes tg-shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}
+
+.tg-skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    var(--bg-tertiary) 100%
+  );
+  background-size: 200px 100%;
+  animation: tg-shimmer 1.5s ease-in-out infinite;
+}
+
+.tg-card-skeleton {
+  pointer-events: none;
+}
+
+.tg-card-skeleton .tg-card-thumb {
+  background: none;
+}
+
+.tg-skeleton-line {
+  border-radius: 4px;
+  height: 10px;
+}
+
+.tg-skeleton-line-title {
+  width: 70%;
+  height: 12px;
+  margin-bottom: 2px;
+}
+
+.tg-skeleton-line-desc {
+  width: 90%;
+}
+
+.tg-skeleton-line-author {
+  width: 50%;
+  height: 8px;
+  margin-top: 4px;
+}
+
+/* Empty state */
+
+.tg-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 13px;
 }
