@@ -25,6 +25,17 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.25', // v0.4.25
+    items: [
+      'Pinned-projects sidebar — pin projects for quick switching, drag to reorder',
+      '"+" button in sidebar to pin and open any project from a searchable picker',
+      'Fixed crash when clicking back to projects (dev server no longer killed)',
+      'Sidebar layout uses proper flex structure — no more overlapping with titlebar or toolbars',
+      'Titlebar stays visible in compact mode for consistent navigation',
+      'Fixed Vercel "multiple users" error by ensuring git identity before commits',
+    ],
+  },
+  {
     version: '0.4.24',
     items: [
       'Community template gallery — browse, search, and download starter templates',

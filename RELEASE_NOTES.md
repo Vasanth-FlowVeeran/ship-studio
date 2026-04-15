@@ -6,6 +6,11 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.25
+
+- **Pinned-projects sidebar** — Pin projects for quick switching with drag-to-reorder, searchable picker, and proper flex layout
+
+
 ## What's New in v0.4.24
 
 - **Community template gallery** — browse, search, and download starter templates
