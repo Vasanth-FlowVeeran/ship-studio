@@ -115,6 +115,58 @@ function PluginErrorFallback({
   );
 }
 
+/**
+ * Outermost isolation boundary — wraps the entire plugin render including
+ * the Context.Provider. Catches errors that escape the inner PluginErrorBoundary
+ * (e.g. plugins bundling their own React, errors during Provider setup, or
+ * dual-React-instance edge cases).
+ */
+class PluginIsolationBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error(
+      `[PluginIsolation] Plugin "${this.props.pluginId}" crashed (outer boundary):`,
+      error
+    );
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.compact) {
+        return (
+          <span
+            className="plugin-error-indicator"
+            title={`${this.props.pluginName} crashed: ${this.state.error?.message || 'Unknown error'}`}
+          >
+            !
+          </span>
+        );
+      }
+
+      return (
+        <PluginErrorFallback
+          pluginName={this.props.pluginName}
+          error={this.state.error}
+          onRetry={this.handleRetry}
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /** Error boundary that isolates plugin crashes */
 class PluginErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
@@ -267,6 +319,8 @@ function SafePluginWrapper({
 export function PluginSlot({ name, plugins, project, actions, theme }: PluginSlotProps) {
   if (plugins.length === 0) return null;
 
+  const compact = name === 'toolbar' || name === 'preview';
+
   return (
     <>
       {plugins.map((plugin) => {
@@ -280,31 +334,38 @@ export function PluginSlot({ name, plugins, project, actions, theme }: PluginSlo
           theme,
           plugin.info.manifest.required_commands || []
         );
-        // Expose context on namespaced map for raw-JS plugins
+
+        // Expose context on window globals for raw-JS and legacy plugins.
+        // Must be synchronous (before plugin component renders) so plugins
+        // that read the legacy global during their first render can find it.
         const pluginsMap = ((
           window as unknown as Record<string, unknown>
         ).__SHIPSTUDIO_PLUGINS__ ??= {}) as Record<string, PluginContextValue>;
         pluginsMap[plugin.info.manifest.id] = ctx;
-        // Legacy single-global write for v0 compat (last-writer-wins)
         exposePluginContext(ctx);
 
-        const compact = name === 'toolbar' || name === 'preview';
-
         return (
-          <PluginContext.Provider key={plugin.info.manifest.id} value={ctx}>
-            <PluginErrorBoundary
-              pluginId={plugin.info.manifest.id}
-              pluginName={plugin.info.manifest.name}
-              compact={compact}
-            >
-              <SafePluginWrapper
-                Component={SlotComponent}
+          <PluginIsolationBoundary
+            key={plugin.info.manifest.id}
+            pluginId={plugin.info.manifest.id}
+            pluginName={plugin.info.manifest.name}
+            compact={compact}
+          >
+            <PluginContext.Provider value={ctx}>
+              <PluginErrorBoundary
                 pluginId={plugin.info.manifest.id}
                 pluginName={plugin.info.manifest.name}
                 compact={compact}
-              />
-            </PluginErrorBoundary>
-          </PluginContext.Provider>
+              >
+                <SafePluginWrapper
+                  Component={SlotComponent}
+                  pluginId={plugin.info.manifest.id}
+                  pluginName={plugin.info.manifest.name}
+                  compact={compact}
+                />
+              </PluginErrorBoundary>
+            </PluginContext.Provider>
+          </PluginIsolationBoundary>
         );
       })}
     </>
