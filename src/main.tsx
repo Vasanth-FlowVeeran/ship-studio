@@ -10,8 +10,11 @@
  * @module main
  */
 
+import './instrument';
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { reactErrorHandler } from '@sentry/react';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { exposeReactGlobals } from './lib/plugin-loader';
@@ -167,7 +170,13 @@ requestAnimationFrame(() => {
 const urlParams = new URLSearchParams(window.location.search);
 const initialProjectPath = urlParams.get('project');
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement, {
+  // Only report errors that escape ErrorBoundary. Caught errors already flow
+  // through `logger.logError` → backend `log_frontend_event` → `tracing::error!`
+  // → sentry_tracing layer, so wiring `onCaughtError` here would double-report.
+  onUncaughtError: reactErrorHandler(),
+  onRecoverableError: reactErrorHandler(),
+}).render(
   <React.StrictMode>
     <ErrorBoundary>
       <App initialProjectPath={initialProjectPath} />

@@ -77,6 +77,9 @@ fn cleanup_agent_processes() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Sentry must init before the tracing subscriber so its layer can attach.
+    logging::init_sentry();
+
     // Initialize logging first
     if let Err(e) = logging::init_logging() {
         eprintln!("Failed to initialize logging: {e}");
