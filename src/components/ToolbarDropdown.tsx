@@ -9,14 +9,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useClickOutside } from '../hooks/useClickOutside';
-import {
-  MoreHorizontalIcon,
-  BellIcon,
-  ZapIcon,
-  PlugIcon,
-  ShieldCheckIcon,
-  HelpIcon,
-} from './icons';
+import { BellIcon, ZapIcon, PlugIcon, ShieldCheckIcon, HelpIcon, ChevronIcon } from './icons';
 import { PluginSlot } from './PluginSlot';
 import type { LoadedPlugin } from '../hooks/usePlugins';
 import type {
@@ -62,12 +55,15 @@ export function ToolbarDropdown({
   return (
     <div className="toolbar-dropdown-container" ref={menuRef}>
       <button
-        className={`workspace-tab icon-only ${isOpen ? 'active' : ''}`}
+        className={`toolbar-icon-btn ${isOpen ? 'is-open' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
-        title="More options"
+        title="Agent settings"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
         data-education-id="toolbar-more"
       >
-        <MoreHorizontalIcon size={12} />
+        <span className="toolbar-btn-label">Agent Settings</span>
+        <ChevronIcon size={10} className={isOpen ? 'chevron-flipped' : undefined} />
       </button>
 
       {isOpen && (

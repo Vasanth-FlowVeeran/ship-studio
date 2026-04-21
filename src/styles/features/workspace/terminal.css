@@ -250,15 +250,6 @@
   visibility: visible;
 }
 
-/* Left-side actions in the terminal tabs bar (Restart dev server +
- * Project settings). Pairs with `.terminal-logs-tabs`, which pushes
- * itself to the right via `margin-left: auto`. */
-.terminal-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .terminal-logs-tabs {
   display: flex;
   gap: 6px;
@@ -275,7 +266,10 @@
 .toolbar-dropdown-menu {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  /* Anchor to the left of the trigger — the Agent Settings dropdown now
+     lives in the left cluster of the workspace header, so the menu
+     expands rightward/downward from the button. */
+  left: 0;
   z-index: var(--z-modal-overlay);
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -304,6 +298,71 @@
 
 .toolbar-dropdown-item:hover {
   background: var(--bg-tertiary);
+}
+
+/* Shown inside a dropdown menu when there are zero items to list
+   (e.g. Plugins dropdown with no plugins installed). */
+.toolbar-dropdown-empty-hint {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Compact plugin-icon slot used inside dropdown rows. Mirrors the
+   `.plugin-icon-container` defense-in-depth from plugins.css but at
+   14×14 so the plugin's real SVG logo (Vercel, Webflow, etc.) fits a
+   menu row. All inner layout, borders, backgrounds, and padding from
+   the plugin's own toolbar component are neutralized — only the SVG
+   logo survives. Any modals/dropdowns the plugin opens on its own are
+   hidden because they'd render adjacent and break the menu layout. */
+.plugin-dropdown-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--text-secondary);
+  overflow: hidden;
+  font-size: 0;
+  line-height: 0;
+}
+
+.plugin-dropdown-icon * {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  gap: 0 !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  box-shadow: none !important;
+}
+
+.plugin-dropdown-icon > * {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+}
+
+.plugin-dropdown-icon svg {
+  width: 14px !important;
+  height: 14px !important;
+  flex-shrink: 0;
+}
+
+.plugin-dropdown-icon [class*='modal'],
+.plugin-dropdown-icon [class*='dropdown'],
+.plugin-dropdown-icon [class*='menu'],
+.plugin-dropdown-icon [class*='tooltip'] {
+  display: none !important;
 }
 
 .toolbar-dropdown-item.auto-accept-on {

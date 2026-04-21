@@ -50,10 +50,9 @@ import {
   PullRequestIcon,
   EyeIcon,
   CompactIcon,
-  ActivityIcon,
-  ResetIcon,
 } from './icons';
 import { ToolbarDropdown } from './ToolbarDropdown';
+import { PluginsDropdown } from './PluginsDropdown';
 import { getAgentById } from '../lib/agent';
 import type { AgentConfig } from '../lib/agent';
 import type { Project } from '../lib/project';
@@ -377,6 +376,7 @@ export const WorkspaceView = memo(function WorkspaceView({
   const mcpModal = useModal('mcp');
   const devCommandModal = useModal('devCommand');
   const projectSettingsModal = useModal('projectSettings');
+  const pluginManagerModal = useModal('pluginManager');
   useEffect(() => {
     const cleanups = [
       envEditorModal.registerOnClose(focusActiveTerminal),
@@ -694,6 +694,24 @@ export const WorkspaceView = memo(function WorkspaceView({
     projectPath: currentProject.path,
     projectName: currentProject.name,
     onOpenAssetsPanel: assetsPanelModal.open,
+    agentSettings: (
+      <>
+        <ToolbarDropdown
+          agent={getActiveTabAgent()}
+          autoAcceptMode={autoAcceptMode}
+          onNotificationSettings={() => setShowNotificationSettings(true)}
+          onSkills={skillsModal.open}
+          onMcp={mcpModal.open}
+          onAutoAcceptToggle={handleToolbarAutoAcceptToggle}
+          onHelp={helpModal.open}
+          terminalPlugins={getSlotPlugins('terminal')}
+          pluginProject={pluginProject}
+          pluginActions={pluginActions}
+          pluginTheme={pluginTheme}
+        />
+        <PluginsDropdown plugins={loadedPlugins} onOpenPluginManager={pluginManagerModal.open} />
+      </>
+    ),
     isSidebarHidden: effectiveSidebarHidden,
     onToggleSidebar: isPinned ? undefined : () => setIsSidebarHidden((v) => !v),
     integrations,
@@ -763,6 +781,9 @@ export const WorkspaceView = memo(function WorkspaceView({
                     setShowHealthLogs(false);
                   }
                 : undefined
+            }
+            onRestartDevServer={
+              isWebProject || customDevCommand ? () => void handleRestartDevServer() : undefined
             }
             isProjectDevServerRunning={isProjectDevServerRunning}
           />
@@ -887,55 +908,15 @@ export const WorkspaceView = memo(function WorkspaceView({
                       className={`compact-terminal-view ${compactView !== 'terminal' ? 'compact-hidden' : ''}`}
                     >
                       <div className="terminal-tabs-bar">
-                        <div className="terminal-toolbar-actions">
-                          {(isWebProject || customDevCommand) && (
-                            <button
-                              className="show-preview-btn icon-only"
-                              onClick={() => void handleRestartDevServer()}
-                              disabled={
-                                isRestartingDevServer ||
-                                (!hasDevServer && projectType !== 'statichtml')
-                              }
-                              title="Restart dev server"
-                              data-education-id="restart-server"
-                            >
-                              {isRestartingDevServer ? (
-                                <div className="capture-spinner" />
-                              ) : (
-                                <ResetIcon size={12} />
-                              )}
-                            </button>
-                          )}
-                          {/* "Edit dev command" and "Project settings" moved to ⌘K palette. */}
-                        </div>
-                        <div className="terminal-logs-tabs">
-                          {(isWebProject || hasDevServer) && (
-                            <button
-                              className={`workspace-tab icon-only ${showHealthLogs ? 'active' : ''}`}
-                              onClick={() => {
-                                setShowDevServerLogs(true);
-                                setShowHealthLogs(true);
-                              }}
-                              title="View health check logs"
-                              data-education-id="health-logs"
-                            >
-                              <ActivityIcon size={12} />
-                            </button>
-                          )}
-                          <ToolbarDropdown
-                            agent={getActiveTabAgent()}
-                            autoAcceptMode={autoAcceptMode}
-                            onNotificationSettings={() => setShowNotificationSettings(true)}
-                            onSkills={skillsModal.open}
-                            onMcp={mcpModal.open}
-                            onAutoAcceptToggle={handleToolbarAutoAcceptToggle}
-                            onHelp={helpModal.open}
-                            terminalPlugins={getSlotPlugins('terminal')}
-                            pluginProject={pluginProject}
-                            pluginActions={pluginActions}
-                            pluginTheme={pluginTheme}
-                          />
-                        </div>
+                        {/* Restart-dev-server moved to the sidebar row
+                            (Commands → Dev server). "Edit dev command" and
+                            "Project settings" moved to the ⌘K palette. */}
+                        {/* Agent-settings dropdown (was here) moved to the
+                            top workspace header — see `agentSettings` prop
+                            passed into WorkspaceHeader. The "View health
+                            check logs" button was also removed while the
+                            Health panel UI is hidden; see HealthIndicatorBar's
+                            HEALTH_PANEL_VISIBLE experiment. */}
 
                         {/* Compact mode controls - visible only at narrow widths via CSS */}
                         <CompactModeToggle

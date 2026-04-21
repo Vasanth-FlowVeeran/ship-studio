@@ -667,6 +667,45 @@
   color: var(--text-primary);
 }
 
+/* Inline action button (e.g. restart dev server). Unlike the close
+   button, this stays visible so users can discover the action without
+   hovering, but dims until the row is hovered/focused. No bg change on
+   hover — just the icon going fully white. */
+.sidebar-row-action {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  opacity: 0.55;
+  transition:
+    opacity var(--transition),
+    color var(--transition);
+  flex-shrink: 0;
+}
+
+.sidebar-row:hover .sidebar-row-action,
+.sidebar-row:focus-within .sidebar-row-action,
+.sidebar-row-action:focus-visible {
+  opacity: 1;
+}
+
+.sidebar-row-action:hover:not(:disabled) {
+  background: none;
+  color: #fff;
+}
+
+.sidebar-row-action:disabled {
+  cursor: progress;
+  opacity: 0.35;
+}
+
 /* Footer is the button itself — no inner outline, no padding gap. */
 .workspace-sidebar-footer {
   flex-shrink: 0;

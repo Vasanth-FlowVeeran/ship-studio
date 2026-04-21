@@ -7,8 +7,9 @@ import {
   useSyncExternalStore,
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
 } from 'react';
-import { SearchIcon, ChevronIcon } from './icons';
+import { SearchIcon, ChevronIcon, ResetIcon } from './icons';
 import { useOpenPalette } from './CommandPalette/paletteContext';
 import { ALL_AGENTS, TERMINAL, getAgentById, type AgentConfig } from '../lib/agent';
 import type { TerminalTab } from '../hooks/useTerminalManagement';
@@ -31,6 +32,13 @@ interface SidebarItem {
   onClose?: () => void;
   isActive?: boolean;
   meta?: string;
+  /** Optional inline action button (e.g. restart) rendered before the close
+   *  button. Not shown when `actionBusy` is true — pair it with a meta value
+   *  like "restarting" so the row still communicates activity. */
+  onAction?: () => void;
+  actionIcon?: ReactNode;
+  actionLabel?: string;
+  actionBusy?: boolean;
 }
 
 interface Props {
@@ -71,6 +79,10 @@ interface Props {
   isRestartingDevServer: boolean;
   devServerRunning: boolean;
   onOpenDevServerLogs?: () => void;
+  /** Restart the dev server for the current project. When provided, the
+   *  Commands → Dev server row renders a refresh icon-button that fires
+   *  this handler (disabled while `isRestartingDevServer` is true). */
+  onRestartDevServer?: () => void;
   /** Predicate: is a dev server currently tracked for the given project path?
    *  Used for background (non-current) project rows so their Commands section
    *  can reflect the live state. Evaluated on each render. */
@@ -195,6 +207,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   isRestartingDevServer,
   devServerRunning,
   onOpenDevServerLogs,
+  onRestartDevServer,
   isProjectDevServerRunning,
 }: Props) {
   // Filter state retained as a constant — the sidebar used to own a
@@ -309,6 +322,10 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         dotState: isRestartingDevServer ? 'attention' : devServerRunning ? 'active' : 'idle',
         onSelect: onOpenDevServerLogs,
         meta: isRestartingDevServer ? 'restarting' : devServerRunning ? 'running' : undefined,
+        onAction: onRestartDevServer,
+        actionIcon: <ResetIcon size={11} />,
+        actionLabel: 'Restart dev server',
+        actionBusy: isRestartingDevServer,
       });
     }
 
@@ -325,6 +342,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
     onSelectTab,
     onCloseTab,
     onOpenDevServerLogs,
+    onRestartDevServer,
   ]);
 
   const filterLower = filter.trim().toLowerCase();
@@ -938,6 +956,12 @@ function SidebarRow({ item }: { item: SidebarItem }) {
     item.onClose?.();
   };
 
+  const handleAction = (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (item.actionBusy) return;
+    item.onAction?.();
+  };
+
   const isAttention = item.dotState === 'attention';
   return (
     <li
@@ -958,6 +982,18 @@ function SidebarRow({ item }: { item: SidebarItem }) {
         {item.label}
       </span>
       {item.meta && <span className="sidebar-row-meta">{item.meta}</span>}
+      {item.onAction && item.actionIcon && (
+        <button
+          type="button"
+          className="sidebar-row-action"
+          onClick={handleAction}
+          disabled={item.actionBusy}
+          title={item.actionLabel}
+          aria-label={item.actionLabel}
+        >
+          {item.actionIcon}
+        </button>
+      )}
       {item.onClose && (
         <button
           type="button"

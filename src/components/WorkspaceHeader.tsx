@@ -14,7 +14,7 @@
  * @module components/WorkspaceHeader
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, type ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { GitHubButton } from './GitHubButton';
 import { ClientEditorButton } from './ClientEditorButton';
@@ -38,6 +38,12 @@ export interface WorkspaceHeaderProps {
   // Env editor, backups, plugin manager, learn mode, and IDE launch moved
   // to the Cmd+K palette.
   onOpenAssetsPanel: () => void;
+
+  // Agent settings dropdown (notification sounds / skills / MCP / auto-accept /
+  // help). Rendered after the Support button in the left cluster. Provided
+  // as a pre-composed node because the dropdown needs tab-agent state + modal
+  // openers + plugin slot data that all live in WorkspaceView. Omit to hide.
+  agentSettings?: ReactNode;
 
   // Sidebar collapse — lives at the far-left of the header so the health
   // panel row below stays focused on health/logs. Omit `onToggleSidebar`
@@ -93,6 +99,7 @@ export function WorkspaceHeader({
   projectPath,
   projectName,
   onOpenAssetsPanel,
+  agentSettings,
   isSidebarHidden,
   onToggleSidebar,
   integrations,
@@ -172,6 +179,7 @@ export function WorkspaceHeader({
             data-education-id="toggle-sidebar"
           >
             <PanelLeftIcon size={12} />
+            <span className="toolbar-btn-label">{isSidebarHidden ? 'Show' : 'Hide'}</span>
           </button>
         )}
         <button
@@ -181,6 +189,7 @@ export function WorkspaceHeader({
           data-education-id="assets-button"
         >
           <ImageIcon size={12} />
+          <span className="toolbar-btn-label">Assets</span>
         </button>
         <button
           className="toolbar-icon-btn"
@@ -189,7 +198,9 @@ export function WorkspaceHeader({
           data-education-id="support-button"
         >
           <HelpIcon size={12} />
+          <span className="toolbar-btn-label">Support</span>
         </button>
+        {agentSettings}
       </div>
 
       {/* Right side — client editor, hosting plugin, GitHub, Publish */}
