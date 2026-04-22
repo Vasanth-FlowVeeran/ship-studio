@@ -3,10 +3,15 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { searchArticles, getPopularArticles, listTickets } from '../../lib/support';
 import type { LibraryArticle } from '@cstar.help/js/library';
 import type { SupportView } from './SupportPanel';
 import { trackEvent } from '../../lib/analytics';
+import { SlackIcon } from '../icons';
+
+const SLACK_INVITE_URL =
+  'https://join.slack.com/t/shipstudiocommunity/shared_invite/zt-3ommmu2w4-jtYZzzc9T~9lsEeKQ4E2AQ';
 
 interface SupportHomeProps {
   onNavigate: (view: SupportView) => void;
@@ -86,6 +91,21 @@ export function SupportHome({ onNavigate }: SupportHomeProps) {
 
   return (
     <div className="support-home">
+      {/* Slack community CTA */}
+      <button
+        className="support-slack-cta"
+        onClick={() => {
+          void openUrl(SLACK_INVITE_URL);
+          void trackEvent('support_slack_cta_clicked');
+        }}
+      >
+        <SlackIcon size={18} />
+        <span className="support-slack-cta-text">
+          <strong>Join the Slack</strong> — chat with the team and other builders.
+        </span>
+        <span className="support-slack-cta-arrow">→</span>
+      </button>
+
       {/* Search */}
       <div className="support-search">
         <span className="support-search-icon">

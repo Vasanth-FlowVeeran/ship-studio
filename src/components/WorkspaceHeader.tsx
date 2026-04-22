@@ -203,23 +203,9 @@ export function WorkspaceHeader({
         {agentSettings}
       </div>
 
-      {/* Right side — client editor, hosting plugin, GitHub, Publish */}
+      {/* Right side — client editor, GitHub, Publish slot, hosting plugin, Publish */}
       <div className="workspace-header-right">
         <ClientEditorButton projectPath={projectPath} />
-        <PluginSlot
-          name="toolbar"
-          plugins={toolbarPlugins.hosting}
-          project={pluginProject}
-          actions={pluginActions}
-          theme={pluginTheme}
-        />
-        <PluginSlot
-          name="publish"
-          plugins={getSlotPlugins('publish')}
-          project={pluginProject}
-          actions={pluginActions}
-          theme={pluginTheme}
-        />
         <span data-education-id="github-button">
           <GitHubButton
             githubState={integrations.github}
@@ -231,6 +217,20 @@ export function WorkspaceHeader({
             onModalClose={focusActiveTerminal}
           />
         </span>
+        <PluginSlot
+          name="publish"
+          plugins={getSlotPlugins('publish')}
+          project={pluginProject}
+          actions={pluginActions}
+          theme={pluginTheme}
+        />
+        <PluginSlot
+          name="toolbar"
+          plugins={toolbarPlugins.hosting}
+          project={pluginProject}
+          actions={pluginActions}
+          theme={pluginTheme}
+        />
         <PublishBranchDropdown
           currentBranch={currentBranch || 'main'}
           projectGithubStatus={integrations.projectGithub}

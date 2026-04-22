@@ -516,17 +516,20 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   z-index: var(--z-dropdown);
-  padding: var(--spacing-xs) 0;
+  padding: 4px;
   display: flex;
   flex-direction: column;
 }
 
-.sidebar-section-picker-item {
+/* Specificity bumped so this wins over both `.workspace-sidebar button`
+   (sidebar flat-corner reset) and the global `button` border-radius. */
+.sidebar-section-picker .sidebar-section-picker-item {
   display: flex;
   align-items: center;
-  padding: 6px var(--spacing-md);
+  padding: 4px 8px;
   background: none;
   border: none;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   text-align: left;
   font: inherit;
@@ -534,7 +537,7 @@
   cursor: pointer;
 }
 
-.sidebar-section-picker-item:hover {
+.sidebar-section-picker .sidebar-section-picker-item:hover {
   background: var(--bg-secondary);
 }
 
@@ -549,6 +552,34 @@
   color: var(--text-muted);
   font-size: 11px;
   font-style: italic;
+}
+
+/* "Add new agent" affordance below the last item in a section.
+   Shown for the Agents section so users who miss the header "+" still
+   have an obvious add target. */
+.sidebar-section-add-footer-row {
+  list-style: none;
+  padding: 4px 10px 6px 32px;
+}
+
+/* Make the toolbar-icon-btn span the full row width in the sidebar footer.
+   The base class is sized to its content; in this context we want a full
+   stripe under the agent list. */
+.workspace-sidebar button.sidebar-section-add-footer {
+  width: 100%;
+  border-radius: var(--radius);
+}
+
+/* Footer picker is rendered via a React portal to document.body and
+   positioned with fixed coordinates — overrides the default absolute
+   positioning that would otherwise get clipped by the sidebar's
+   overflow: hidden. */
+.sidebar-section-picker.is-footer {
+  position: fixed;
+  top: auto;
+  bottom: auto;
+  right: auto;
+  left: auto;
 }
 
 /* Rows within a section */

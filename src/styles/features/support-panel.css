@@ -120,6 +120,56 @@
   min-width: 0;
 }
 
+/* ─── Slack CTA ────────────────────────────────────────────────────────────── */
+
+.support-slack-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, rgba(97, 31, 105, 0.15) 0%, rgba(78, 29, 129, 0.1) 100%);
+  border: 1px solid rgba(147, 51, 234, 0.2);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.support-slack-cta:hover {
+  background: linear-gradient(135deg, rgba(97, 31, 105, 0.25) 0%, rgba(78, 29, 129, 0.18) 100%);
+  border-color: rgba(147, 51, 234, 0.35);
+}
+
+.support-slack-cta svg {
+  flex-shrink: 0;
+  color: #e9a7fb;
+}
+
+.support-slack-cta-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.support-slack-cta-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.support-slack-cta-arrow {
+  flex-shrink: 0;
+  color: #c4b5fd;
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* ─── Search ───────────────────────────────────────────────────────────────── */
 
 .support-search {

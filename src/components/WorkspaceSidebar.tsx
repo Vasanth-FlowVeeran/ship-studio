@@ -9,7 +9,8 @@ import {
   type MouseEvent,
   type ReactNode,
 } from 'react';
-import { SearchIcon, ChevronIcon, ResetIcon } from './icons';
+import { createPortal } from 'react-dom';
+import { SearchIcon, ChevronIcon, ResetIcon, PlusIcon } from './icons';
 import { BrowserDropdown } from './BrowserDropdown';
 import { useOpenPalette } from './CommandPalette/paletteContext';
 import { ALL_AGENTS, TERMINAL, getAgentById, type AgentConfig } from '../lib/agent';
@@ -488,6 +489,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 onAdd={atMaxTabs ? undefined : (agentId) => onAddTab(agentId)}
                 addLabel="Add agent tab"
                 addShortcut="⌘T"
+                addFooterLabel={atMaxTabs ? undefined : 'Add new agent'}
                 items={filteredAgents}
                 emptyHint={filter ? 'No matches' : 'No agents running'}
               />
@@ -848,6 +850,9 @@ interface SectionProps {
   addShortcut?: string;
   /** If provided, the "+" opens a popover picker with these options instead of an instant add. */
   addOptions?: AgentConfig[];
+  /** If set, renders a full-width "+ <label>" row below the items
+      (styled like a toolbar button) that invokes the default add. */
+  addFooterLabel?: string;
 }
 
 function SidebarSection({
@@ -862,10 +867,18 @@ function SidebarSection({
   addLabel,
   addShortcut,
   addOptions,
+  addFooterLabel,
 }: SectionProps) {
   const headerId = `sidebar-section-${id}`;
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerAnchor, setPickerAnchor] = useState<'header' | 'footer' | null>(null);
+  const [footerPickerPos, setFooterPickerPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const pickerOpen = pickerAnchor !== null;
   const pickerRef = useRef<HTMLDivElement>(null);
+  const footerBtnRef = useRef<HTMLButtonElement>(null);
   const closeTimerRef = useRef<number | null>(null);
 
   /* Show the agent picker only when the user has multiple options.
@@ -886,21 +899,29 @@ function SidebarSection({
   const scheduleClose = () => {
     cancelClose();
     closeTimerRef.current = window.setTimeout(() => {
-      setPickerOpen(false);
+      setPickerAnchor(null);
       closeTimerRef.current = null;
     }, 120);
   };
 
-  const openPicker = () => {
+  const openPicker = (anchor: 'header' | 'footer') => {
     if (!hasMultipleOptions) return;
     cancelClose();
-    setPickerOpen(true);
+    if (anchor === 'footer' && footerBtnRef.current) {
+      /* Portal-anchor the footer picker relative to the viewport so the
+         sidebar's `overflow: hidden` and scroll-container clipping can't
+         chop it off. We mirror the button's x-position and width so the
+         dropdown visually aligns with the trigger. */
+      const rect = footerBtnRef.current.getBoundingClientRect();
+      setFooterPickerPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+    setPickerAnchor(anchor);
   };
 
   useEffect(() => {
     if (!pickerOpen) return;
     const handleKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') setPickerOpen(false);
+      if (e.key === 'Escape') setPickerAnchor(null);
     };
     window.addEventListener('keydown', handleKey);
     return () => {
@@ -917,7 +938,7 @@ function SidebarSection({
     e.stopPropagation();
     if (!onAdd) return;
     cancelClose();
-    setPickerOpen(false);
+    setPickerAnchor(null);
     onAdd();
   };
 
@@ -942,21 +963,16 @@ function SidebarSection({
                 type="button"
                 className="sidebar-section-add"
                 onClick={handleAddClick}
-                onMouseEnter={openPicker}
+                onMouseEnter={() => openPicker('header')}
                 onMouseLeave={scheduleClose}
                 title={addLabel}
                 aria-label={addLabel}
               >
                 +
               </button>
-              {addShortcut && (
-                <kbd className="sidebar-section-shortcut" aria-hidden="true">
-                  {addShortcut}
-                </kbd>
-              )}
             </>
           )}
-          {pickerOpen && addOptions && hasMultipleOptions && (
+          {pickerAnchor === 'header' && addOptions && hasMultipleOptions && (
             <div
               className="sidebar-section-picker"
               role="menu"
@@ -969,7 +985,7 @@ function SidebarSection({
                   type="button"
                   className="sidebar-section-picker-item"
                   onClick={() => {
-                    setPickerOpen(false);
+                    setPickerAnchor(null);
                     onAdd?.(agent.id);
                   }}
                 >
@@ -986,6 +1002,60 @@ function SidebarSection({
             <li className="sidebar-section-empty">{emptyHint}</li>
           ) : (
             items.map((item) => <SidebarRow key={item.key} item={item} />)
+          )}
+          {addFooterLabel && onAdd && items.length > 0 && (
+            <li className="sidebar-section-add-footer-row">
+              <button
+                ref={footerBtnRef}
+                type="button"
+                className="toolbar-icon-btn sidebar-section-add-footer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cancelClose();
+                  setPickerAnchor(null);
+                  onAdd();
+                }}
+                onMouseEnter={() => openPicker('footer')}
+                onMouseLeave={scheduleClose}
+                aria-label={addFooterLabel}
+              >
+                <PlusIcon size={14} />
+                <span>{addFooterLabel}</span>
+                {addShortcut && <span className="capture-shortcut">{addShortcut}</span>}
+              </button>
+              {pickerAnchor === 'footer' &&
+                addOptions &&
+                hasMultipleOptions &&
+                footerPickerPos &&
+                createPortal(
+                  <div
+                    className="sidebar-section-picker is-footer"
+                    role="menu"
+                    style={{
+                      top: footerPickerPos.top,
+                      left: footerPickerPos.left,
+                      width: footerPickerPos.width,
+                    }}
+                    onMouseEnter={cancelClose}
+                    onMouseLeave={scheduleClose}
+                  >
+                    {addOptions.map((agent) => (
+                      <button
+                        key={agent.id}
+                        type="button"
+                        className="sidebar-section-picker-item"
+                        onClick={() => {
+                          setPickerAnchor(null);
+                          onAdd(agent.id);
+                        }}
+                      >
+                        {agent.displayName}
+                      </button>
+                    ))}
+                  </div>,
+                  document.body
+                )}
+            </li>
           )}
         </ul>
       )}
