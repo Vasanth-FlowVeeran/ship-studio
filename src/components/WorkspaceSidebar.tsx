@@ -270,14 +270,15 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
     });
   };
 
-  // Determine whether a given project row is expanded. The current project
-  // is ALWAYS expanded — switching to a project opens its folder, even if
-  // the user had previously collapsed it. Others default to collapsed
-  // unless explicitly expanded by the user.
+  // Expanded if the user has an explicit preference; otherwise default to
+  // "expanded when current, collapsed when not". Storing the toggle means
+  // collapsing the current project sticks even across project switches —
+  // previously we force-returned `true` for the current project, so the
+  // chevron was a no-op on the current row.
   const isProjectExpanded = (projectPath: string): boolean => {
-    if (projectPath === currentProjectPath) return true;
     const explicit = projectExpanded[projectPath];
-    return typeof explicit === 'boolean' ? explicit : false;
+    if (typeof explicit === 'boolean') return explicit;
+    return projectPath === currentProjectPath;
   };
 
   // Registry-owned state for the current project's tabs. We join it to
