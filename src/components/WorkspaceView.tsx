@@ -987,6 +987,7 @@ export const WorkspaceView = memo(function WorkspaceView({
                               <DevServerLogs
                                 output={devServerOutput}
                                 outputVersion={devServerOutputVersion}
+                                onSendToAgent={sendToClaude}
                               />
                             </div>
                           )}
@@ -995,6 +996,7 @@ export const WorkspaceView = memo(function WorkspaceView({
                               <DevServerLogs
                                 output={healthOutput}
                                 outputVersion={healthOutputVersion}
+                                onSendToAgent={sendToClaude}
                               />
                             </div>
                           )}

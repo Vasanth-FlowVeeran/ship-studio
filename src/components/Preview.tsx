@@ -562,7 +562,11 @@ function InspectPanel({
           compose cleanly with nested slot hierarchies). */}
       <div className="preview-logs-body">
         <div className={`preview-logs-slot ${activeTab === 'logs' ? 'is-active' : ''}`}>
-          <DevServerLogs output={devServerOutput} outputVersion={devServerOutputVersion} />
+          <DevServerLogs
+            output={devServerOutput}
+            outputVersion={devServerOutputVersion}
+            onSendToAgent={onSendToAgent}
+          />
         </div>
         <div className={`preview-logs-slot ${activeTab === 'browser' ? 'is-active' : ''}`}>
           <BrowserTools onSendToAgent={onSendToAgent} />

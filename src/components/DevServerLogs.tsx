@@ -7,15 +7,26 @@
  * - Automatic scrolling to latest output
  * - Terminal resize handling
  * - Live updates as new output arrives
+ * - "Send to agent" — full buffer (tail-capped) or a user-dragged selection
  *
  * @module components/DevServerLogs
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { loadNerdFonts } from '../lib/fonts';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { useOptionalToast } from '../contexts/ToastContext';
+import { CopyIcon } from './icons';
 import '@xterm/xterm/css/xterm.css';
+
+/* Tail-limit the full-buffer send so we don't fire 3k+ lines of HMR
+   chatter at the agent. 500 lines ≈ ~40KB of typical Next.js output —
+   enough to capture recent requests + a stack trace, small enough to
+   read. Selection-send is unbounded (user chose it deliberately). */
+const MAX_LOG_LINES_ON_SEND = 500;
 
 /** Props for the DevServerLogs component */
 interface DevServerLogsProps {
@@ -23,14 +34,41 @@ interface DevServerLogsProps {
   output: string;
   /** Version number that changes when output updates (triggers re-render) */
   outputVersion: number;
+  /** Pipe the current server logs into the agent terminal. */
+  onSendToAgent?: (text: string) => void;
 }
 
-export function DevServerLogs({ output, outputVersion }: DevServerLogsProps) {
+interface SelectionInfo {
+  text: string;
+  mouseX: number;
+  mouseY: number;
+}
+
+export function DevServerLogs({ output, outputVersion, onSendToAgent }: DevServerLogsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [isReady, setIsReady] = useState(false);
   const lastWrittenLengthRef = useRef(0);
+
+  // Selection popover
+  const { showToast } = useOptionalToast();
+  const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
+  const [question, setQuestion] = useState('');
+  const popoverRef = useRef<HTMLDivElement>(null);
+  // xterm selection is cleared on certain redraws (new output mid-drag),
+  // so snapshot the text on every selection change — we read from the ref
+  // on mouseup rather than from `term.getSelection()` directly.
+  const selectedTextRef = useRef('');
+
+  const dismissPopover = useCallback(() => {
+    setSelectionInfo(null);
+    setQuestion('');
+    terminalRef.current?.clearSelection();
+    selectedTextRef.current = '';
+  }, []);
+
+  useClickOutside(popoverRef, dismissPopover, selectionInfo !== null);
 
   // Initialize terminal after mount and fonts are loaded
   useEffect(() => {
@@ -101,6 +139,14 @@ export function DevServerLogs({ output, outputVersion }: DevServerLogsProps) {
     terminalRef.current = term;
     fitAddonRef.current = fitAddon;
 
+    // Snapshot selected text as xterm updates it. We read from the ref
+    // in mouseup rather than calling term.getSelection() there, because
+    // the selection can be cleared between the drag end and our handler
+    // if new output arrives.
+    const selectionDisposable = term.onSelectionChange(() => {
+      selectedTextRef.current = term.getSelection();
+    });
+
     // Write initial message
     term.write('\x1b[90m$ npm run dev\x1b[0m\r\n\r\n');
 
@@ -138,6 +184,7 @@ export function DevServerLogs({ output, outputVersion }: DevServerLogsProps) {
     return () => {
       if (resizeTimer !== null) window.clearTimeout(resizeTimer);
       resizeObserver.disconnect();
+      selectionDisposable.dispose();
       lastWrittenLengthRef.current = 0;
       if (terminalRef.current) {
         terminalRef.current.dispose();
@@ -164,15 +211,135 @@ export function DevServerLogs({ output, outputVersion }: DevServerLogsProps) {
     terminalRef.current?.focus();
   }, []);
 
-  return (
-    <div
-      ref={containerRef}
-      onClick={handleClick}
-      style={{
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#1a1a1a',
-      }}
-    />
+  // Surface the selection popover after a drag. xterm owns the mouse
+  // events internally, but bubbling still reaches the container, so by
+  // the time our handler fires `term.hasSelection()` is accurate.
+  const handleMouseUp = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onSendToAgent) return;
+      const term = terminalRef.current;
+      if (!term) return;
+      // Bail if the drag started/ended on the popover itself (shouldn't
+      // happen since it's portaled to body, but defensive).
+      if (popoverRef.current?.contains(e.target as Node)) return;
+      if (!term.hasSelection()) return;
+      const text = selectedTextRef.current || term.getSelection();
+      if (!text.trim()) return;
+      setSelectionInfo({ text, mouseX: e.clientX, mouseY: e.clientY });
+      setQuestion('');
+    },
+    [onSendToAgent]
   );
+
+  const handleSendFullBuffer = useCallback(() => {
+    if (!onSendToAgent) return;
+    onSendToAgent(formatServerLogsForAgent(output));
+  }, [onSendToAgent, output]);
+
+  const handleSendSelection = useCallback(() => {
+    if (!onSendToAgent || !selectionInfo) return;
+    onSendToAgent(formatSelectionForAgent(selectionInfo.text, question));
+    showToast('Sent to agent', 'success');
+    dismissPopover();
+  }, [onSendToAgent, selectionInfo, question, showToast, dismissPopover]);
+
+  // Popover position: anchored to mouseup point, clamped to viewport.
+  const popoverWidth = 320;
+  const popoverHeight = 120;
+  let popoverStyle: React.CSSProperties | undefined;
+  if (selectionInfo) {
+    const top = Math.max(
+      8,
+      Math.min(selectionInfo.mouseY + 12, window.innerHeight - popoverHeight - 8)
+    );
+    const left = Math.max(
+      8,
+      Math.min(selectionInfo.mouseX - popoverWidth / 2, window.innerWidth - popoverWidth - 8)
+    );
+    popoverStyle = { top, left };
+  }
+
+  return (
+    <div className="dev-server-logs">
+      {onSendToAgent && (
+        <div className="dev-server-logs-toolbar">
+          <span className="dev-server-logs-hint">Select text to send a specific snippet</span>
+          <button
+            type="button"
+            className="dev-server-logs-send"
+            onClick={handleSendFullBuffer}
+            disabled={output.length === 0}
+            title={`Send the last ${MAX_LOG_LINES_ON_SEND} lines to the active agent`}
+          >
+            Send to agent
+          </button>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        onClick={handleClick}
+        onMouseUp={handleMouseUp}
+        className="dev-server-logs-terminal"
+      />
+      {selectionInfo &&
+        popoverStyle &&
+        createPortal(
+          <div className="code-selection-popover" ref={popoverRef} style={popoverStyle}>
+            <input
+              className="code-selection-input"
+              type="text"
+              placeholder="Ask about this..."
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSendSelection();
+                if (e.key === 'Escape') dismissPopover();
+              }}
+              autoFocus
+            />
+            <div className="code-selection-actions">
+              <button className="code-selection-cancel" onClick={dismissPopover}>
+                Cancel
+              </button>
+              <button className="code-selection-copy" onClick={handleSendSelection}>
+                <CopyIcon size={12} />
+                Copy to agent
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
+
+/* Strip ANSI escape sequences (colors, cursor moves, OSC titles) so the
+   agent sees plain text instead of `\x1b[32mfoo\x1b[0m` noise. */
+function stripAnsi(input: string): string {
+  // eslint-disable-next-line no-control-regex
+  return input.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
+}
+
+function formatServerLogsForAgent(output: string): string {
+  const stripped = stripAnsi(output).trimEnd();
+  if (!stripped) return 'The dev server logs are currently empty.';
+
+  const allLines = stripped.split('\n');
+  const truncated = allLines.length > MAX_LOG_LINES_ON_SEND;
+  const tail = truncated ? allLines.slice(-MAX_LOG_LINES_ON_SEND) : allLines;
+  const skipped = allLines.length - tail.length;
+  const header = truncated
+    ? `Here are the last ${tail.length} lines of dev server output (${skipped} earlier lines omitted):`
+    : "Here's the current dev server output:";
+
+  return `${header}\n\n\`\`\`\n${tail.join('\n')}\n\`\`\``;
+}
+
+function formatSelectionForAgent(text: string, question: string): string {
+  const cleaned = stripAnsi(text).replace(/\r$/gm, '').trimEnd();
+  const parts = ['Here is a snippet from the dev server logs:', '', '```', cleaned, '```'];
+  if (question.trim()) {
+    parts.push('', question.trim());
+  }
+  return parts.join('\n');
 }
