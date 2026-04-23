@@ -289,6 +289,16 @@
   padding: 4px;
 }
 
+/* Portaled variant: menu rendered into <body> with JS-computed viewport
+   coords. Escapes `overflow: hidden` on any ancestor — needed for the
+   Agent Settings dropdown in .terminal-tabs-bar, whose grandparent
+   .terminal-pane clips absolute children. */
+.toolbar-dropdown-menu-floating {
+  position: fixed;
+  top: auto;
+  left: auto;
+}
+
 .toolbar-dropdown-item {
   display: flex;
   align-items: center;

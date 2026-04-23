@@ -39,11 +39,11 @@ export interface WorkspaceHeaderProps {
   // to the Cmd+K palette.
   onOpenAssetsPanel: () => void;
 
-  // Agent settings dropdown (notification sounds / skills / MCP / auto-accept /
-  // help). Rendered after the Support button in the left cluster. Provided
-  // as a pre-composed node because the dropdown needs tab-agent state + modal
-  // openers + plugin slot data that all live in WorkspaceView. Omit to hide.
-  agentSettings?: ReactNode;
+  // Extra dropdown node rendered at the end of the left cluster (after the
+  // Support button). Currently used for the Plugins dropdown. Provided as a
+  // pre-composed node because it needs plugin slot data that lives in
+  // WorkspaceView. Omit to hide.
+  headerExtras?: ReactNode;
 
   // Sidebar collapse — lives at the far-left of the header so the health
   // panel row below stays focused on health/logs. Omit `onToggleSidebar`
@@ -99,7 +99,7 @@ export function WorkspaceHeader({
   projectPath,
   projectName,
   onOpenAssetsPanel,
-  agentSettings,
+  headerExtras,
   isSidebarHidden,
   onToggleSidebar,
   integrations,
@@ -200,7 +200,7 @@ export function WorkspaceHeader({
           <HelpIcon size={12} />
           <span className="toolbar-btn-label">Support</span>
         </button>
-        {agentSettings}
+        {headerExtras}
       </div>
 
       {/* Right side — client editor, GitHub, Publish slot, hosting plugin, Publish */}

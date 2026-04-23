@@ -64,6 +64,7 @@ export function PluginsDropdown({
         aria-expanded={isOpen}
         data-education-id="plugins-dropdown"
       >
+        <PuzzleIcon size={12} />
         <span className="toolbar-btn-label">Plugins</span>
         <ChevronIcon size={10} className={isOpen ? 'chevron-flipped' : undefined} />
       </button>

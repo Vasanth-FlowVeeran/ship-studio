@@ -673,29 +673,14 @@ export const WorkspaceView = memo(function WorkspaceView({
     projectPath: currentProject.path,
     projectName: currentProject.name,
     onOpenAssetsPanel: assetsPanelModal.open,
-    agentSettings: (
-      <>
-        <ToolbarDropdown
-          agent={getActiveTabAgent()}
-          autoAcceptMode={autoAcceptMode}
-          onNotificationSettings={() => setShowNotificationSettings(true)}
-          onSkills={skillsModal.open}
-          onMcp={mcpModal.open}
-          onAutoAcceptToggle={handleToolbarAutoAcceptToggle}
-          onHelp={helpModal.open}
-          terminalPlugins={getSlotPlugins('terminal')}
-          pluginProject={pluginProject}
-          pluginActions={pluginActions}
-          pluginTheme={pluginTheme}
-        />
-        <PluginsDropdown
-          plugins={loadedPlugins.filter((p) => !HOSTING_PLUGIN_IDS.includes(p.info.manifest.id))}
-          pluginProject={pluginProject}
-          pluginActions={pluginActions}
-          pluginTheme={pluginTheme}
-          onOpenPluginManager={pluginManagerModal.open}
-        />
-      </>
+    headerExtras: (
+      <PluginsDropdown
+        plugins={loadedPlugins.filter((p) => !HOSTING_PLUGIN_IDS.includes(p.info.manifest.id))}
+        pluginProject={pluginProject}
+        pluginActions={pluginActions}
+        pluginTheme={pluginTheme}
+        onOpenPluginManager={pluginManagerModal.open}
+      />
     ),
     isSidebarHidden: effectiveSidebarHidden,
     onToggleSidebar: () => setIsSidebarHidden((v) => !v),
@@ -888,7 +873,7 @@ export const WorkspaceView = memo(function WorkspaceView({
 
               <div className="workspace-content">
                 <SplitPane
-                  defaultSplit={28}
+                  defaultSplit={29}
                   minLeft={20}
                   minRight={35}
                   rightCollapsed={isPreviewHidden}
@@ -905,12 +890,19 @@ export const WorkspaceView = memo(function WorkspaceView({
                           {/* Restart-dev-server moved to the sidebar row
                             (Commands → Dev server). "Edit dev command" and
                             "Project settings" moved to the ⌘K palette. */}
-                          {/* Agent-settings dropdown (was here) moved to the
-                            top workspace header — see `agentSettings` prop
-                            passed into WorkspaceHeader. The "View health
-                            check logs" button was also removed while the
-                            Health panel UI is hidden; see HealthIndicatorBar's
-                            HEALTH_PANEL_VISIBLE experiment. */}
+                          <ToolbarDropdown
+                            agent={getActiveTabAgent()}
+                            autoAcceptMode={autoAcceptMode}
+                            onNotificationSettings={() => setShowNotificationSettings(true)}
+                            onSkills={skillsModal.open}
+                            onMcp={mcpModal.open}
+                            onAutoAcceptToggle={handleToolbarAutoAcceptToggle}
+                            onHelp={helpModal.open}
+                            terminalPlugins={getSlotPlugins('terminal')}
+                            pluginProject={pluginProject}
+                            pluginActions={pluginActions}
+                            pluginTheme={pluginTheme}
+                          />
                         </div>
                         <div className="terminal-content" data-education-id="claude-terminal">
                           {allSessions.flatMap((session) =>
