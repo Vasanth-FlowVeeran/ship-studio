@@ -1,0 +1,209 @@
+/* ========================================================================
+ * Compact workspace layout (≤ 750px window width)
+ *
+ * Purpose-built minimal layout: drag-enabled top bar with project picker +
+ * dev-server dot + palette shortcut, an agent/terminal tab strip, and a
+ * full-height terminal stack. See src/components/CompactWorkspace.tsx for
+ * the rationale on why this is a separate tree instead of responsive CSS
+ * over the full layout.
+ * ====================================================================== */
+
+.compact-workspace {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  min-width: 100vw;
+  height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+/* ---------- Top bar ---------- */
+
+/* Topbar layout is now inline-styled in CompactTopbar.tsx to avoid any
+ * cascade / cache / specificity conflicts. Only leftover rules: the
+ * dropdown menu item styling (plain button styling, low-risk). */
+
+.compact-topbar-project-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--transition);
+}
+
+.compact-topbar-project-menu-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.compact-topbar-project-menu-item.is-subtle {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* ---------- Tab strip ---------- */
+
+.compact-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 0 4px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.compact-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.compact-tab {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+
+.compact-tab:hover {
+  background: var(--bg-secondary);
+}
+
+.compact-tab.is-active {
+  background: var(--bg-tertiary);
+}
+
+.compact-tab-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  max-width: 160px;
+}
+
+.compact-tab.is-active .compact-tab-select {
+  color: var(--text-primary);
+}
+
+.compact-tab-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Colored status dot — green when running, amber when attention-flagged.
+ * Full-mode sidebar has more states (idle/muted/crashed/exited); in compact
+ * we reduce to the two that matter for a glanceable strip. */
+.compact-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
+
+.compact-tab.has-attention .compact-tab-dot {
+  background: var(--warning);
+  animation: compact-tab-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes compact-tab-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.compact-tab-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.compact-tab:hover .compact-tab-close,
+.compact-tab.is-active .compact-tab-close {
+  display: inline-flex;
+}
+
+.compact-tab-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.compact-tab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin-left: 2px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.compact-tab-add:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+/* ---------- Terminal stack ---------- */
+
+/* The stack is a positioning context; its children (`.terminal-tab-content`)
+ * are absolutely positioned and flip visibility via the `active` modifier so
+ * all terminals stay mounted for the active project's tab list. Non-active
+ * terminals use the same `.terminal-tab-content` rules from the full-mode
+ * stylesheet (visibility: hidden + position: absolute). */
+.compact-terminal-stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-primary);
+}

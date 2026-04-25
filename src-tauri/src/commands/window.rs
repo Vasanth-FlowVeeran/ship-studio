@@ -23,10 +23,6 @@ const FULL_MODE_HEIGHT: f64 = 800.0;
 pub async fn enter_compact_mode(window: Window) -> Result<(), CommandError> {
     tracing::info!("Entering compact mode");
 
-    // Get saved preferences for position
-    let state = read_app_state();
-    let position = state.compact_mode.as_ref().and_then(|p| p.position.clone());
-
     // Set always-on-top so window floats above browser
     window
         .set_always_on_top(true)
@@ -37,12 +33,13 @@ pub async fn enter_compact_mode(window: Window) -> Result<(), CommandError> {
         .set_size(LogicalSize::new(COMPACT_WIDTH, COMPACT_HEIGHT_DEFAULT))
         .map_err(|e| format!("Failed to set window size: {e}"))?;
 
-    // Restore saved position if available
-    if let Some(pos) = position {
-        window
-            .set_position(LogicalPosition::new(pos.x as f64, pos.y as f64))
-            .map_err(|e| format!("Failed to set position: {e}"))?;
-    }
+    // Always re-center on entry. A previously saved position tends to
+    // drift to the corner (either stale from a pre-resize save, or because
+    // macOS clamps a position that no longer fits the new size). Centering
+    // on every entry is predictable; the user can drag afterward.
+    window
+        .center()
+        .map_err(|e| format!("Failed to center window: {e}"))?;
 
     // Focus and bring to front
     window

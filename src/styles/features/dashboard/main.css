@@ -192,12 +192,22 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  transition: border-color var(--transition);
+  transition:
+    border-color var(--transition),
+    background-color var(--transition);
   height: 30px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-muted);
 }
 
-.dashboard-search:focus-within {
+.dashboard-search:hover,
+.dashboard-search:focus-visible {
   border-color: var(--text-muted);
+  background: var(--bg-tertiary);
+  outline: none;
 }
 
 .dashboard-search svg {
@@ -207,17 +217,11 @@
   height: 14px;
 }
 
-.dashboard-search-input {
+.dashboard-search-placeholder {
   flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: none;
-}
-
-.dashboard-search-input::placeholder {
   color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
 }
 
 .dashboard-search-shortcut {

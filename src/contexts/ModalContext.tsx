@@ -34,7 +34,8 @@ export type ModalId =
   | 'unsavedChanges'
   | 'conflictResolution'
   | 'diff'
-  | 'quitConfirm';
+  | 'quitConfirm'
+  | 'commandPalette';
 
 interface ModalContextValue {
   isOpen: (id: ModalId) => boolean;
@@ -102,6 +103,17 @@ export function ModalProvider({ children }: ProviderProps) {
   );
 
   return <ModalContext.Provider value={value}>{children}</ModalContext.Provider>;
+}
+
+/**
+ * Stable `open(id)` accessor — useful when you need to open modals from
+ * inside a `useCommands` factory without tripping the deps array (the full
+ * `useModal` result is not reference-stable across state changes, this is).
+ */
+export function useOpenModal(): (id: ModalId) => void {
+  const ctx = useContext(ModalContext);
+  if (!ctx) throw new Error('useOpenModal must be used inside a <ModalProvider>');
+  return ctx.open;
 }
 
 /**

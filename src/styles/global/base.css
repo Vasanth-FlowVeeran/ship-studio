@@ -297,6 +297,26 @@ button:hover {
   color: var(--text-secondary);
 }
 
+/* Open/pressed state — e.g. when a dropdown trigger has its menu open.
+   Mirrors the hover state so the button reads as "engaged" without
+   introducing a separate color accent. */
+.toolbar-icon-btn.is-open,
+.toolbar-icon-btn.is-open:hover {
+  background: var(--border);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.toolbar-icon-btn.is-open svg {
+  color: var(--text-secondary);
+}
+
+/* Rotate the chevron 180° when its parent dropdown is open. */
+.toolbar-icon-btn .chevron-flipped {
+  transform: rotate(180deg);
+  transition: transform 0.15s;
+}
+
 /* ===== Primitive: ModalFrame ===== */
 .modal-frame-overlay {
   position: fixed;

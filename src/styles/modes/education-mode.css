@@ -97,19 +97,10 @@
   margin: 0 2px;
 }
 
-/* Education Mode button in header */
-/* Active state when education mode is on */
-.toolbar-icon-btn.active {
-  background: var(--accent, var(--success-light));
-  border-color: var(--accent, var(--success-light));
-  color: #000;
-}
-
-.toolbar-icon-btn.active svg {
-  color: #000;
-}
-
-.toolbar-icon-btn.active:hover {
-  background: #16a34a;
-  border-color: #16a34a;
-}
+/* Previously held `.toolbar-icon-btn.active` rules for an education-mode
+   toggle button that no longer exists. The selector was unscoped so it
+   leaked into other `.toolbar-icon-btn` users (e.g. the Agent Settings
+   dropdown, which used `.active` for its open state and picked up a
+   jarring green background). If education mode re-introduces a toggle
+   button, scope new styles under `.education-mode` and use a more
+   specific class than `.active`. */

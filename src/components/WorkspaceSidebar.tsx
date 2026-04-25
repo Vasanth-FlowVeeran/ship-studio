@@ -7,8 +7,12 @@ import {
   useSyncExternalStore,
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
 } from 'react';
-import { SearchIcon, ChevronIcon } from './icons';
+import { createPortal } from 'react-dom';
+import { SearchIcon, ChevronIcon, ResetIcon, PlusIcon } from './icons';
+import { BrowserDropdown } from './BrowserDropdown';
+import { useOpenPalette } from './CommandPalette/paletteContext';
 import { ALL_AGENTS, TERMINAL, getAgentById, type AgentConfig } from '../lib/agent';
 import type { TerminalTab } from '../hooks/useTerminalManagement';
 import type { PinnedProjectRow } from '../hooks/usePinnedProjects';
@@ -30,6 +34,17 @@ interface SidebarItem {
   onClose?: () => void;
   isActive?: boolean;
   meta?: string;
+  /** Optional inline action button (e.g. restart) rendered before the close
+   *  button. Not shown when `actionBusy` is true — pair it with a meta value
+   *  like "restarting" so the row still communicates activity. */
+  onAction?: () => void;
+  actionIcon?: ReactNode;
+  actionLabel?: string;
+  actionBusy?: boolean;
+  /** Optional trailing element rendered after the action button (before the
+   *  close button). Used by the Dev server row to host the BrowserDropdown
+   *  icon — click opens default browser, hover reveals a picker. */
+  trailing?: ReactNode;
 }
 
 interface Props {
@@ -70,6 +85,15 @@ interface Props {
   isRestartingDevServer: boolean;
   devServerRunning: boolean;
   onOpenDevServerLogs?: () => void;
+  /** Restart the dev server for the current project. When provided, the
+   *  Commands → Dev server row renders a refresh icon-button that fires
+   *  this handler (disabled while `isRestartingDevServer` is true). */
+  onRestartDevServer?: () => void;
+  /** URL of the current project's dev server (e.g. `http://localhost:3000`).
+   *  When set, the Commands → Dev server row shows an inline "open in
+   *  browser" icon next to the restart button. Click opens the default
+   *  browser; hover reveals a picker of installed browsers. */
+  devServerUrl?: string;
   /** Predicate: is a dev server currently tracked for the given project path?
    *  Used for background (non-current) project rows so their Commands section
    *  can reflect the live state. Evaluated on each render. */
@@ -194,9 +218,16 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   isRestartingDevServer,
   devServerRunning,
   onOpenDevServerLogs,
+  onRestartDevServer,
+  devServerUrl,
   isProjectDevServerRunning,
 }: Props) {
-  const [filter, setFilter] = useState('');
+  // Filter state retained as a constant — the sidebar used to own a
+  // text-filter input, but the ⌘K palette now takes over search. The
+  // filter helpers below all short-circuit when the string is empty,
+  // so they become free no-ops.
+  const filter = '';
+  const openPalette = useOpenPalette();
   const [collapsed, setCollapsed] = useState<Record<SectionId, boolean>>(readCollapsed);
   const [projectExpanded, setProjectExpanded] =
     useState<Record<string, boolean>>(readProjectExpanded);
@@ -239,14 +270,15 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
     });
   };
 
-  // Determine whether a given project row is expanded. The current project
-  // is ALWAYS expanded — switching to a project opens its folder, even if
-  // the user had previously collapsed it. Others default to collapsed
-  // unless explicitly expanded by the user.
+  // Expanded if the user has an explicit preference; otherwise default to
+  // "expanded when current, collapsed when not". Storing the toggle means
+  // collapsing the current project sticks even across project switches —
+  // previously we force-returned `true` for the current project, so the
+  // chevron was a no-op on the current row.
   const isProjectExpanded = (projectPath: string): boolean => {
-    if (projectPath === currentProjectPath) return true;
     const explicit = projectExpanded[projectPath];
-    return typeof explicit === 'boolean' ? explicit : false;
+    if (typeof explicit === 'boolean') return explicit;
+    return projectPath === currentProjectPath;
   };
 
   // Registry-owned state for the current project's tabs. We join it to
@@ -303,6 +335,15 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         dotState: isRestartingDevServer ? 'attention' : devServerRunning ? 'active' : 'idle',
         onSelect: onOpenDevServerLogs,
         meta: isRestartingDevServer ? 'restarting' : devServerRunning ? 'running' : undefined,
+        onAction: onRestartDevServer,
+        actionIcon: <ResetIcon size={11} />,
+        actionLabel: 'Restart dev server',
+        actionBusy: isRestartingDevServer,
+        trailing: devServerUrl ? (
+          <span data-education-id="browser-button">
+            <BrowserDropdown url={devServerUrl} buttonClassName="sidebar-row-action" iconOnly />
+          </span>
+        ) : undefined,
       });
     }
 
@@ -319,6 +360,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
     onSelectTab,
     onCloseTab,
     onOpenDevServerLogs,
+    onRestartDevServer,
+    devServerUrl,
   ]);
 
   const filterLower = filter.trim().toLowerCase();
@@ -398,6 +441,22 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   const pinnedOpen = currentInPinned || !groupCollapsed.pinned;
   const activeOpen = currentInActive || !groupCollapsed.projects;
 
+  /**
+   * Cmd+1..9 shortcut number for this row — matches the ordering used by
+   * `useProjectNumberShortcuts`: pinned first, then active (alphabetical).
+   * Only rows 1..9 get a badge; 10+ return null.
+   */
+  const shortcutNumberFor = (row: PinnedProjectRow): number | null => {
+    const pinIdx = pinnedRows.findIndex((r) => r.projectPath === row.projectPath);
+    if (pinIdx !== -1) return pinIdx < 9 ? pinIdx + 1 : null;
+    const actIdx = activeRows.findIndex((r) => r.projectPath === row.projectPath);
+    if (actIdx !== -1) {
+      const n = pinnedRows.length + actIdx + 1;
+      return n <= 9 ? n : null;
+    }
+    return null;
+  };
+
   // Single row renderer shared by both groups — the current project gets its
   // live agent/terminal/command sections; anyone else gets the read-only
   // InactiveProjectSections view fed from the session registry.
@@ -413,6 +472,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         row={row}
         isCurrent={isCurrent}
         isExpanded={expanded}
+        shortcutNumber={shortcutNumberFor(row)}
         onToggleExpand={() => toggleProjectExpanded(row.projectPath)}
         onSelectProject={onSelectProject}
         onClose={canClose ? () => onCloseProject(row.projectPath) : undefined}
@@ -429,6 +489,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 addOptions={atMaxTabs ? undefined : AGENT_ADD_OPTIONS}
                 onAdd={atMaxTabs ? undefined : (agentId) => onAddTab(agentId)}
                 addLabel="Add agent tab"
+                addShortcut="⌘T"
+                addFooterLabel={atMaxTabs ? undefined : 'Add new agent'}
                 items={filteredAgents}
                 emptyHint={filter ? 'No matches' : 'No agents running'}
               />
@@ -499,17 +561,16 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         <span>Home</span>
       </button>
 
-      <div className="workspace-sidebar-filter">
+      <button
+        type="button"
+        className="workspace-sidebar-filter"
+        onClick={() => openPalette()}
+        aria-label="Open command palette"
+      >
         <SearchIcon size={12} />
-        <input
-          type="text"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Search"
-          aria-label="Search"
-          spellCheck={false}
-        />
-      </div>
+        <span className="workspace-sidebar-filter-placeholder">Search</span>
+        <span className="workspace-sidebar-filter-shortcut">⌘K</span>
+      </button>
 
       <div className="workspace-sidebar-scroll">
         <SidebarGroupHeader
@@ -679,6 +740,7 @@ function ProjectGroup({
   row,
   isCurrent,
   isExpanded,
+  shortcutNumber,
   onToggleExpand,
   onSelectProject,
   onClose,
@@ -687,6 +749,8 @@ function ProjectGroup({
   row: PinnedProjectRow;
   isCurrent: boolean;
   isExpanded: boolean;
+  /** Cmd+N shortcut badge (1..9). Null for rows beyond the shortcut range. */
+  shortcutNumber: number | null;
   onToggleExpand: () => void;
   onSelectProject: (path: string) => void;
   /** Shown as a hover-only X when defined. */
@@ -733,8 +797,12 @@ function ProjectGroup({
             className={isExpanded ? 'chevron-expanded' : 'chevron-collapsed'}
           />
         </button>
-        <span className="sidebar-project-initials" aria-hidden="true">
-          {initials}
+        <span
+          className={`sidebar-project-initials ${shortcutNumber !== null ? 'is-shortcut' : ''}`}
+          aria-hidden="true"
+          title={shortcutNumber !== null ? `⌘${shortcutNumber}` : undefined}
+        >
+          {shortcutNumber !== null ? `⌘${shortcutNumber}` : initials}
         </span>
         <span className="sidebar-project-name" title={row.fallbackName}>
           {row.fallbackName}
@@ -779,8 +847,13 @@ interface SectionProps {
   /** Simple "+" click handler. If `addOptions` is provided, this is invoked with the chosen agent id. */
   onAdd?: (agentId?: string) => void;
   addLabel?: string;
+  /** Display-only keyboard hint next to the "+" button (e.g. "⌘T"). */
+  addShortcut?: string;
   /** If provided, the "+" opens a popover picker with these options instead of an instant add. */
   addOptions?: AgentConfig[];
+  /** If set, renders a full-width "+ <label>" row below the items
+      (styled like a toolbar button) that invokes the default add. */
+  addFooterLabel?: string;
 }
 
 function SidebarSection({
@@ -793,38 +866,81 @@ function SidebarSection({
   onToggle,
   onAdd,
   addLabel,
+  addShortcut,
   addOptions,
+  addFooterLabel,
 }: SectionProps) {
   const headerId = `sidebar-section-${id}`;
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerAnchor, setPickerAnchor] = useState<'header' | 'footer' | null>(null);
+  const [footerPickerPos, setFooterPickerPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const pickerOpen = pickerAnchor !== null;
   const pickerRef = useRef<HTMLDivElement>(null);
+  const footerBtnRef = useRef<HTMLButtonElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  /* Show the agent picker only when the user has multiple options.
+     With a single agent configured, `+` is an unambiguous "add the
+     default agent" button — a one-item dropdown would just be noise. */
+  const hasMultipleOptions = (addOptions?.length ?? 0) > 1;
+
+  const cancelClose = () => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  /* Grace period so the user can move their mouse from the `+` button
+     into the picker (there's a tiny gap between them) without the
+     picker snapping shut. */
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimerRef.current = window.setTimeout(() => {
+      setPickerAnchor(null);
+      closeTimerRef.current = null;
+    }, 120);
+  };
+
+  const openPicker = (anchor: 'header' | 'footer') => {
+    if (!hasMultipleOptions) return;
+    cancelClose();
+    if (anchor === 'footer' && footerBtnRef.current) {
+      /* Portal-anchor the footer picker relative to the viewport so the
+         sidebar's `overflow: hidden` and scroll-container clipping can't
+         chop it off. We mirror the button's x-position and width so the
+         dropdown visually aligns with the trigger. */
+      const rect = footerBtnRef.current.getBoundingClientRect();
+      setFooterPickerPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+    setPickerAnchor(anchor);
+  };
 
   useEffect(() => {
     if (!pickerOpen) return;
-    const handleClickOutside = (e: globalThis.MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-      }
-    };
     const handleKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') setPickerOpen(false);
+      if (e.key === 'Escape') setPickerAnchor(null);
     };
-    document.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('keydown', handleKey);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('keydown', handleKey);
     };
   }, [pickerOpen]);
 
+  useEffect(() => () => cancelClose(), []);
+
+  /* Click always opens the default agent immediately — the picker is
+     strictly for the power user who wants a non-default. `onAdd()` with
+     no agentId falls through to `getDefaultAgentId()` downstream. */
   const handleAddClick = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (!onAdd) return;
-    if (addOptions && addOptions.length > 0) {
-      setPickerOpen((v) => !v);
-    } else {
-      onAdd();
-    }
+    cancelClose();
+    setPickerAnchor(null);
+    onAdd();
   };
 
   return (
@@ -843,25 +959,34 @@ function SidebarSection({
         <div className="sidebar-section-meta" ref={pickerRef}>
           <span className="sidebar-section-count">{total}</span>
           {onAdd && (
-            <button
-              type="button"
-              className="sidebar-section-add"
-              onClick={handleAddClick}
-              title={addLabel}
-              aria-label={addLabel}
-            >
-              +
-            </button>
+            <>
+              <button
+                type="button"
+                className="sidebar-section-add"
+                onClick={handleAddClick}
+                onMouseEnter={() => openPicker('header')}
+                onMouseLeave={scheduleClose}
+                title={addLabel}
+                aria-label={addLabel}
+              >
+                +
+              </button>
+            </>
           )}
-          {pickerOpen && addOptions && (
-            <div className="sidebar-section-picker" role="menu">
+          {pickerAnchor === 'header' && addOptions && hasMultipleOptions && (
+            <div
+              className="sidebar-section-picker"
+              role="menu"
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
+            >
               {addOptions.map((agent) => (
                 <button
                   key={agent.id}
                   type="button"
                   className="sidebar-section-picker-item"
                   onClick={() => {
-                    setPickerOpen(false);
+                    setPickerAnchor(null);
                     onAdd?.(agent.id);
                   }}
                 >
@@ -878,6 +1003,60 @@ function SidebarSection({
             <li className="sidebar-section-empty">{emptyHint}</li>
           ) : (
             items.map((item) => <SidebarRow key={item.key} item={item} />)
+          )}
+          {addFooterLabel && onAdd && items.length > 0 && (
+            <li className="sidebar-section-add-footer-row">
+              <button
+                ref={footerBtnRef}
+                type="button"
+                className="toolbar-icon-btn sidebar-section-add-footer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cancelClose();
+                  setPickerAnchor(null);
+                  onAdd();
+                }}
+                onMouseEnter={() => openPicker('footer')}
+                onMouseLeave={scheduleClose}
+                aria-label={addFooterLabel}
+              >
+                <PlusIcon size={14} />
+                <span>{addFooterLabel}</span>
+                {addShortcut && <span className="capture-shortcut">{addShortcut}</span>}
+              </button>
+              {pickerAnchor === 'footer' &&
+                addOptions &&
+                hasMultipleOptions &&
+                footerPickerPos &&
+                createPortal(
+                  <div
+                    className="sidebar-section-picker is-footer"
+                    role="menu"
+                    style={{
+                      top: footerPickerPos.top,
+                      left: footerPickerPos.left,
+                      width: footerPickerPos.width,
+                    }}
+                    onMouseEnter={cancelClose}
+                    onMouseLeave={scheduleClose}
+                  >
+                    {addOptions.map((agent) => (
+                      <button
+                        key={agent.id}
+                        type="button"
+                        className="sidebar-section-picker-item"
+                        onClick={() => {
+                          setPickerAnchor(null);
+                          onAdd(agent.id);
+                        }}
+                      >
+                        {agent.displayName}
+                      </button>
+                    ))}
+                  </div>,
+                  document.body
+                )}
+            </li>
           )}
         </ul>
       )}
@@ -896,6 +1075,12 @@ function SidebarRow({ item }: { item: SidebarItem }) {
   const handleClose = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     item.onClose?.();
+  };
+
+  const handleAction = (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (item.actionBusy) return;
+    item.onAction?.();
   };
 
   const isAttention = item.dotState === 'attention';
@@ -918,6 +1103,27 @@ function SidebarRow({ item }: { item: SidebarItem }) {
         {item.label}
       </span>
       {item.meta && <span className="sidebar-row-meta">{item.meta}</span>}
+      {item.onAction && item.actionIcon && (
+        <button
+          type="button"
+          className="sidebar-row-action"
+          onClick={handleAction}
+          disabled={item.actionBusy}
+          title={item.actionLabel}
+          aria-label={item.actionLabel}
+        >
+          {item.actionIcon}
+        </button>
+      )}
+      {item.trailing && (
+        <span
+          className="sidebar-row-trailing"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {item.trailing}
+        </span>
+      )}
       {item.onClose && (
         <button
           type="button"

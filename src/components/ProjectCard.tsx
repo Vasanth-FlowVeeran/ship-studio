@@ -10,7 +10,7 @@
 
 import { memo } from 'react';
 import { DashboardProject } from '../lib/project';
-import { BranchIcon, CodeIcon, NewWindowIcon } from './icons';
+import { BranchIcon, NewWindowIcon } from './icons';
 import { ProjectCardMenu } from './ProjectCardMenu';
 
 /** Props for the ProjectCard component */
@@ -25,8 +25,6 @@ interface ProjectCardProps {
   onDelete: () => void;
   /** Callback when main branch warning is toggled */
   onToggleMainBranchWarning: (hidden: boolean) => void;
-  /** Callback to open the project in VS Code or Cursor */
-  onOpenIde?: () => void;
   /** Callback to move project to a folder */
   onMoveToFolder?: () => void;
   /** Callback to export project as a template zip */
@@ -49,7 +47,6 @@ export const ProjectCard = memo(function ProjectCard({
   onSelect,
   onDelete,
   onToggleMainBranchWarning,
-  onOpenIde,
   onMoveToFolder,
   onExportAsTemplate,
   onOpenInNewWindow,
@@ -99,18 +96,7 @@ export const ProjectCard = memo(function ProjectCard({
                 <NewWindowIcon size={16} />
               </button>
             )}
-            {onOpenIde && (
-              <button
-                className="quick-action-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenIde();
-                }}
-                title="Open in IDE"
-              >
-                <CodeIcon size={16} />
-              </button>
-            )}
+            {/* "Open in IDE" removed — now a palette command (⌘K → Open in Cursor / VS Code). */}
           </div>
         </div>
       </div>

@@ -60,7 +60,8 @@ pub async fn open_project_in_new_window(
         .inner_size(1400.0, 900.0)
         .min_inner_size(400.0, 300.0)
         .resizable(true)
-        .transparent(true);
+        .transparent(true)
+        .initialization_script_for_all_frames(crate::webview_scripts::INSPECTOR_SHIM);
 
     #[cfg(target_os = "macos")]
     {

@@ -49,7 +49,7 @@ import { FolderBreadcrumb } from './FolderBreadcrumb';
 import { MoveFolderModal } from './MoveFolderModal';
 import { SettingsModal } from './SettingsModal';
 import { GitHubCalendar } from './GitHubCalendar';
-import { ChangelogModal } from './ChangelogModal';
+import { useModal } from '../contexts/ModalContext';
 import {
   getCalendarHidden,
   setCalendarHidden as persistCalendarHidden,
@@ -140,7 +140,7 @@ export function ProjectList({
 
   // Settings / Changelog modal state
   const [showSettings, setShowSettings] = useState(false);
-  const [showChangelog, setShowChangelog] = useState(false);
+  const changelogModal = useModal('changelog');
   const [calendarHidden, setCalendarHidden] = useState(false);
   const [slackCtaHidden, setSlackCtaHidden] = useState(false);
 
@@ -161,7 +161,10 @@ export function ProjectList({
   }, []);
 
   // Search and sort state
-  const [searchQuery, setSearchQuery] = useState('');
+  // NOTE: search filtering now flows through the Cmd+K palette; the
+  // state is kept here only because downstream grid/folder filters still
+  // key off an empty string. It's effectively a constant for now.
+  const [searchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('last_opened');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
@@ -508,8 +511,6 @@ export function ProjectList({
         )}
 
         <DashboardHeader
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
           onCreateProject={onCreateProject}
           onImportProject={onImportProject}
           isGitHubAuthenticated={isGitHubAuthenticated}
@@ -593,7 +594,7 @@ export function ProjectList({
               className="dashboard-card-row"
               onClick={() => {
                 void trackEvent('changelog_opened', { $screen_name: 'Dashboard' });
-                setShowChangelog(true);
+                changelogModal.open();
               }}
             >
               <div className="dashboard-card-row-icon">
@@ -710,7 +711,7 @@ export function ProjectList({
         />
 
         {/* What's New Modal */}
-        <ChangelogModal isOpen={showChangelog} onClose={() => setShowChangelog(false)} />
+        {/* ChangelogModal is mounted globally in <AppGlobalModals>. */}
       </div>
     </div>
   );

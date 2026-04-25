@@ -16,7 +16,6 @@ import { AssetsPanel } from './AssetsPanel';
 import { EducationOverlay } from './EducationOverlay';
 import { ScreenshotToast, ScreenshotPreviewModal } from './ScreenshotPreview';
 import { NotificationSettingsModal } from './NotificationSettingsModal';
-import { HelpModal } from './HelpModal';
 import { SkillsModal } from './SkillsModal';
 import { McpModal } from './McpModal';
 import { PluginManager } from './PluginManager';
@@ -244,8 +243,8 @@ export function WorkspaceModals({
         />
       )}
 
-      {/* Help Modal */}
-      <HelpModal projectPath={currentProjectPath} />
+      {/* HelpModal is mounted globally in <AppGlobalModals> so the command
+          palette can open it from any view. */}
 
       {/* Skills Modal */}
       <SkillsModal

@@ -1,0 +1,262 @@
+/*
+ * Command palette — top-anchored search/action modal (Cmd+K).
+ * Extends the shared ModalFrame via `.command-palette` override class.
+ */
+
+/* Top-anchor the overlay flex alignment for this variant. */
+.modal-frame-overlay:has(.command-palette) {
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+
+.command-palette {
+  width: 640px;
+  max-width: 92vw;
+  max-height: 70vh;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ===== Search row ===== */
+.command-palette-search {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-lg);
+  border-bottom: 1px solid var(--border);
+}
+
+.command-palette-search-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.command-palette-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 15px;
+  color: var(--text-primary);
+  font-family: inherit;
+  min-width: 0;
+  padding: 0;
+  height: 20px;
+  line-height: 20px;
+}
+
+.command-palette-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ===== Scope line (project context) ===== */
+.command-palette-scope {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: 12px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.command-palette-scope-label {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+
+.command-palette-scope-value {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ===== Tab row ===== */
+.command-palette-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--spacing-lg);
+  padding: 0 var(--spacing-lg);
+  border-bottom: 1px solid var(--border);
+}
+
+.command-palette-tab {
+  position: relative;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: var(--spacing-md) 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: color var(--transition);
+  outline: none;
+}
+
+.command-palette-tab:hover,
+.command-palette-tab:focus,
+.command-palette-tab:focus-visible {
+  color: var(--text-secondary);
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+}
+
+.command-palette-tab.is-active {
+  color: var(--text-primary);
+}
+
+.command-palette-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+
+/* ===== Result list ===== */
+.command-palette-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  min-height: 0;
+}
+
+.command-palette-empty {
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+.command-palette-group + .command-palette-group {
+  margin-top: var(--spacing-xs);
+}
+
+.command-palette-group-header {
+  padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ===== Row — flex: icon | stacked text | meta ===== */
+.command-palette-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: 10px var(--spacing-lg);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  transition: background-color var(--transition-fast);
+  min-height: 40px;
+}
+
+.command-palette-row.is-selected {
+  background: var(--bg-tertiary);
+}
+
+.command-palette-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.command-palette-row.is-selected .command-palette-row-icon {
+  color: var(--text-primary);
+}
+
+.command-palette-row-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.command-palette-row-title {
+  font-size: 14px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.command-palette-row-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.command-palette-row-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+/* ===== Keyboard pill ===== */
+.command-palette-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 2px 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  height: 20px;
+}
+
+/* ===== Footer hint row ===== */
+.command-palette-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.command-palette-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}

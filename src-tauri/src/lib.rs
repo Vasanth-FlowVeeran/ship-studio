@@ -21,6 +21,7 @@ pub mod state;
 pub mod static_server;
 pub mod types;
 pub mod utils;
+pub mod webview_scripts;
 
 use tauri::Manager;
 
@@ -109,6 +110,35 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|_app| {
+            // Build the main window programmatically so we can attach an
+            // initialization script that runs in all frames (including the
+            // cross-origin preview iframe). Config here mirrors what used to
+            // live in tauri.conf.json under `app.windows[0]`.
+            {
+                let mut main_builder = tauri::WebviewWindowBuilder::new(
+                    _app,
+                    "main",
+                    tauri::WebviewUrl::App("index.html".into()),
+                )
+                .title("Ship Studio")
+                .inner_size(1400.0, 900.0)
+                .min_inner_size(400.0, 300.0)
+                .resizable(true)
+                .fullscreen(false)
+                .transparent(true)
+                .background_color(tauri::utils::config::Color(45, 45, 45, 255))
+                .initialization_script_for_all_frames(webview_scripts::INSPECTOR_SHIM);
+
+                #[cfg(target_os = "macos")]
+                {
+                    main_builder = main_builder
+                        .title_bar_style(tauri::TitleBarStyle::Overlay)
+                        .hidden_title(true);
+                }
+
+                main_builder.build()?;
+            }
+
             // Build a custom menu on macOS that replaces Cmd+W (Close Window)
             // with a custom "Close Tab" action that emits an event to the frontend
             #[cfg(target_os = "macos")]

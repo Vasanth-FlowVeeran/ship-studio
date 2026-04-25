@@ -65,6 +65,39 @@
   background: #1e1e1e;
   display: flex;
   flex-direction: column;
+  /* Container query context for the screenshot footer below — lets
+     it swap long labels ("Full Screenshot") for short ones ("Full")
+     purely in CSS when the terminal pane is narrow. */
+  container-type: inline-size;
+  container-name: terminal-pane;
+}
+
+/* Sits at the bottom of the terminal pane with the screenshot
+   cluster. Sized to line up with `.workspace-sidebar-add-project`
+   across the workspace. */
+.terminal-pane-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  height: 45px;
+  padding: 0 var(--spacing-md);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+}
+
+/* Long labels by default; short labels kick in at the breakpoint. */
+.terminal-pane-footer .capture-label-short {
+  display: none;
+}
+
+@container terminal-pane (max-width: 350px) {
+  .terminal-pane-footer .capture-label-full {
+    display: none;
+  }
+  .terminal-pane-footer .capture-label-short {
+    display: inline;
+  }
 }
 
 .terminal-toolbar {

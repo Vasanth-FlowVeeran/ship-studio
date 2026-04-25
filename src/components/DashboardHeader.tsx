@@ -1,23 +1,18 @@
 /**
  * DashboardHeader component for the main project list view.
  *
- * Provides:
- * - Search input with Cmd+K keyboard shortcut for quick filtering
- * - "New Folder" button to create folders
- * - "New Project" button to create projects
- * - Settings button for app configuration
+ * The search field is a button-styled trigger that opens the command palette;
+ * typing happens inside the palette, not here.
  *
  * @module components/DashboardHeader
  */
 
-import { useEffect, useRef } from 'react';
 import { SearchIcon } from './icons';
-import { trackEvent, trackSearch } from '../lib/analytics';
+import { trackEvent } from '../lib/analytics';
 import { Button } from './primitives/Button';
+import { useModal } from '../contexts/ModalContext';
 
 interface DashboardHeaderProps {
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
   onCreateProject: () => void;
   onImportProject?: () => void;
   /** Whether GitHub is authenticated (import requires GitHub) */
@@ -27,49 +22,26 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({
-  searchQuery,
-  onSearchChange,
   onCreateProject,
   onImportProject,
   isGitHubAuthenticated = true,
   onGitHubConnectForImport,
 }: DashboardHeaderProps) {
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Cmd+K keyboard shortcut to focus search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const palette = useModal('commandPalette');
 
   return (
     <div className="dashboard-header">
-      <div className="dashboard-search" data-education-id="search-projects">
+      <button
+        type="button"
+        className="dashboard-search"
+        data-education-id="search-projects"
+        onClick={() => palette.open()}
+        aria-label="Open command palette"
+      >
         <SearchIcon />
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Search projects..."
-          value={searchQuery}
-          onChange={(e) => {
-            onSearchChange(e.target.value);
-            trackSearch('project_search', e.target.value, 'Dashboard');
-          }}
-          className="dashboard-search-input"
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
-        />
+        <span className="dashboard-search-placeholder">Search projects, actions, settings…</span>
         <span className="dashboard-search-shortcut">⌘K</span>
-      </div>
+      </button>
       <div className="dashboard-header-actions">
         {onImportProject && (
           <Button

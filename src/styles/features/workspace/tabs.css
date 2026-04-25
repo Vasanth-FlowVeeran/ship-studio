@@ -1,39 +1,54 @@
-/* Workspace Tabs */
+/* Workspace Tabs
+   The tab row stretches to fill the full toolbar height so active-state
+   underlines can sit flush with the toolbar's bottom border. Each tab has
+   no background/border — hover/active states are communicated by color +
+   a 2px underline pinned to the bottom via ::after (overlaps the parent
+   toolbar's border-bottom at `bottom: -1px`). */
 .workspace-tabs {
   display: flex;
-  gap: 6px;
+  align-self: stretch;
+  align-items: stretch;
+  gap: 0;
   margin-left: auto;
 }
 
 .workspace-tab {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 8px;
+  gap: 6px;
+  padding: 0 var(--spacing-md);
   min-width: 0;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
+  border: none;
+  border-radius: 0;
   color: var(--text-muted);
+  font-family: inherit;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+  transition: color 0.15s;
   outline: none;
 }
 
-.workspace-tab:hover {
-  color: var(--text-primary);
+.workspace-tab:hover,
+.workspace-tab:focus-visible {
+  color: var(--text-secondary);
 }
 
 .workspace-tab.active {
-  background: var(--bg-tertiary);
-  border-color: var(--border);
   color: var(--text-primary);
+}
+
+.workspace-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
 }
 
 .workspace-tab.attention {

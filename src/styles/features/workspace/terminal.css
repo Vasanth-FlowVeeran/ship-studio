@@ -210,6 +210,16 @@
   margin: 4px 0;
 }
 
+/* Wraps the full-mode terminal tabs bar + the absolute-positioned
+ * `.terminal-content` stack. Flex column so the content stack stretches to
+ * fill the split pane's left half. */
+.workspace-terminal-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .terminal-tab-content {
   position: absolute;
   top: 0;
@@ -250,15 +260,6 @@
   visibility: visible;
 }
 
-/* Left-side actions in the terminal tabs bar (Restart dev server +
- * Project settings). Pairs with `.terminal-logs-tabs`, which pushes
- * itself to the right via `margin-left: auto`. */
-.terminal-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .terminal-logs-tabs {
   display: flex;
   gap: 6px;
@@ -275,7 +276,10 @@
 .toolbar-dropdown-menu {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  /* Anchor to the left of the trigger — the Agent Settings dropdown now
+     lives in the left cluster of the workspace header, so the menu
+     expands rightward/downward from the button. */
+  left: 0;
   z-index: var(--z-modal-overlay);
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -283,6 +287,16 @@
   min-width: 200px;
   box-shadow: var(--shadow);
   padding: 4px;
+}
+
+/* Portaled variant: menu rendered into <body> with JS-computed viewport
+   coords. Escapes `overflow: hidden` on any ancestor — needed for the
+   Agent Settings dropdown in .terminal-tabs-bar, whose grandparent
+   .terminal-pane clips absolute children. */
+.toolbar-dropdown-menu-floating {
+  position: fixed;
+  top: auto;
+  left: auto;
 }
 
 .toolbar-dropdown-item {
@@ -304,6 +318,151 @@
 
 .toolbar-dropdown-item:hover {
   background: var(--bg-tertiary);
+}
+
+/* Shown inside a dropdown menu when there are zero items to list
+   (e.g. Plugins dropdown with no plugins installed). */
+.toolbar-dropdown-empty-hint {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Plugins dropdown stays mounted so plugin subtrees survive open/close
+   cycles. Hidden via off-screen absolute positioning (not display:none)
+   so plugin-rendered modals using position:fixed can still paint to
+   the viewport even while their dropdown ancestor is "closed". */
+.toolbar-dropdown-menu.is-hidden {
+  left: -99999px !important;
+  top: -99999px !important;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* Plugin modals use position:fixed inside the hidden menu — they need
+   to override the inherited `visibility: hidden` so they can render. */
+.toolbar-dropdown-menu.is-hidden [class*='overlay'],
+.toolbar-dropdown-menu.is-hidden [class*='modal'],
+.toolbar-dropdown-menu.is-hidden [class*='portal'] {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* One row per plugin in the Plugins dropdown. The plugin's own
+   `toolbar` slot component is rendered inside `.plugin-dropdown-row-
+   trigger` — it stays the real click target (preserving its internal
+   modalOpen state), but we strip the toolbar-icon-btn chrome so it
+   looks like a menu row icon. The label alongside it is the plugin
+   name from manifest (purely decorative). */
+.plugin-dropdown-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.plugin-dropdown-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.plugin-dropdown-row-trigger {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Neutralize the plugin's toolbar button chrome (border, padding,
+   background) so it looks like a menu-row icon slot. The plugin
+   retains its SVG logo and its click handler — only the outer
+   button styling is reset. */
+.plugin-dropdown-row-trigger > * > button,
+.plugin-dropdown-row-trigger button.toolbar-icon-btn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.plugin-dropdown-row:hover .plugin-dropdown-row-trigger button.toolbar-icon-btn {
+  color: var(--text-primary);
+}
+
+.plugin-dropdown-row-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+
+.plugin-dropdown-row-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Compact plugin-icon slot used inside dropdown rows. Mirrors the
+   `.plugin-icon-container` defense-in-depth from plugins.css but at
+   14×14 so the plugin's real SVG logo (Vercel, Webflow, etc.) fits a
+   menu row. All inner layout, borders, backgrounds, and padding from
+   the plugin's own toolbar component are neutralized — only the SVG
+   logo survives. Any modals/dropdowns the plugin opens on its own are
+   hidden because they'd render adjacent and break the menu layout. */
+.plugin-dropdown-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--text-secondary);
+  overflow: hidden;
+  font-size: 0;
+  line-height: 0;
+}
+
+.plugin-dropdown-icon * {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  gap: 0 !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  box-shadow: none !important;
+}
+
+.plugin-dropdown-icon > * {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+}
+
+.plugin-dropdown-icon svg {
+  width: 14px !important;
+  height: 14px !important;
+  flex-shrink: 0;
+}
+
+.plugin-dropdown-icon [class*='modal'],
+.plugin-dropdown-icon [class*='dropdown'],
+.plugin-dropdown-icon [class*='menu'],
+.plugin-dropdown-icon [class*='tooltip'] {
+  display: none !important;
 }
 
 .toolbar-dropdown-item.auto-accept-on {

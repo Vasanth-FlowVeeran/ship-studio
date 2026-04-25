@@ -1,8 +1,25 @@
-/* Preview */
+/* Preview. Uses grid rather than column-flex because ancestor heights
+   in the chain above .preview-pane are indefinite at layout time —
+   percentage flex-basis on the logs panel was resolving to auto
+   (content size) and letting the viewport grow past its share. Grid
+   rows are computed against the container's resolved height, which
+   WKWebView handles deterministically here.
+
+   Three rows: toolbar (auto), viewport (1fr), logs panel. The panel
+   row is `0` when closed and `1fr` when open. Panel stays mounted
+   either way (its overflow:hidden clips at the 0 row) so plugin-
+   style state inside doesn't get torn down on toggle. JS sets
+   `data-logs="open"` on the container when showLogs is true. */
 .preview-container {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto 1fr 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.preview-container[data-logs='open'] {
+  grid-template-rows: auto 1fr 1fr;
 }
 
 .preview-toolbar {
@@ -13,13 +30,6 @@
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   overflow: visible;
-}
-
-.preview-toolbar-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 /* Page Switcher */
@@ -104,7 +114,9 @@
 
 .page-item {
   position: relative;
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
   width: 100%;
   padding: 10px 12px;
   background: transparent;
@@ -142,6 +154,13 @@
   border-radius: 0 2px 2px 0;
 }
 
+.page-item-hint {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .preview-url {
   font-family: monospace;
   font-size: 12px;
@@ -169,37 +188,57 @@
 
 .preview-breakpoints {
   display: flex;
-  gap: 4px;
+  align-self: stretch;
+  align-items: stretch;
+  gap: 0;
+  /* Cancel the parent .preview-toolbar's 9px top/bottom padding so the
+     tabs span the full toolbar height — lets the active underline sit
+     flush with the toolbar's bottom border. */
+  margin-top: -9px;
+  margin-bottom: -9px;
   margin-left: auto;
   margin-right: 0;
 }
 
 .breakpoint-btn {
-  padding: 6px 8px;
+  position: relative;
+  padding: 0 var(--spacing-md);
   background: transparent;
-  border-radius: var(--radius-sm);
+  border: none;
+  border-radius: 0;
   color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+  cursor: pointer;
+  transition: color 0.15s;
+  outline: none;
 }
 
 .breakpoint-btn svg {
   display: block;
 }
 
-.breakpoint-btn:hover {
-  background: var(--bg-tertiary);
+.breakpoint-btn:hover,
+.breakpoint-btn:focus-visible {
+  background: transparent;
   color: var(--text-secondary);
 }
 
 .breakpoint-btn.active {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.breakpoint-btn.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
   background: var(--accent);
-  color: #1e1e1e;
+  border-radius: 2px 2px 0 0;
 }
 
 .preview-zoom {
@@ -344,6 +383,267 @@
 
 .preview-resize-handle:hover .preview-resize-handle-bar {
   background: var(--accent);
+}
+
+/* Dev server logs toggle (toolbar button) */
+.preview-logs-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition);
+}
+
+.preview-logs-toggle:hover {
+  color: var(--text-primary);
+}
+
+/* iOS-style toggle pill next to the Inspect label. Reflects the open
+   state of the inspector panel — replaces the prior border/background
+   color-change because those didn't read as a toggle. */
+.preview-logs-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 12px;
+  margin-left: 2px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition:
+    background var(--transition),
+    border-color var(--transition);
+}
+
+.preview-logs-toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 8px;
+  height: 8px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition:
+    transform var(--transition),
+    background var(--transition);
+}
+
+.preview-logs-toggle-switch.is-on {
+  background: var(--success-light);
+  border-color: var(--success-light);
+}
+
+.preview-logs-toggle-switch.is-on::after {
+  transform: translateX(10px);
+  background: #ffffff;
+}
+
+/* Collapsible dev server logs panel (bottom of preview) */
+.preview-logs-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: #1a1a1a;
+  border-top: 1px solid var(--border);
+  /* Isolate the panel's internal layout from ancestors: any Network
+     row / DOM tree / console line change inside the panel won't
+     trigger re-layout upward. */
+  contain: layout size;
+}
+
+.preview-logs-header {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  padding-right: var(--spacing-md);
+}
+
+.preview-logs-tabs {
+  display: flex;
+  align-items: stretch;
+}
+
+.preview-logs-tab {
+  position: relative;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition);
+  outline: none;
+}
+
+.preview-logs-tab:hover,
+.preview-logs-tab:focus-visible {
+  color: var(--text-secondary);
+  outline: none;
+}
+
+.preview-logs-tab.is-active {
+  color: var(--text-primary);
+}
+
+.preview-logs-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+
+.preview-logs-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Center within the header row — the header is `align-items: stretch`
+     for the tabs (so their `::after` underline spans the full height),
+     so the close button needs align-self:center to vertical-center its
+     fixed 22px box in the taller stretched row. */
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.preview-logs-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Body stacks both tab contents in a single grid cell. The active
+   slot is visible; the inactive slot stays laid out (full size,
+   same grid cell) but hidden via `visibility: hidden` — so nothing
+   re-mounts and xterm / stores keep their state across tab switches. */
+.preview-logs-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 1fr;
+  grid-template-columns: 1fr;
+}
+
+/* Hide via opacity (not visibility): the BrowserTools slot has its
+   own active sub-slot with its own visibility:visible rule, which
+   would punch through an outer `visibility: hidden` and render inner
+   Console entries on top of the Server Logs. Opacity compounds
+   through stacking contexts, so opacity:0 on the outer slot hides
+   every descendant unconditionally.
+
+   `isolation: isolate` is important: it forces every slot to create
+   its own stacking context regardless of opacity. Without it,
+   xterm's internal `.xterm-helper-textarea` (which has inline
+   `z-index: 1000`) escapes the inactive DevServerLogs slot and
+   renders on top of the active BrowserTools buttons — eating clicks.
+   The explicit `z-index` + `isolation` combo guarantees the active
+   slot always wins the hit-test. */
+.preview-logs-slot {
+  grid-row: 1;
+  grid-column: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+  z-index: 0;
+}
+
+.preview-logs-slot.is-active {
+  opacity: 1;
+  z-index: 1;
+}
+
+/* DevServerLogs layout: optional toolbar above the xterm container.
+   The terminal area keeps its hard-coded #1a1a1a to match xterm's
+   theme background exactly — tokenizing this pulls in a theme-aware
+   value that won't match the renderer. */
+.dev-server-logs {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #1a1a1a;
+}
+
+.dev-server-logs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.dev-server-logs-hint {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dev-server-logs-send {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    color var(--transition),
+    border-color var(--transition);
+}
+
+.dev-server-logs-send:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.dev-server-logs-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dev-server-logs-terminal {
+  flex: 1;
+  min-height: 0;
+  background: #1a1a1a;
 }
 
 /* Crop selection overlay */

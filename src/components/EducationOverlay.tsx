@@ -11,6 +11,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { educationContent } from '../lib/educationContent';
 import { GraduationCapIcon } from './icons';
+import { COMPACT_BREAKPOINT } from '../hooks/useIsCompact';
 
 interface EducationOverlayProps {
   /** Callback to close the overlay */
@@ -136,8 +137,6 @@ export function EducationOverlay({ onClose }: EducationOverlayProps) {
 
   // Auto-exit when window shrinks below compact mode threshold
   useEffect(() => {
-    const COMPACT_BREAKPOINT = 550;
-
     const handleResize = () => {
       if (window.innerWidth <= COMPACT_BREAKPOINT) {
         onClose();

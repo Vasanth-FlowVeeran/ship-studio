@@ -5,6 +5,7 @@
 
 /* Components (primitives) */
 @import './components/modal.css';
+@import './components/command-palette.css';
 
 /* Features */
 @import './features/setup.css';
@@ -19,9 +20,10 @@
 @import './features/workspace/terminal.css';
 @import './features/workspace/sidebar.css';
 @import './features/workspace/connect-overlay.css';
-@import './features/workspace/compact.css';
+@import './features/workspace/compact-workspace.css';
 @import './features/toolbar.css';
 @import './features/preview.css';
+@import './features/browser-tools.css';
 @import './features/github.css';
 @import './features/publish/dropdown.css';
 @import './features/publish/rows.css';
@@ -55,6 +57,5 @@
 @import './features/project-rail.css';
 
 /* Modes */
-@import './modes/compact-mode.css';
 @import './modes/education-mode.css';
 @import './modes/code-mode.css';

@@ -375,6 +375,64 @@ Don't dump new files into `src/styles/` root unless they're genuinely cross-cutt
 
 Don't add new `show*`/`open*`/`close*` triples to `App.tsx` or `useWorkspaceModals`. Use `useModal('myModalId')` from the `ModalContext` (forthcoming); modals read their own open state rather than being passed `isOpen` props.
 
+### New feature → contribute commands via `useCommands`
+
+Every user-facing feature MUST expose its primary actions through the Cmd+K palette. The palette is a contract, not a screen — it's how users discover and invoke features without hunting toolbars.
+
+Commands live next to the handlers that implement them. The pattern is always:
+
+```tsx
+// src/commands/useBranchCommands.tsx (or inline in the feature hook)
+import { useCommands } from '../commands/useCommands';
+
+export function useBranchCommands({ currentBranch, switchBranch, hasConflicts }: Params) {
+  useCommands(
+    () => [
+      {
+        id: 'branches.switch',                      // domain.verb, globally unique
+        title: 'Switch branch…',
+        icon: <BranchIcon size={14} />,
+        category: 'branch',                         // drives tab + grouping
+        when: 'project',                            // or (ctx) => boolean
+        keywords: ['checkout', 'change'],
+        run: () => switchBranch(),
+      },
+      {
+        id: 'branches.resolveConflicts',
+        title: 'Resolve merge conflicts',
+        category: 'branch',
+        when: ({ kind }) => kind === 'project' && hasConflicts,
+        run: () => openConflictModal(),
+      },
+    ],
+    [switchBranch, hasConflicts],
+  );
+}
+```
+
+**The six rules:**
+
+1. **`id` is namespaced and globally unique** — format `domain.verb` (e.g. `branches.switch`, `devserver.restart`, `modal.env`). Collisions silently overwrite.
+2. **`when` is static or a predicate** — `'home' | 'project'` for the common case, or `(ctx) => boolean` for stateful gating. Evaluated fresh at palette open / state change; never a stale snapshot.
+3. **`run` surfaces failures via toast** — silent failures kill palette trust. If a command can fail, `try/catch` and call `showToast(err, 'error')`. Don't assume backend rejections will bubble anywhere visible.
+4. **Opening a modal goes through `useOpenModal()`** — from `contexts/ModalContext.tsx`. It returns a stable `(id) => void`. Never reach around to a setter.
+5. **Destructive actions need confirmation** — route through the existing confirm-modal pattern. The palette is low-friction by design; guardrails belong on the handler side.
+6. **Deps array controls re-registration** — treat it exactly like `useEffect`'s. Missing a dep → stale closure. Too many deps → the bucket rebuilds constantly (no harm, but wasteful).
+
+**Where to put it:**
+
+- For a feature with ≤ 3 commands → call `useCommands` at the bottom of the feature's hook (if it's `.tsx`) or a sibling `useXxxCommands.tsx`.
+- For simple modal-opener commands → batch them in `src/commands/useAppCommands.tsx` (already exists).
+- For cross-cutting commands (e.g. "Check for updates") → `useAppCommands.tsx`.
+
+**Out of scope for the palette** (don't register these):
+
+- One-shot deep settings (e.g. "Toggle Slack CTA visibility") — leave inside their settings modal.
+- Buttons whose label depends heavily on state and where the user is already looking at it (e.g. per-row delete buttons in a list).
+- Anything that'd need more than two UI prompts after triggering — build a dedicated flow instead.
+
+See `src/commands/` for the infra (registry, scorer, frecency, `useCommands`) and `src/commands/useAppCommands.tsx` for a canonical example.
+
 ---
 
 ## Patterns That Are "Out"

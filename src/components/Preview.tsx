@@ -12,11 +12,13 @@
  * @module components/Preview
  */
 
-import { useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
+import { useRef, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
 import { usePreviewConnection, SERVER_MAX_RETRIES } from '../hooks/usePreviewConnection';
 import { usePreviewCapture } from '../hooks/usePreviewCapture';
 import { usePreviewResize, BREAKPOINTS, type Breakpoint } from '../hooks/usePreviewResize';
 import { useOptionalToast } from '../contexts/ToastContext';
+import { DevServerLogs } from './DevServerLogs';
+import { BrowserTools } from './BrowserTools';
 
 // SVG icons for breakpoints
 const BreakpointIcon = ({ type }: { type: Breakpoint }) => {
@@ -126,12 +128,22 @@ interface PreviewProps {
   isDevServerRestarting?: boolean;
   /** Whether this is a static HTML project (changes loading/error messaging) */
   isStaticProject?: boolean;
-  /** Extra toolbar elements to render in the center */
-  toolbarExtra?: React.ReactNode;
   /** Callback to send prompt to Claude terminal */
   onSendToClaude?: (prompt: string) => void;
   /** Plugin components rendered in the preview toolbar */
   previewPlugins?: React.ReactNode;
+  /** Whether the dev server logs panel is open */
+  showLogs?: boolean;
+  /** Callback to toggle the dev server logs panel */
+  onToggleLogs?: () => void;
+  /** Dev server output buffer (passed through to DevServerLogs) */
+  devServerOutput?: string;
+  /** Version counter that bumps when devServerOutput changes */
+  devServerOutputVersion?: number;
+  /** Controlled inspect-panel sub-tab. Falls back to local state when unset. */
+  inspectTab?: InspectTab;
+  /** Callback when the user switches inspect-panel sub-tabs. */
+  onInspectTabChange?: (tab: InspectTab) => void;
 }
 
 /**
@@ -164,9 +176,14 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     isBranchSwitching = false,
     isDevServerRestarting = false,
     isStaticProject = false,
-    toolbarExtra,
     onSendToClaude,
     previewPlugins,
+    showLogs = false,
+    onToggleLogs,
+    devServerOutput = '',
+    devServerOutputVersion = 0,
+    inspectTab,
+    onInspectTabChange,
   },
   ref
 ) {
@@ -266,8 +283,33 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   }
 
   return (
-    <div className="preview-container">
+    <div className="preview-container" data-logs={showLogs ? 'open' : 'closed'}>
       <div className="preview-toolbar">
+        {onToggleLogs && (
+          <button
+            type="button"
+            className={`preview-logs-toggle ${showLogs ? 'active' : ''}`}
+            onClick={onToggleLogs}
+            title={showLogs ? 'Hide inspector' : 'Show inspector'}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+            <span>Inspect</span>
+            <span className={`preview-logs-toggle-switch ${showLogs ? 'is-on' : ''}`} aria-hidden />
+          </button>
+        )}
+
         {/* Page Switcher */}
         <div className="page-switcher" ref={conn.dropdownRef} data-education-id="page-switcher">
           <button
@@ -319,7 +361,8 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
                       className={`page-item ${page.route === conn.currentPage ? 'active' : ''}`}
                       onClick={() => conn.handlePageSelect(page.route)}
                     >
-                      {page.route}
+                      <span className="page-item-route">{page.route}</span>
+                      {page.route === '/' && <span className="page-item-hint">Home</span>}
                     </button>
                   ))
                 )}
@@ -336,8 +379,6 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
         >
           ↻
         </button>
-
-        {toolbarExtra && <div className="preview-toolbar-center">{toolbarExtra}</div>}
 
         {previewPlugins}
 
@@ -442,6 +483,111 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           <div className="preview-resize-handle-bar" />
         </div>
       </div>
+      <InspectPanel
+        hidden={!showLogs}
+        devServerOutput={devServerOutput}
+        devServerOutputVersion={devServerOutputVersion}
+        onClose={onToggleLogs}
+        onSendToAgent={onSendToClaude}
+        activeTab={inspectTab}
+        onActiveTabChange={onInspectTabChange}
+      />
     </div>
   );
 });
+
+export type InspectTab = 'logs' | 'browser';
+
+interface InspectPanelProps {
+  hidden: boolean;
+  devServerOutput: string;
+  devServerOutputVersion: number;
+  onClose?: () => void;
+  onSendToAgent?: (text: string) => void;
+  /** Controlled tab. When set, the component is fully controlled. */
+  activeTab?: InspectTab;
+  onActiveTabChange?: (tab: InspectTab) => void;
+}
+
+function InspectPanel({
+  hidden,
+  devServerOutput,
+  devServerOutputVersion,
+  onClose,
+  onSendToAgent,
+  activeTab: activeTabProp,
+  onActiveTabChange,
+}: InspectPanelProps) {
+  const [activeTabLocal, setActiveTabLocal] = useState<InspectTab>('logs');
+  const activeTab = activeTabProp ?? activeTabLocal;
+  const setActiveTab = onActiveTabChange ?? setActiveTabLocal;
+
+  return (
+    <div className="preview-logs-panel" aria-hidden={hidden}>
+      <div className="preview-logs-header">
+        <div className="preview-logs-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'logs'}
+            className={`preview-logs-tab ${activeTab === 'logs' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('logs')}
+          >
+            Server Logs
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'browser'}
+            className={`preview-logs-tab ${activeTab === 'browser' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('browser')}
+          >
+            Browser Tools
+          </button>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            className="preview-logs-close"
+            onClick={onClose}
+            title="Hide panel"
+            aria-label="Hide panel"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        )}
+      </div>
+      {/* Both tab contents stay mounted and stack in the same grid cell.
+          Toggling `is-active` swaps visibility via CSS (opacity) so
+          DevServerLogs doesn't re-init xterm (and BrowserTools doesn't
+          re-subscribe to the store) every time the user switches tabs.
+          `inert` on inactive slots blocks keyboard focus and pointer
+          events without needing pointer-events: none (which doesn't
+          compose cleanly with nested slot hierarchies). */}
+      <div className="preview-logs-body">
+        <div className={`preview-logs-slot ${activeTab === 'logs' ? 'is-active' : ''}`}>
+          <DevServerLogs
+            output={devServerOutput}
+            outputVersion={devServerOutputVersion}
+            onSendToAgent={onSendToAgent}
+          />
+        </div>
+        <div className={`preview-logs-slot ${activeTab === 'browser' ? 'is-active' : ''}`}>
+          <BrowserTools onSendToAgent={onSendToAgent} />
+        </div>
+      </div>
+    </div>
+  );
+}

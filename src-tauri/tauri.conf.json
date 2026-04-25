@@ -11,23 +11,7 @@
   },
   "app": {
     "macOSPrivateApi": true,
-    "windows": [
-      {
-        "title": "Ship Studio",
-        "width": 1400,
-        "height": 900,
-        "minWidth": 400,
-        "minHeight": 300,
-        "resizable": true,
-        "fullscreen": false,
-        "dragDropEnabled": true,
-        "transparent": true,
-        "titleBarStyle": "Overlay",
-        "hiddenTitle": true,
-        "theme": "Dark",
-        "backgroundColor": "#2d2d2d"
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null,
       "assetProtocol": {

@@ -1,7 +1,21 @@
 /**
- * HealthIndicatorBar — renders the CodeHealthPanel with its left/right toolbar
- * button groups (restart server, project settings, compact mode, browser,
- * show/hide preview). Extracted from WorkspaceView.
+ * HealthIndicatorBar — wraps CodeHealthPanel. Previously also owned a
+ * right-side toolbar with preview-restore / compact-mode / browser
+ * controls, but those moved into the full-width `.preview-tabs-bar`
+ * at the workspace-main level, so they stay reachable even when the
+ * preview pane is hidden. This component now purely renders (or hides)
+ * the code-health UI.
+ *
+ * ────────────────────────────────────────────────────────────────────
+ * EXPERIMENT (hidden on purpose): the Health panel UI is currently
+ * disabled via `HEALTH_PANEL_VISIBLE` below. We want to see whether
+ * anyone actually notices it's gone before committing to removing
+ * the feature. If support pings come in about missing test/lint/
+ * typecheck indicators, flip the flag back to `true`. All underlying
+ * code (CodeHealthPanel, useCodeHealth, healthPanelRef plumbing,
+ * auto-run on branch switch via useBranchManagement) is intentionally
+ * left intact — we're only hiding the UI.
+ * ────────────────────────────────────────────────────────────────────
  *
  * @module components/workspace/HealthIndicatorBar
  */
@@ -9,26 +23,19 @@
 import type { RefObject } from 'react';
 import { CodeHealthPanel } from '../CodeHealthPanel';
 import type { CodeHealthPanelRef } from '../CodeHealthPanel';
-import { BrowserDropdown } from '../BrowserDropdown';
-import { CompactIcon, PanelRightIcon, PanelLeftIcon } from '../icons';
+
+/**
+ * Feature flag for the Health panel UI. Flip to `true` to restore the
+ * test/lint/typecheck/format indicator + expandable detail panel. See
+ * the module comment above for the rationale.
+ */
+const HEALTH_PANEL_VISIBLE = false;
 
 export interface HealthIndicatorBarProps {
   projectPath: string;
   healthPanelRef: RefObject<CodeHealthPanelRef | null>;
   onAskClaude: (text: string) => void;
   onHealthOutput: (data: string) => void;
-
-  isWebProject: boolean;
-  isPreviewHidden: boolean;
-  devServerPort: number;
-
-  onEnterCompactMode: () => Promise<void>;
-  onShowPreview: () => void;
-  /** Current sidebar visibility in the workspace. Ignored on home/
-   *  projects view since that view always renders the sidebar. */
-  isSidebarHidden: boolean;
-  /** Flip sidebar visibility. */
-  onToggleSidebar: () => void;
 }
 
 export function HealthIndicatorBar({
@@ -36,60 +43,16 @@ export function HealthIndicatorBar({
   healthPanelRef,
   onAskClaude,
   onHealthOutput,
-  isWebProject,
-  isPreviewHidden,
-  devServerPort,
-  onEnterCompactMode,
-  onShowPreview,
-  isSidebarHidden,
-  onToggleSidebar,
 }: HealthIndicatorBarProps) {
-  // Only the sidebar toggle lives in this top toolbar. Restart / project
-  // settings moved one row down into `.terminal-tabs-bar` alongside the
-  // health-logs + kebab controls, so the health panel row stays minimal.
-  const toolbarLeft = (
-    <button
-      className="show-preview-btn icon-only"
-      onClick={onToggleSidebar}
-      title={isSidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
-      aria-label={isSidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
-      data-education-id="toggle-sidebar"
-    >
-      <PanelLeftIcon size={12} />
-    </button>
-  );
-
-  const toolbarRight = isPreviewHidden ? (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      {isWebProject && (
-        <>
-          <button
-            className="show-preview-btn icon-only"
-            onClick={() => void onEnterCompactMode()}
-            title="Compact Mode"
-            data-education-id="compact-button"
-          >
-            <CompactIcon size={12} />
-          </button>
-          <span data-education-id="browser-button">
-            <BrowserDropdown
-              url={`http://localhost:${devServerPort}`}
-              buttonClassName="show-preview-btn icon-only"
-              iconOnly
-            />
-          </span>
-        </>
-      )}
-      <button
-        className="show-preview-btn icon-only"
-        onClick={onShowPreview}
-        title="Show Panel"
-        data-education-id="show-preview"
-      >
-        <PanelRightIcon size={12} />
-      </button>
-    </div>
-  ) : undefined;
+  if (!HEALTH_PANEL_VISIBLE) {
+    // Hidden-experiment path: skip CodeHealthPanel entirely. The
+    // preview-hide/show toggle now lives in the full-width tabs bar at
+    // workspace-main scope, so we don't need to keep a fallback toolbar
+    // row here. `healthPanelRef` stays un-populated; the only external
+    // callers (useBranchManagement's post-switch auto-run) use optional
+    // chaining, so the calls become no-ops.
+    return null;
+  }
 
   return (
     <CodeHealthPanel
@@ -97,8 +60,6 @@ export function HealthIndicatorBar({
       projectPath={projectPath}
       onAskClaude={onAskClaude}
       onHealthOutput={onHealthOutput}
-      toolbarLeft={toolbarLeft}
-      toolbarRight={toolbarRight}
     />
   );
 }
