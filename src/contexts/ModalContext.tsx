@@ -119,10 +119,15 @@ export function ModalProvider({ children }: ProviderProps) {
   // unmounts (app quit, hard reload). Without this, the open event has no
   // close partner and duration is lost.
   useEffect(() => {
+    // Snapshot the Map ref at mount-time so the cleanup doesn't read
+    // `openedAtRef.current` directly (lint flags ref reads in cleanup).
+    // The Map is mutated in place — never reassigned — so the captured
+    // reference stays current through the provider's lifetime.
+    const openedAtMap = openedAtRef.current;
     return () => {
       for (const id of openSetRef.current) {
         if (MODAL_TRACKING_EXCLUDED.has(id)) continue;
-        const openedAt = openedAtRef.current.get(id);
+        const openedAt = openedAtMap.get(id);
         void trackEvent(`modal_${id}_closed`, {
           modal_id: id,
           duration_ms: openedAt !== undefined ? Math.round(performance.now() - openedAt) : null,

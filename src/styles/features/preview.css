@@ -186,6 +186,39 @@
   animation: spin 0.8s linear infinite;
 }
 
+.preview-dimensions {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  user-select: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.preview-dimensions:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.preview-dimensions:active:not(:disabled) {
+  background: var(--border);
+}
+
+.preview-dimensions:disabled {
+  cursor: default;
+}
+
 .preview-breakpoints {
   display: flex;
   align-self: stretch;
@@ -198,6 +231,12 @@
   margin-bottom: -9px;
   margin-left: auto;
   margin-right: 0;
+}
+
+/* When the dimensions readout precedes the breakpoints, it owns the
+   auto-margin push so the two sit together on the right edge. */
+.preview-dimensions + .preview-breakpoints {
+  margin-left: var(--spacing-xs);
 }
 
 .breakpoint-btn {

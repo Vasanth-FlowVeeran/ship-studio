@@ -46,7 +46,7 @@ export function usePreviewCapture({
   const [selectionEnd, setSelectionEnd] = useState<{ x: number; y: number } | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
 
-  const iframeWrapperRef = useRef<HTMLDivElement>(null);
+  const iframeWrapperRef = useRef<HTMLDivElement | null>(null);
   const cropOverlayRef = useRef<HTMLDivElement>(null);
 
   // Shared helper: capture the current window and return the temp file path

@@ -228,7 +228,9 @@ export function BranchesTab({
             <div className="branch-card-info">
               <div className="branch-card-name">
                 <BranchIcon size={14} />
-                {currentBranchInfo.name}
+                <span className="branch-card-name-text" title={currentBranchInfo.name}>
+                  {currentBranchInfo.name}
+                </span>
                 {currentBranchInfo.isDefault && <span className="branch-live-badge">Live</span>}
                 <span className="branch-card-current-label">you are here</span>
               </div>
@@ -517,7 +519,9 @@ function BranchCard({
       <div className="branch-card-info">
         <div className="branch-card-name">
           <BranchIcon size={14} />
-          {branch.name}
+          <span className="branch-card-name-text" title={branch.name}>
+            {branch.name}
+          </span>
           {branch.isDefault && <span className="branch-live-badge">Live</span>}
           {isCurrent && <span className="branch-card-current-label">you are here</span>}
         </div>

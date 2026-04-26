@@ -129,6 +129,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 12px;
   padding: 14px 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -154,10 +155,24 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
   margin-bottom: 4px;
+}
+
+.branch-card-name > svg,
+.branch-card-name > .branch-live-badge,
+.branch-card-name > .branch-card-current-label {
+  flex-shrink: 0;
+}
+
+.branch-card-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .branch-card-current-label {
@@ -199,6 +214,7 @@
 .branch-card-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .branch-card-action {

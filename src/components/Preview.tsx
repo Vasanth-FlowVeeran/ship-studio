@@ -12,7 +12,7 @@
  * @module components/Preview
  */
 
-import { useRef, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
+import { useRef, forwardRef, useImperativeHandle, useCallback, useState, useEffect } from 'react';
 import { usePreviewConnection, SERVER_MAX_RETRIES } from '../hooks/usePreviewConnection';
 import { usePreviewCapture } from '../hooks/usePreviewCapture';
 import {
@@ -223,6 +223,43 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   });
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeSize, setIframeSize] = useState<{ w: number; h: number } | null>(null);
+  const iframeSizeObserverRef = useRef<ResizeObserver | null>(null);
+
+  // Callback ref that observes the iframe wrapper's size and forwards the
+  // element to the capture hook's ref (used for screenshots and crop math).
+  const setIframeWrapperEl = useCallback(
+    (el: HTMLDivElement | null) => {
+      capture.iframeWrapperRef.current = el;
+
+      if (iframeSizeObserverRef.current) {
+        iframeSizeObserverRef.current.disconnect();
+        iframeSizeObserverRef.current = null;
+      }
+
+      if (el) {
+        const ro = new ResizeObserver((entries) => {
+          const entry = entries[0];
+          if (!entry) return;
+          setIframeSize({
+            w: Math.round(entry.contentRect.width),
+            h: Math.round(entry.contentRect.height),
+          });
+        });
+        ro.observe(el);
+        iframeSizeObserverRef.current = ro;
+      } else {
+        setIframeSize(null);
+      }
+    },
+    [capture.iframeWrapperRef]
+  );
+
+  useEffect(() => {
+    return () => {
+      iframeSizeObserverRef.current?.disconnect();
+    };
+  }, []);
 
   // Force refresh the preview iframe with cache busting
   // Uses currentPage (tracked via proxy) so it refreshes the actual visible page,
@@ -387,6 +424,26 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
 
         {previewPlugins}
 
+        {iframeSize && iframeSize.w > 0 && iframeSize.h > 0 && (
+          <button
+            type="button"
+            className="preview-dimensions"
+            title={onSendToClaude ? 'Click to send to agent' : undefined}
+            disabled={!onSendToClaude}
+            aria-label={`Preview dimensions ${iframeSize.w} by ${iframeSize.h}${
+              onSendToClaude ? ', click to send to agent' : ''
+            }`}
+            onClick={() => {
+              if (!onSendToClaude) return;
+              onSendToClaude(
+                `The preview viewport is currently ${iframeSize.w} × ${iframeSize.h} (width × height in CSS pixels).`
+              );
+            }}
+          >
+            {iframeSize.w} × {iframeSize.h}
+          </button>
+        )}
+
         <div className="preview-breakpoints" data-education-id="breakpoints">
           {(Object.keys(BREAKPOINTS) as Breakpoint[]).map((bp) => {
             // Always show 'full' - it adapts to any size
@@ -440,7 +497,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
             maxHeight: '100%',
           }}
         >
-          <div ref={capture.iframeWrapperRef} className="preview-iframe-wrapper">
+          <div ref={setIframeWrapperEl} className="preview-iframe-wrapper">
             <iframe
               key={projectPath}
               ref={iframeRef}
