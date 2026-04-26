@@ -188,11 +188,35 @@
 
 .preview-dimensions {
   margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
   user-select: none;
   white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.preview-dimensions:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.preview-dimensions:active:not(:disabled) {
+  background: var(--border);
+}
+
+.preview-dimensions:disabled {
+  cursor: default;
 }
 
 .preview-breakpoints {

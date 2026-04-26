@@ -425,13 +425,23 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
         {previewPlugins}
 
         {iframeSize && iframeSize.w > 0 && iframeSize.h > 0 && (
-          <span
+          <button
+            type="button"
             className="preview-dimensions"
-            title="Preview dimensions"
-            aria-label={`Preview dimensions ${iframeSize.w} by ${iframeSize.h}`}
+            title={onSendToClaude ? 'Click to send to agent' : undefined}
+            disabled={!onSendToClaude}
+            aria-label={`Preview dimensions ${iframeSize.w} by ${iframeSize.h}${
+              onSendToClaude ? ', click to send to agent' : ''
+            }`}
+            onClick={() => {
+              if (!onSendToClaude) return;
+              onSendToClaude(
+                `The preview viewport is currently ${iframeSize.w} × ${iframeSize.h} (width × height in CSS pixels).`
+              );
+            }}
           >
             {iframeSize.w} × {iframeSize.h}
-          </span>
+          </button>
         )}
 
         <div className="preview-breakpoints" data-education-id="breakpoints">
