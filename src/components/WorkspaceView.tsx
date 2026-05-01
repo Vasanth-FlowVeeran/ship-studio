@@ -20,6 +20,8 @@ import {
   type RefObject,
 } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { logger } from '../lib/logger';
+import { setTerminalState } from '../lib/project';
 import { Terminal } from './Terminal';
 import { DevServerLogs } from './DevServerLogs';
 import { Preview } from './Preview';
@@ -30,8 +32,7 @@ import { CodeTab } from './CodeTab';
 import { BranchPRTabContainer } from './workspace/BranchPRTabContainer';
 import { CompactWorkspace } from './CompactWorkspace';
 import { MainBranchBanner } from './MainBranchBanner';
-import type { CodeHealthPanelRef } from './CodeHealthPanel';
-import { HealthIndicatorBar } from './workspace/HealthIndicatorBar';
+import type { HealthTabPanelRef } from './HealthTabPanel';
 import { useIsCompact } from '../hooks/useIsCompact';
 import { WorkspaceModals } from './WorkspaceModals';
 import { WorkspaceHeader, HOSTING_PLUGIN_IDS } from './WorkspaceHeader';
@@ -100,7 +101,7 @@ interface TerminalProps {
 
 interface DevServerProps {
   hasDevServer: boolean;
-  healthPanelRef: RefObject<CodeHealthPanelRef | null>;
+  healthPanelRef: RefObject<HealthTabPanelRef | null>;
   devServerPort: number;
   projectType: ProjectType;
   isRestartingDevServer: boolean;
@@ -559,6 +560,37 @@ export const WorkspaceView = memo(function WorkspaceView({
     },
     []
   );
+
+  // Manual rename from the sidebar's double-click → input flow. Updates the
+  // registry (which becomes the display source of truth via `tabTitles`)
+  // and writes the full tab list back to .shipstudio/project.json so the
+  // rename survives across launches. An empty `name` clears the custom
+  // title — useful for "undo my rename, go back to the agent name".
+  const handleRenameTab = useCallback(
+    (tabId: number, name: string) => {
+      const projectPath = currentProject.path;
+      sessionRegistry.setTerminalTabCustomTitle(projectPath, tabId, name || null);
+      const customTitles = sessionRegistry.getCustomTitles(projectPath);
+      const activeIdx = Math.max(
+        0,
+        terminalTabs.findIndex((t) => t.id === activeTerminalTab)
+      );
+      void setTerminalState(projectPath, {
+        tabs: terminalTabs.map((t) => ({
+          agent_id: t.agentId,
+          session_id: t.sessionId,
+          custom_title: customTitles.get(t.id),
+        })),
+        active_tab_index: activeIdx,
+      }).catch((err) => {
+        logger.warn('[RenameTab] Failed to persist custom title', {
+          error: String(err),
+          tabId,
+        });
+      });
+    },
+    [currentProject.path, terminalTabs, activeTerminalTab]
+  );
   // Subscribe to registry so the current project's sidebar / tab selector
   // re-render when a title changes.
   // Sidebar visibility is workspace-local (not persisted). The home /
@@ -613,7 +645,10 @@ export const WorkspaceView = memo(function WorkspaceView({
     const map = new Map<number, string>();
     if (snap) {
       for (const t of snap.terminalTabs) {
-        if (t.title && t.title.length > 0) map.set(t.id, t.title);
+        // Custom (user-set) title wins over PTY-emitted title so a manual
+        // rename is not overwritten on the next title escape from the agent.
+        const display = t.customTitle ?? t.title;
+        if (display && display.length > 0) map.set(t.id, display);
       }
     }
     return map;
@@ -801,6 +836,7 @@ export const WorkspaceView = memo(function WorkspaceView({
               }}
               onAddTab={addTerminalTab}
               onCloseTab={closeTerminalTab}
+              onRenameTab={handleRenameTab}
               hasDevServer={hasDevServer}
               isRestartingDevServer={isRestartingDevServer}
               devServerRunning={hasDevServer}
@@ -934,12 +970,6 @@ export const WorkspaceView = memo(function WorkspaceView({
                   rightCollapsed={isPreviewHidden}
                   left={
                     <div className="terminal-pane">
-                      <HealthIndicatorBar
-                        projectPath={currentProject.path}
-                        healthPanelRef={healthPanelRef}
-                        onAskClaude={sendToClaude}
-                        onHealthOutput={handleHealthOutput}
-                      />
                       <div className="workspace-terminal-view">
                         <div className="terminal-tabs-bar">
                           {/* Restart-dev-server moved to the sidebar row
@@ -1115,6 +1145,8 @@ export const WorkspaceView = memo(function WorkspaceView({
                             devServerOutputVersion={devServerOutputVersion}
                             inspectTab={inspectTab}
                             onInspectTabChange={setInspectTab}
+                            healthPanelRef={healthPanelRef}
+                            onHealthOutput={handleHealthOutput}
                             previewPlugins={
                               <PluginSlot
                                 name="preview"

@@ -25,7 +25,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../lib/logger';
 import { trackEvent } from '../lib/analytics';
 import { getWindowLabel } from '../lib/window';
-import type { CodeHealthPanelRef } from '../components/CodeHealthPanel';
+import type { HealthTabPanelRef } from '../components/HealthTabPanel';
+import { stripAnsi } from '../lib/ansi';
 
 /** All the per-project server state we track in the map. */
 interface ProjectServerState {
@@ -42,6 +43,10 @@ interface ProjectServerState {
   healthThrottleTimer: ReturnType<typeof setTimeout> | null;
   healthPending: boolean;
   suppressed: boolean;
+  /** Carry-over of an incomplete trailing line between PTY chunks so the
+   *  probe-line filter can match patterns split across chunk boundaries
+   *  (the PTY emits chunks of arbitrary size — they are not line-aligned). */
+  pendingOutputLine: string;
 }
 
 const DEFAULT_PORT = 3000;
@@ -63,7 +68,62 @@ function makeState(): ProjectServerState {
     healthThrottleTimer: null,
     healthPending: false,
     suppressed: false,
+    pendingOutputLine: '',
   };
+}
+
+/* Lines that match this pattern are the dev server logging Ship Studio's
+   own liveness probe (a `fetch('/')` every 10s from `usePreviewConnection`).
+   Filtering them keeps the visible log focused on real traffic.
+
+   Three shapes covered after ANSI stripping:
+     - `GET /` or `HEAD /` followed by whitespace, end-of-line, or `HTTP`
+       — Next.js, Vite, Express, etc. Anchored to the start of the line
+       (allowing only timestamp / IP / bracket / quote prefix chars) so a
+       narrative log line like "Last request was GET / 200" is NOT filtered.
+     - `[200] /` or `[304] /` — bracketed-status format used by some custom
+       dev-server loggers (seen in Webflow / Astro tooling).
+     - `"GET / HTTP/1.1"` — Apache / morgan combined log format. Not anchored
+       since the quoted request signature is distinctive enough on its own.
+
+   The path is anchored on `/` followed by whitespace, EOL, `"`, or `HTTP`,
+   so real requests like `/api/foo` or `/static/img.png` still pass through. */
+export const PROBE_LINE_PATTERN =
+  /^[^A-Za-z]*(?:(?:GET|HEAD)\s+\/(?:[\s"]|$|HTTP)|\[(?:200|304)\]\s+\/(?:\s|$))|"(?:GET|HEAD)\s+\/\s+HTTP/i;
+
+export function isProbeLine(line: string): boolean {
+  const stripped = stripAnsi(line).trim();
+  if (!stripped) return false;
+  return PROBE_LINE_PATTERN.test(stripped);
+}
+
+/** Split incoming PTY data into complete lines + a trailing partial.
+ *  Filters out probe lines and returns the surviving content (with their
+ *  newline terminators preserved) plus the new pending fragment. Exported
+ *  for unit testing — not consumed elsewhere. */
+export function filterProbeChunk(
+  pendingLine: string,
+  chunk: string
+): { kept: string; pending: string } {
+  const combined = pendingLine + chunk;
+  const lastNewline = combined.lastIndexOf('\n');
+  if (lastNewline === -1) {
+    // No complete line yet — keep buffering.
+    return { kept: '', pending: combined };
+  }
+  const completeBlock = combined.slice(0, lastNewline + 1);
+  const pending = combined.slice(lastNewline + 1);
+  // `split('\n')` on a string ending in '\n' yields a trailing '' entry,
+  // which becomes the trailing newline when re-joined. Filter probe lines
+  // from the populated entries; pass everything else through verbatim.
+  const kept = completeBlock
+    .split('\n')
+    .filter((line, i, arr) => {
+      if (i === arr.length - 1 && line === '') return true;
+      return !isProbeLine(line);
+    })
+    .join('\n');
+  return { kept, pending };
 }
 
 export function useDevServer(currentProjectPath: string | null) {
@@ -81,7 +141,7 @@ export function useDevServer(currentProjectPath: string | null) {
   const [renderKey, setRenderKey] = useState(0);
   const bump = useCallback(() => setRenderKey((v) => v + 1), []);
 
-  const healthPanelRef = useRef<CodeHealthPanelRef>(null);
+  const healthPanelRef = useRef<HealthTabPanelRef>(null);
 
   const getOrCreateState = useCallback((path: string): ProjectServerState => {
     let s = statesRef.current.get(path);
@@ -204,7 +264,7 @@ export function useDevServer(currentProjectPath: string | null) {
 
   const handleHealthOutput = useCallback(
     (output: string) => {
-      // Health output always belongs to the current project (CodeHealthPanel
+      // Health output always belongs to the current project (HealthTabPanel
       // is only mounted in the active workspace).
       const path = currentPathRef.current;
       if (!path) return;
@@ -269,7 +329,10 @@ export function useDevServer(currentProjectPath: string | null) {
         const s = statesRef.current.get(projectPath);
         if (!s) return;
         if (s.suppressed) return;
-        s.outputBuffer += data;
+        const { kept, pending } = filterProbeChunk(s.pendingOutputLine, data);
+        s.pendingOutputLine = pending;
+        if (!kept) return; // chunk was entirely buffered or entirely filtered
+        s.outputBuffer += kept;
         if (s.outputBuffer.length > OUTPUT_BUFFER_MAX) {
           s.outputBuffer = s.outputBuffer.slice(-OUTPUT_BUFFER_MAX);
         }
@@ -304,6 +367,7 @@ export function useDevServer(currentProjectPath: string | null) {
     s.healthBuffer = '';
     s.outputVersion = 0;
     s.healthVersion = 0;
+    s.pendingOutputLine = '';
     bump();
   }, [bump, getOrCreateState]);
 

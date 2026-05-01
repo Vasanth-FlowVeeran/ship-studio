@@ -45,6 +45,10 @@ interface SidebarItem {
    *  close button). Used by the Dev server row to host the BrowserDropdown
    *  icon — click opens default browser, hover reveals a picker. */
   trailing?: ReactNode;
+  /** Commit a manual rename. When provided, double-clicking the row label
+   *  switches to an inline `<input>`; pressing Enter or blurring calls this
+   *  with the new (trimmed) value. Empty string clears the custom title. */
+  onRename?: (newName: string) => void;
 }
 
 interface Props {
@@ -79,6 +83,9 @@ interface Props {
   onSelectTab: (id: number) => void;
   onAddTab: (agentId?: string) => void;
   onCloseTab: (id: number) => void;
+  /** Commit a manual rename of a terminal tab. Empty string clears the
+   *  custom title so the row falls back to the PTY-emitted name. */
+  onRenameTab?: (id: number, name: string) => void;
 
   // Dev server
   hasDevServer: boolean;
@@ -136,6 +143,15 @@ function writeProjectExpanded(state: Record<string, boolean>) {
     localStorage.setItem(PROJECT_EXPAND_STORAGE_KEY, JSON.stringify(state));
   } catch {
     // ignore
+  }
+}
+
+function formatDevServerLabel(url: string | undefined): string {
+  if (!url) return 'Dev server';
+  try {
+    return new URL(url).host;
+  } catch {
+    return 'Dev server';
   }
 }
 
@@ -214,6 +230,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   onSelectTab,
   onAddTab,
   onCloseTab,
+  onRenameTab,
   hasDevServer,
   isRestartingDevServer,
   devServerRunning,
@@ -321,6 +338,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         dotState: tabDotState({ attention: hasAttention, status: regTab?.status }),
         onSelect: () => onSelectTab(tab.id),
         onClose: terminalTabs.length > 1 ? () => onCloseTab(tab.id) : undefined,
+        onRename: onRenameTab ? (newName) => onRenameTab(tab.id, newName) : undefined,
       };
 
       if (isShell) terms.push(item);
@@ -331,10 +349,10 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
     if (hasDevServer || isRestartingDevServer) {
       commands.push({
         key: 'dev-server',
-        label: 'Dev server',
+        label: formatDevServerLabel(devServerUrl),
         dotState: isRestartingDevServer ? 'attention' : devServerRunning ? 'active' : 'idle',
         onSelect: onOpenDevServerLogs,
-        meta: isRestartingDevServer ? 'restarting' : devServerRunning ? 'running' : undefined,
+        meta: isRestartingDevServer ? 'restarting' : undefined,
         onAction: onRestartDevServer,
         actionIcon: <ResetIcon size={11} />,
         actionLabel: 'Restart dev server',
@@ -359,6 +377,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
     devServerRunning,
     onSelectTab,
     onCloseTab,
+    onRenameTab,
     onOpenDevServerLogs,
     onRestartDevServer,
     devServerUrl,
@@ -507,12 +526,12 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
               />
               <SidebarSection
                 id="commands"
-                label="Commands"
+                label="Dev server"
                 total={commandItems.length}
                 collapsed={collapsed.commands}
                 onToggle={() => toggleSection('commands')}
                 items={filteredCommands}
-                emptyHint={filter ? 'No matches' : 'No commands'}
+                emptyHint={filter ? 'No matches' : 'Not running'}
               />
             </div>
           ) : (
@@ -698,7 +717,6 @@ function InactiveProjectSections({
           key: 'dev-server',
           label: 'Dev server',
           dotState: 'active',
-          meta: 'running',
         },
       ]
     : [];
@@ -725,12 +743,12 @@ function InactiveProjectSections({
       />
       <SidebarSection
         id="commands"
-        label="Commands"
+        label="Dev server"
         total={commands.length}
         collapsed={false}
         onToggle={() => {}}
         items={commands}
-        emptyHint={filterLower ? 'No matches' : 'No commands'}
+        emptyHint={filterLower ? 'No matches' : 'Not running'}
       />
     </>
   );
@@ -1065,7 +1083,23 @@ function SidebarSection({
 }
 
 function SidebarRow({ item }: { item: SidebarItem }) {
+  // The draft is only read while `isEditing`. We seed it from `item.label`
+  // when the user enters edit mode (see `enterEditMode`) and let it go
+  // stale otherwise — no need to sync from props in an effect.
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Focus + select-all when entering edit mode so the user can replace the
+  // existing name without an extra keystroke.
+  useEffect(() => {
+    if (!isEditing || !inputRef.current) return;
+    inputRef.current.focus();
+    inputRef.current.select();
+  }, [isEditing]);
+
   const handleKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (isEditing) return;
     if ((e.key === 'Enter' || e.key === ' ') && item.onSelect) {
       e.preventDefault();
       item.onSelect();
@@ -1083,6 +1117,26 @@ function SidebarRow({ item }: { item: SidebarItem }) {
     item.onAction?.();
   };
 
+  const enterEditMode = () => {
+    if (!item.onRename) return;
+    setDraft(item.label);
+    setIsEditing(true);
+  };
+
+  const commitEdit = () => {
+    if (!item.onRename) return;
+    const trimmed = draft.trim();
+    // Only fire onRename if the value actually changed — saves a no-op
+    // round-trip to disk and a registry notify when the user just blurs.
+    if (trimmed !== item.label) item.onRename(trimmed);
+    setIsEditing(false);
+  };
+
+  const cancelEdit = () => {
+    setDraft(item.label);
+    setIsEditing(false);
+  };
+
   const isAttention = item.dotState === 'attention';
   return (
     <li
@@ -1090,18 +1144,42 @@ function SidebarRow({ item }: { item: SidebarItem }) {
         'sidebar-row',
         item.isActive ? 'is-active' : '',
         isAttention && !item.isActive ? 'is-attention' : '',
+        isEditing ? 'is-editing' : '',
       ]
         .filter(Boolean)
         .join(' ')}
-      role={item.onSelect ? 'button' : undefined}
-      tabIndex={item.onSelect ? 0 : -1}
-      onClick={item.onSelect}
+      role={item.onSelect && !isEditing ? 'button' : undefined}
+      tabIndex={item.onSelect && !isEditing ? 0 : -1}
+      onClick={isEditing ? undefined : item.onSelect}
+      onDoubleClick={item.onRename ? enterEditMode : undefined}
       onKeyDown={handleKeyDown}
     >
       <span className={`sidebar-row-dot dot-${item.dotState}`} aria-hidden="true" />
-      <span className="sidebar-row-label" title={item.label}>
-        {item.label}
-      </span>
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          className="sidebar-row-rename"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commitEdit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              cancelEdit();
+            }
+          }}
+          aria-label="Rename tab"
+        />
+      ) : (
+        <span className="sidebar-row-label" title={item.label}>
+          {item.label}
+        </span>
+      )}
       {item.meta && <span className="sidebar-row-meta">{item.meta}</span>}
       {item.onAction && item.actionIcon && (
         <button
