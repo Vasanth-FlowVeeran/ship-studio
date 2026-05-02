@@ -6,6 +6,14 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.6.1
+
+- **Health tab in the Inspect panel** — Code Health moved into the Inspect panel with a tab-native layout: status rows for Test / Lint / Types / Format and inline output for the selected check.
+- **Open in Browser button** — Preview toolbar now has an "Open in Browser" button next to the breakpoint icons. Click to open the default browser, hover to pick a specific one (Safari, Chrome, Firefox, Arc, Brave, Edge).
+- **Dev server row shows the port** — Sidebar "Dev server" row now shows `localhost:3001` inline instead of a separate "running" badge.
+- **Security hardening** — CI now scans high-trust config files (eslint, vite, package.json, workflows) for obfuscated-payload signatures and runs with a read-only GITHUB_TOKEN scope by default.
+
+
 ## What's New in v0.6.0
 
 - **Cmd+K command palette** — Press ⌘K anywhere to switch projects, open modals, or run actions. Cmd+1..9 jumps to pinned projects. The workspace header is slimmer because IDE picker, env editor, backups, plugin manager, and Learn Mode toggle all live in the palette now.
