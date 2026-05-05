@@ -381,6 +381,7 @@ pub fn run() {
             commands::ide::capture_fullpage_playwright,
             commands::ide::capture_viewport_playwright,
             commands::ide::get_project_thumbnail,
+            commands::ide::upload_project_thumbnail,
             commands::ide::get_screenshot_base64,
             commands::ide::crop_and_save_screenshot,
             commands::ide::compare_screenshots,
@@ -550,6 +551,12 @@ pub fn run() {
             // Logging
             logging::get_log_path,
             logging::log_frontend_event,
+            // Snapshots / Undo-Redo
+            commands::snapshots::snapshot_start_watching,
+            commands::snapshots::snapshot_stop_watching,
+            commands::snapshots::snapshot_status,
+            commands::snapshots::snapshot_undo,
+            commands::snapshots::snapshot_redo,
             // Window / Compact Mode
             commands::window::enter_compact_mode,
             commands::window::exit_compact_mode,
