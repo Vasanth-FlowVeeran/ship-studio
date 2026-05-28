@@ -6,6 +6,14 @@ The latest entry is rendered inside the in-app update dialog, so write user-
 facing language — what changed, in plain English — not commit subjects.
 -->
 
+## What's New in v0.6.4
+
+- **Monorepo support** — Ship Studio now detects pnpm/npm workspaces when you import a repo (or first open an existing project) and asks which app you want to work on. The dev server, preview, and `/public` asset tools all run inside that workspace, while git and PRs stay at the repo root. Choose "Use the whole repo" to skip the picker.
+- **Merge right after submitting for review** — After you create a PR, the Submit for Review window stays open with an inline "Merge into main" action. If there are conflicts you can hand them to the agent ("Ask agent to fix") or resolve them yourself, and once it's merged you get a one-click branch-cleanup prompt.
+- **One-click dependency install** — Open a project whose `node_modules` is missing and the preview pane shows an "Install with pnpm" prompt instead of a blank screen. Click it to stream the install in a terminal; the dev server starts automatically when it finishes.
+- **Fixes** — Removing and re-adding a local folder now re-prompts the workspace picker, and fixed a bug where the dependency-install terminal could relaunch itself every couple of seconds.
+
+
 ## What's New in v0.6.3
 
 - **Side-by-side agents** — in focus mode with two or more agents on a project, toggle "Split" in the terminal toolbar to view them side by side. Drag the handle between panes to resize. Click a pane to make it the active one.

@@ -25,6 +25,15 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.6.4', // v0.6.4
+    items: [
+      'Monorepo support — Ship Studio detects pnpm/npm workspaces when you import a repo (or first open an existing project) and asks which app to work on; the dev server, preview, and /public tools run inside that workspace while git and PRs stay at the repo root. "Use the whole repo" skips the picker',
+      'Merge right after submitting for review — the Submit for Review window stays open after PR creation with an inline "Merge into main" action, conflict handoff ("Ask agent to fix" or "Resolve myself"), and a one-click post-merge branch-cleanup prompt',
+      'One-click dependency install — projects with a missing node_modules now show an "Install with pnpm" prompt in the preview pane; click to stream the install in a terminal and the dev server starts automatically when it finishes',
+      'Fixes — removing and re-adding a local folder re-prompts the workspace picker; fixed an install terminal that could relaunch itself every couple of seconds',
+    ],
+  },
+  {
     version: '0.6.3', // v0.6.3
     items: [
       'Side-by-side agents — in focus mode with two or more agents on a project, toggle "Split" in the terminal toolbar to view them side by side. Drag the handle between panes to resize. Click a pane to make it the active one',
