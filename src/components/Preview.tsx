@@ -17,6 +17,7 @@ import {
   forwardRef,
   useImperativeHandle,
   useCallback,
+  useMemo,
   useState,
   useEffect,
   type RefObject,
@@ -36,6 +37,8 @@ import { BrowserTools } from './BrowserTools';
 import { HealthTabPanel, type HealthTabPanelRef } from './HealthTabPanel';
 import { BrowserDropdown } from './BrowserDropdown';
 import { useVisualEditor } from '../hooks/useVisualEditor';
+import { useBreakpoints } from '../hooks/useBreakpoints';
+import { BASE_BREAKPOINT, type Breakpoint as TwBreakpoint } from '../lib/edit';
 import { VisualEditorPanel } from './edit/VisualEditorPanel';
 import type { ProjectType } from '../lib/static-server';
 
@@ -267,8 +270,16 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   });
 
   // Responsive viewport resizing and breakpoint switching (extracted to hook)
+  // Explicit edit-target breakpoint. Defaults to Base (mobile-first: unprefixed
+  // styles apply at every width — the right starting point, and it avoids silently
+  // writing prefixed classes just because the canvas is wide). Set when the user
+  // picks one from the panel dropdown; cleared whenever the user resizes the canvas
+  // (so the active breakpoint then follows the width again).
+  const [pinnedBreakpoint, setPinnedBreakpoint] = useState<TwBreakpoint | null>(BASE_BREAKPOINT);
+
   const resize = usePreviewResize({
     iframeWrapperRef: capture.iframeWrapperRef,
+    onUserResize: () => setPinnedBreakpoint(null),
   });
 
   // Inspect-panel vertical resize. Null = use the default 1fr split from CSS;
@@ -367,12 +378,42 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   }, [showLogs, computeMaxPanelHeight]);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const editorEnabled = conn.serverReady && projectType === 'nextjs';
+
+  // The project's Tailwind breakpoints (Base + detected), and the layer edits
+  // currently target — DERIVED from the live canvas width (never set on its own,
+  // so picking a breakpoint resizes the canvas and resizing updates the layer,
+  // with no feedback loop). Largest breakpoint whose min-width ≤ the canvas width.
+  const breakpoints = useBreakpoints(projectPath, editorEnabled);
+  // Active edit layer: the explicitly-pinned breakpoint if any, else derived from
+  // the canvas width (largest breakpoint whose min-width fits). The pin lets you
+  // edit a layer the width wouldn't select on its own — e.g. Base at a wide canvas,
+  // which must not force a shrink.
+  const derivedBreakpoint = useMemo(() => {
+    const width = resize.customWidth ?? (resize.viewportWidth || 1280);
+    let active = breakpoints[0];
+    for (const bp of breakpoints) if (bp.minPx <= width) active = bp;
+    return active;
+  }, [resize.customWidth, resize.viewportWidth, breakpoints]);
+  // Keep a pin valid only while it still matches a known breakpoint (project switch).
+  const activeBreakpoint =
+    (pinnedBreakpoint && breakpoints.find((b) => b.name === pinnedBreakpoint.name)) ||
+    derivedBreakpoint;
+  // The selected breakpoint can exceed what the pane can show (the frame caps its
+  // visible width at the viewport). When so, edits still apply at that breakpoint
+  // but won't be visible here — the panel shows a note.
+  const breakpointTooWide =
+    activeBreakpoint.minPx > 0 &&
+    resize.viewportWidth > 0 &&
+    resize.viewportWidth < activeBreakpoint.minPx;
 
   // Visual editor (v1: Next.js only). Inert until the user toggles edit mode.
   const editor = useVisualEditor({
     iframeRef,
     projectPath,
-    enabled: conn.serverReady && projectType === 'nextjs',
+    enabled: editorEnabled,
+    activeBreakpoint,
+    breakpoints,
     onToast,
   });
 
@@ -827,6 +868,15 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           <VisualEditorPanel
             selection={editor.selection}
             currentClass={editor.currentClass}
+            breakpoints={breakpoints}
+            activeBreakpoint={activeBreakpoint}
+            breakpointTooWide={breakpointTooWide}
+            onSelectBreakpoint={(bp) => {
+              setPinnedBreakpoint(bp);
+              // Jump the canvas to a breakpoint's width so you can see it; Base
+              // applies at all widths, so leave the canvas where it is.
+              if (bp.minPx > 0) resize.previewAtWidth(bp.minPx);
+            }}
             onStepGap={(dir) => editor.stepSpacing('gap', dir)}
             onSetSide={editor.setBoxSide}
             onApplyEnum={editor.applyEnum}

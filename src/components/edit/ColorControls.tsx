@@ -13,13 +13,18 @@ import {
   arbitraryColorRaw,
   colorClassToken,
   colorFormatOf,
+  readLayer,
   type ColorPrefix,
+  type LayerContext,
 } from '../../lib/edit';
 import { rgbaToCss, toFormat, toHex, toRgba, visibleHex } from '../../lib/color';
 import { ColorPicker } from './ColorPicker';
+import { LayerDot } from './LayerDot';
 
 interface Props {
   currentClass: string;
+  /** Active breakpoint layer — the explicit color is read across the cascade. */
+  layer: LayerContext;
   onApplyEnum: (token: string, style: Record<string, string>) => void;
   /** Rendered colors from getComputedStyle, keyed by CSS property ('color',
    *  'background-color'), used to seed the picker when there's no explicit
@@ -32,6 +37,7 @@ function ColorField({
   css,
   prefix,
   currentClass,
+  layer,
   onApplyEnum,
   computed,
 }: {
@@ -39,9 +45,11 @@ function ColorField({
   css: string;
   prefix: ColorPrefix;
 } & Props) {
-  // Explicit arbitrary value in the class (drives match-existing format on save);
-  // otherwise fall back to the element's rendered color just for display/seeding.
-  const explicit = arbitraryColorRaw(currentClass, prefix);
+  // Explicit arbitrary value at the active breakpoint (drives match-existing format
+  // on save); otherwise fall back to the element's rendered color for display/seeding.
+  const { value: explicit, definedAt } = readLayer(currentClass, layer, (s) =>
+    arbitraryColorRaw(s, prefix)
+  );
   const computedRaw = computed?.[css];
   const raw = explicit;
   const seed = explicit ?? computedRaw ?? '#000000';
@@ -112,7 +120,10 @@ function ColorField({
 
   return (
     <div className="ss-edit-panel__control">
-      <label className="ss-edit-panel__label">{label}</label>
+      <label className="ss-edit-panel__label">
+        {label}
+        <LayerDot definedAt={definedAt} active={layer.bp} />
+      </label>
       <button
         ref={triggerRef}
         type="button"
@@ -140,7 +151,7 @@ function ColorField({
   );
 }
 
-export function ColorControls({ currentClass, onApplyEnum, computed }: Props) {
+export function ColorControls({ currentClass, layer, onApplyEnum, computed }: Props) {
   return (
     <>
       {COLOR_CONTROLS.map((c) => (
@@ -150,6 +161,7 @@ export function ColorControls({ currentClass, onApplyEnum, computed }: Props) {
           css={c.css}
           prefix={c.prefix}
           currentClass={currentClass}
+          layer={layer}
           onApplyEnum={onApplyEnum}
           computed={computed}
         />

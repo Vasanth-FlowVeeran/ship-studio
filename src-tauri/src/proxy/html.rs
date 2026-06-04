@@ -275,12 +275,15 @@ mod tests {
 
     #[test]
     fn select_script_supports_live_style_patch() {
-        // The selection script must apply an inline-style patch on ss:mutate so
-        // the preview is independent of Tailwind's JIT (a freshly-typed class has
-        // no compiled CSS). Guards the include_str! script content.
-        assert!(SELECT_SCRIPT.contains("d.style"));
-        assert!(SELECT_SCRIPT.contains("setProperty"));
+        // The selection script previews a freshly-typed class (no compiled CSS yet)
+        // via an injected, breakpoint-aware stylesheet keyed to a marker attribute —
+        // base rules bare, variants wrapped in @media so they only show at width.
+        // Guards the include_str! script content.
         assert!(SELECT_SCRIPT.contains("ss:mutate"));
+        assert!(SELECT_SCRIPT.contains("d.rules"));
+        assert!(SELECT_SCRIPT.contains("data-ss-sel"));
+        assert!(SELECT_SCRIPT.contains("@media (min-width:"));
+        assert!(SELECT_SCRIPT.contains("ss-preview"));
     }
 
     #[test]

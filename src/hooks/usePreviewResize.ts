@@ -36,13 +36,23 @@ export const RESIZE_HANDLE_PX = 8;
 interface UsePreviewResizeParams {
   /** Ref to the iframe wrapper element, used to read its offsetWidth during resize drag */
   iframeWrapperRef: React.RefObject<HTMLDivElement | null>;
+  /** Fired when the USER changes the canvas width (drag, device preset, or the
+   *  pane auto-fitting) — but NOT when `previewAtWidth` sets it programmatically.
+   *  Lets the editor drop a pinned breakpoint so it follows the width again. */
+  onUserResize?: () => void;
 }
 
-export function usePreviewResize({ iframeWrapperRef }: UsePreviewResizeParams) {
+export function usePreviewResize({ iframeWrapperRef, onUserResize }: UsePreviewResizeParams) {
   const [customWidth, setCustomWidth] = useState<number | null>(null); // null = 100% (desktop)
   const [customHeight, setCustomHeight] = useState<number | null>(null); // null = full available height
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
+
+  // Mirror the callback so resize handlers can call the latest without re-creating.
+  const onUserResizeRef = useRef(onUserResize);
+  useEffect(() => {
+    onUserResizeRef.current = onUserResize;
+  }, [onUserResize]);
 
   // Ref mirrors customWidth state so the ResizeObserver callback can read the latest value
   const customWidthRef = useRef<number | null>(null);
@@ -94,6 +104,7 @@ export function usePreviewResize({ iframeWrapperRef }: UsePreviewResizeParams) {
           if (currentCustom !== null && currentCustom > newWidth) {
             const fittingWidth = BREAKPOINT_WIDTHS.find((w) => w <= newWidth);
             setCustomWidth(fittingWidth ?? null);
+            onUserResizeRef.current?.(); // pane shrank past the width — follow it
           }
         }
       });
@@ -124,6 +135,8 @@ export function usePreviewResize({ iframeWrapperRef }: UsePreviewResizeParams) {
           // Multiply by 2 because preview is centered (handle moves half of width change)
           const newWidth = startWidth + deltaX * 2;
           const maxWidth = viewportRef.current.offsetWidth - 12; // Leave space for handle
+
+          onUserResizeRef.current?.(); // manual drag — the breakpoint should follow
 
           if (newWidth >= maxWidth - 10) {
             // Snap to full width (desktop)
@@ -200,8 +213,19 @@ export function usePreviewResize({ iframeWrapperRef }: UsePreviewResizeParams) {
     [iframeWrapperRef]
   );
 
+  // Resize the canvas to an exact pixel width. Used by the editor's Tailwind
+  // breakpoint selector so picking a breakpoint sets the preview to that width
+  // (and the editor's derived active breakpoint follows). Deliberately NOT clamped
+  // to the viewport — like the device presets, the frame caps its visible width at
+  // the pane (CSS maxWidth), so a too-wide breakpoint stays the edit target even
+  // when it can't be shown; the panel surfaces a "preview too narrow" note instead.
+  const previewAtWidth = useCallback((px: number) => {
+    setCustomWidth(px);
+  }, []);
+
   // Handle breakpoint button click
   const handleBreakpointClick = useCallback((bp: Breakpoint) => {
+    onUserResizeRef.current?.(); // device preset — the editor breakpoint should follow
     if (bp === 'full') {
       setCustomWidth(null);
       setCustomHeight(null);
@@ -228,5 +252,6 @@ export function usePreviewResize({ iframeWrapperRef }: UsePreviewResizeParams) {
     handleResizeStart,
     handleVerticalResizeStart,
     handleBreakpointClick,
+    previewAtWidth,
   };
 }

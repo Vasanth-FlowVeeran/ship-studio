@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { VisualEditorPanel } from './VisualEditorPanel';
+import { BASE_BREAKPOINT, DEFAULT_BREAKPOINTS, type Breakpoint } from '../../lib/edit';
 import type { Selection } from '../../hooks/useVisualEditor';
+
+const BREAKPOINTS: Breakpoint[] = [BASE_BREAKPOINT, ...DEFAULT_BREAKPOINTS];
+const MD = BREAKPOINTS.find((b) => b.name === 'md')!;
 
 const resolvedSelection: Selection = {
   signature: { className: 'p-3', tagName: 'div', ancestorClasses: [] },
@@ -16,11 +20,21 @@ const resolvedSelection: Selection = {
   instanceCount: 1,
 };
 
-function renderPanel(selection: Selection | null, currentClass = 'p-3') {
+function renderPanel(
+  selection: Selection | null,
+  currentClass = 'p-3',
+  activeBreakpoint: Breakpoint = BASE_BREAKPOINT,
+  onSelectBreakpoint = vi.fn(),
+  breakpointTooWide = false
+) {
   return render(
     <VisualEditorPanel
       selection={selection}
       currentClass={currentClass}
+      breakpoints={BREAKPOINTS}
+      activeBreakpoint={activeBreakpoint}
+      breakpointTooWide={breakpointTooWide}
+      onSelectBreakpoint={onSelectBreakpoint}
       onStepGap={vi.fn()}
       onSetSide={vi.fn()}
       onApplyEnum={vi.fn()}
@@ -66,5 +80,54 @@ describe('VisualEditorPanel', () => {
   it('warns when multiple elements share the source', () => {
     renderPanel({ ...resolvedSelection, instanceCount: 4 });
     expect(screen.getByText(/Editing 4 elements/)).toBeInTheDocument();
+  });
+
+  it('renders the breakpoint dropdown showing the active breakpoint', () => {
+    renderPanel(resolvedSelection, 'p-3', MD);
+    const trigger = screen.getByRole('button', { name: 'Breakpoint' });
+    expect(trigger).toHaveTextContent('md · ≥768px');
+  });
+
+  it('explains the mobile-first cascade contextually for the active breakpoint', () => {
+    renderPanel(resolvedSelection, 'p-3', BASE_BREAKPOINT);
+    expect(screen.getByText(/apply to every screen size/i)).toBeInTheDocument();
+    renderPanel(resolvedSelection, 'p-3', MD);
+    expect(screen.getByText(/from 768px wide and up/i)).toBeInTheDocument();
+  });
+
+  it('selecting a breakpoint from the dropdown asks to resize the canvas to that layer', () => {
+    const onSelect = vi.fn();
+    renderPanel(resolvedSelection, 'p-3', BASE_BREAKPOINT, onSelect);
+    fireEvent.click(screen.getByRole('button', { name: 'Breakpoint' })); // open
+    fireEvent.click(screen.getByRole('option', { name: 'lg · ≥1024px' }));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'lg', minPx: 1024 }));
+  });
+
+  it('shows the "preview too narrow" note when the breakpoint exceeds the canvas', () => {
+    renderPanel(
+      resolvedSelection,
+      'p-3',
+      BREAKPOINTS.find((b) => b.name === 'xl'),
+      vi.fn(),
+      true
+    );
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent(/too narrow to show/i);
+    expect(note).toHaveTextContent('xl');
+  });
+
+  it('shows a value as inherited when only a smaller breakpoint defines it', () => {
+    // gap-4 is set at base; viewing md, the panel reads 4 (inherited from Base).
+    renderPanel(resolvedSelection, 'p-3 gap-4', MD);
+    expect(screen.getByLabelText<HTMLInputElement>('Gap').value).toBe('4');
+    // The Gap label carries an "inherited" indicator pointing at Base.
+    expect(screen.getByLabelText('Inherited from Base')).toBeInTheDocument();
+  });
+
+  it('reads the active breakpoint value over the base one', () => {
+    // base gap-2, md:gap-8 → at md the panel shows 8 (set here, not inherited).
+    renderPanel(resolvedSelection, 'gap-2 md:gap-8', MD);
+    expect(screen.getByLabelText<HTMLInputElement>('Gap').value).toBe('8');
+    expect(screen.getByLabelText('Set on md')).toBeInTheDocument();
   });
 });

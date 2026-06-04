@@ -7,12 +7,29 @@
  * shown read-only with the reason, matching the resolver's safe fallback.
  */
 
-import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { Button } from '../primitives/Button';
 import { SpacingBox } from './SpacingBox';
 import { EnumControls } from './EnumControls';
+import { EnumDropdown } from './EnumDropdown';
 import { ColorControls } from './ColorControls';
-import { scaleValue, SPACING_REM, type BoxType, type Side } from '../../lib/edit';
+import { LayerDot } from './LayerDot';
+import {
+  scaleValue,
+  readLayer,
+  breakpointPrefixes,
+  SPACING_REM,
+  type BoxType,
+  type Side,
+  type Breakpoint,
+  type LayerContext,
+} from '../../lib/edit';
 import type { Selection } from '../../hooks/useVisualEditor';
 
 /** Editable numeric field for the gap value: click to type, Enter/blur to apply,
@@ -56,6 +73,15 @@ interface Props {
   selection: Selection | null;
   /** The class string currently applied live (what "Save" will persist). */
   currentClass: string;
+  /** All breakpoints (Base + detected), ascending by min-width. */
+  breakpoints: Breakpoint[];
+  /** The breakpoint layer currently being edited (derived from the canvas width). */
+  activeBreakpoint: Breakpoint;
+  /** True when the active breakpoint is wider than the preview can show — edits
+   *  apply but aren't visible at the current canvas size. */
+  breakpointTooWide: boolean;
+  /** Switch the edited breakpoint — resizes the preview canvas to match. */
+  onSelectBreakpoint: (bp: Breakpoint) => void;
   /** Step the gap utility one notch up (1) or down (-1). */
   onStepGap: (dir: 1 | -1) => void;
   /** Set one side of padding/margin to an absolute value (box-model editor). */
@@ -78,6 +104,10 @@ function initialPos() {
 export function VisualEditorPanel({
   selection,
   currentClass,
+  breakpoints,
+  activeBreakpoint,
+  breakpointTooWide,
+  onSelectBreakpoint,
   onStepGap,
   onSetSide,
   onApplyEnum,
@@ -86,6 +116,15 @@ export function VisualEditorPanel({
 }: Props) {
   const resolution = selection?.resolution ?? null;
   const dirty = resolution?.status === 'resolved' && currentClass !== resolution.class_name;
+
+  // Cascade-resolution context for the active breakpoint, threaded to each control
+  // so they show the effective value at this layer and which breakpoint set it.
+  const layer = useMemo<LayerContext>(
+    () => ({ bp: activeBreakpoint, ordered: breakpoints, known: breakpointPrefixes(breakpoints) }),
+    [activeBreakpoint, breakpoints]
+  );
+  const gap = readLayer(currentClass, layer, (s) => scaleValue(s, 'gap'));
+  const opacity = readLayer(currentClass, layer, (s) => scaleValue(s, 'opacity'));
 
   // Self-owned fixed position so the panel is draggable by its header. Fully
   // inline (no CSS-var/measurement dependency) so it can't drift out of view.
@@ -144,6 +183,42 @@ export function VisualEditorPanel({
       </div>
 
       <div className="ss-edit-panel__body">
+        {/* Breakpoint dropdown — picking one resizes the canvas; the active value
+            tracks the live preview width. Tailwind is mobile-first: edits cascade
+            up, so a value set on a breakpoint applies at that width and larger. */}
+        <div className="ss-edit-panel__control">
+          <label className="ss-edit-panel__label">Breakpoint</label>
+          <EnumDropdown
+            label="Breakpoint"
+            value={activeBreakpoint.name}
+            options={breakpoints.map((bp) => ({
+              label: bp.minPx > 0 ? `${bp.name} · ≥${bp.minPx}px` : 'Base · all widths',
+              token: bp.name,
+            }))}
+            onChange={(name) => {
+              const bp = breakpoints.find((b) => b.name === name);
+              if (bp) onSelectBreakpoint(bp);
+            }}
+          />
+        </div>
+
+        {/* Plain-language explainer of the mobile-first cascade — styles set on a
+            breakpoint apply at that width AND LARGER, which surprises users coming
+            from desktop-first tools. Contextual to the active layer. */}
+        <p className="ss-edit-panel__bp-help">
+          {activeBreakpoint.minPx > 0
+            ? `Changes here apply from ${activeBreakpoint.minPx}px wide and up, overriding the smaller sizes.`
+            : 'Changes here apply to every screen size. Pick a breakpoint to override it from that width up.'}
+        </p>
+
+        {breakpointTooWide && (
+          <p className="ss-edit-panel__bp-note" role="note">
+            Preview is too narrow to show <strong>{activeBreakpoint.name}</strong> (≥
+            {activeBreakpoint.minPx}px). Edits still apply at this breakpoint — widen the preview to
+            see them.
+          </p>
+        )}
+
         {!selection && (
           <p className="ss-edit-panel__hint">
             Click any element in the preview to edit its spacing.
@@ -188,10 +263,13 @@ export function VisualEditorPanel({
               </p>
             )}
 
-            <SpacingBox currentClass={currentClass} onSetSide={onSetSide} />
+            <SpacingBox currentClass={currentClass} layer={layer} onSetSide={onSetSide} />
 
             <div className="ss-edit-panel__control">
-              <label className="ss-edit-panel__label">Gap</label>
+              <label className="ss-edit-panel__label">
+                Gap
+                <LayerDot definedAt={gap.definedAt} active={activeBreakpoint} />
+              </label>
               <div className="ss-edit-panel__stepper">
                 <Button
                   size="sm"
@@ -202,7 +280,7 @@ export function VisualEditorPanel({
                   −
                 </Button>
                 <GapField
-                  value={scaleValue(currentClass, 'gap')}
+                  value={gap.value}
                   onSet={(n) => onApplyEnum(`gap-${n}`, { gap: `${n * SPACING_REM}rem` })}
                 />
                 <Button
@@ -216,10 +294,13 @@ export function VisualEditorPanel({
               </div>
             </div>
 
-            <EnumControls currentClass={currentClass} onApplyEnum={onApplyEnum} />
+            <EnumControls currentClass={currentClass} layer={layer} onApplyEnum={onApplyEnum} />
 
             <div className="ss-edit-panel__control">
-              <label className="ss-edit-panel__label">Opacity</label>
+              <label className="ss-edit-panel__label">
+                Opacity
+                <LayerDot definedAt={opacity.definedAt} active={activeBreakpoint} />
+              </label>
               <input
                 type="range"
                 className="ss-edit-panel__slider"
@@ -227,7 +308,7 @@ export function VisualEditorPanel({
                 min={0}
                 max={100}
                 step={5}
-                value={scaleValue(currentClass, 'opacity') ?? 100}
+                value={opacity.value ?? 100}
                 onChange={(e) => {
                   const n = Number(e.target.value);
                   onApplyEnum(`opacity-${n}`, { opacity: String(n / 100) });
@@ -237,6 +318,7 @@ export function VisualEditorPanel({
 
             <ColorControls
               currentClass={currentClass}
+              layer={layer}
               onApplyEnum={onApplyEnum}
               computed={{
                 color: selection?.signature.computedColor,

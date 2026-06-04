@@ -372,6 +372,191 @@ pub fn apply_classname_edit(
     Ok(())
 }
 
+// ───────────────────────────── Breakpoints ──────────────────────────────────
+
+/// A responsive breakpoint the editor can target (serialized to the frontend as
+/// `{name, prefix, minPx}`). The frontend prepends the base (unprefixed) layer.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Breakpoint {
+    /// Display name == the Tailwind variant key (e.g. "md", "2xl", or a custom name).
+    pub name: String,
+    /// Variant prefix without the colon — same as `name` for responsive breakpoints.
+    pub prefix: String,
+    /// Min-width the breakpoint activates at, in px.
+    pub min_px: u32,
+}
+
+/// Tailwind's default breakpoints (px), the base set before project overrides.
+const DEFAULT_BREAKPOINTS: &[(&str, u32)] = &[
+    ("sm", 640),
+    ("md", 768),
+    ("lg", 1024),
+    ("xl", 1280),
+    ("2xl", 1536),
+];
+
+/// Parse a CSS length to px. Supports rem/em (×16), px, and unitless (treated as
+/// px). Returns None for anything we can't resolve to a fixed px (var(), calc(), %).
+fn parse_len_px(raw: &str) -> Option<u32> {
+    let s = raw.trim();
+    let (num, mult) = if let Some(n) = s.strip_suffix("rem") {
+        (n, 16.0)
+    } else if let Some(n) = s.strip_suffix("em") {
+        (n, 16.0)
+    } else if let Some(n) = s.strip_suffix("px") {
+        (n, 1.0)
+    } else {
+        (s, 1.0)
+    };
+    let v: f64 = num.trim().parse().ok()?;
+    if !v.is_finite() || v < 0.0 {
+        return None;
+    }
+    Some((v * mult).round() as u32)
+}
+
+/// Apply Tailwind v4 `--breakpoint-*` declarations from `css` onto `map`. Handles
+/// `--breakpoint-*: initial` (clear all defaults) and `--breakpoint-<name>: initial`
+/// (remove one). Returns true if any `--breakpoint-` declaration was seen, so the
+/// caller knows this is a v4 project and can skip v3 config parsing.
+fn apply_css_breakpoints(css: &str, map: &mut std::collections::BTreeMap<String, u32>) -> bool {
+    let mut seen = false;
+    for line in css.lines() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix("--breakpoint-") else {
+            continue;
+        };
+        let Some((name, value)) = rest.split_once(':') else {
+            continue;
+        };
+        let name = name.trim();
+        // Value is everything up to the terminating `;` or an inline `/* … */`.
+        let value = value.split(';').next().unwrap_or("");
+        let value = value.split("/*").next().unwrap_or("").trim();
+        seen = true;
+        if value == "initial" {
+            if name == "*" {
+                map.clear();
+            } else {
+                map.remove(name);
+            }
+            continue;
+        }
+        if name == "*" {
+            continue; // `--breakpoint-*: <len>` isn't meaningful
+        }
+        if let Some(px) = parse_len_px(value) {
+            map.insert(name.to_string(), px);
+        }
+    }
+    seen
+}
+
+/// Best-effort: merge a v3 `screens: { name: 'value', … }` string-literal map from
+/// a config file onto `map`. Bails on anything that isn't a simple literal block
+/// (spreads, function values, `min`/`max` objects) — those keep the defaults.
+fn apply_v3_screens(config: &str, map: &mut std::collections::BTreeMap<String, u32>) {
+    let Some(idx) = config.find("screens") else {
+        return;
+    };
+    let after = &config[idx + "screens".len()..];
+    let Some(brace) = after.find('{') else {
+        return;
+    };
+    // Between `screens` and `{` only ws/`:` may appear (else it's not `screens: {`).
+    if after[..brace]
+        .chars()
+        .any(|c| !c.is_whitespace() && c != ':')
+    {
+        return;
+    }
+    let body = &after[brace + 1..];
+    let Some(end) = body.find('}') else {
+        return;
+    };
+    for part in body[..end].split(',') {
+        let Some((k, v)) = part.split_once(':') else {
+            continue;
+        };
+        let trim_q = |s: &str| {
+            s.trim()
+                .trim_matches(|c| c == '\'' || c == '"' || c == '`')
+                .trim()
+                .to_string()
+        };
+        let key = trim_q(k);
+        let val = trim_q(v);
+        if key.is_empty() {
+            continue;
+        }
+        if let Some(px) = parse_len_px(&val) {
+            map.insert(key, px);
+        }
+    }
+}
+
+/// Detect the project's Tailwind breakpoints. Tailwind v4 `@theme { --breakpoint-* }`
+/// is the primary source (scanned from the project's CSS); v3 `theme.screens` is a
+/// best-effort fallback; a missing/unparseable config yields Tailwind's defaults.
+/// Returns only the real responsive breakpoints — the frontend prepends the base layer.
+#[tauri::command]
+#[tracing::instrument(fields(project = %project_path))]
+pub fn detect_breakpoints(project_path: String) -> Result<Vec<Breakpoint>, CommandError> {
+    let root = validate_project_path(&project_path)?;
+    let mut map: std::collections::BTreeMap<String, u32> = DEFAULT_BREAKPOINTS
+        .iter()
+        .map(|(n, px)| (n.to_string(), *px))
+        .collect();
+
+    // v4: scan project CSS (the `ignore` walker skips node_modules/.next/.git).
+    let mut css_touched = false;
+    for entry in ignore::WalkBuilder::new(&root)
+        .standard_filters(true)
+        .build()
+        .flatten()
+    {
+        let path = entry.path();
+        let is_css = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("css"))
+            .unwrap_or(false);
+        if !is_css {
+            continue;
+        }
+        if let Ok(css) = std::fs::read_to_string(path) {
+            css_touched |= apply_css_breakpoints(&css, &mut map);
+        }
+    }
+
+    // v3: only when there's no v4 signal, best-effort parse the config's screens map.
+    if !css_touched {
+        for name in &[
+            "tailwind.config.js",
+            "tailwind.config.ts",
+            "tailwind.config.cjs",
+            "tailwind.config.mjs",
+        ] {
+            if let Ok(cfg) = std::fs::read_to_string(root.join(name)) {
+                apply_v3_screens(&cfg, &mut map);
+                break;
+            }
+        }
+    }
+
+    let mut bps: Vec<Breakpoint> = map
+        .into_iter()
+        .map(|(name, min_px)| Breakpoint {
+            prefix: name.clone(),
+            name,
+            min_px,
+        })
+        .collect();
+    bps.sort_by_key(|b| b.min_px);
+    Ok(bps)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -542,5 +727,79 @@ mod tests {
         let after = std::fs::read_to_string(&file).unwrap();
         assert_eq!(after, "const x=1;\n<div className=\"p-6 flex\">\n");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    use std::collections::BTreeMap;
+    fn default_map() -> BTreeMap<String, u32> {
+        DEFAULT_BREAKPOINTS
+            .iter()
+            .map(|(n, p)| (n.to_string(), *p))
+            .collect()
+    }
+
+    #[test]
+    fn parse_len_px_units() {
+        assert_eq!(parse_len_px("48rem"), Some(768)); // rem → ×16
+        assert_eq!(parse_len_px("40rem"), Some(640));
+        assert_eq!(parse_len_px("768px"), Some(768));
+        assert_eq!(parse_len_px("768"), Some(768)); // unitless → px
+        assert_eq!(parse_len_px("var(--x)"), None);
+        assert_eq!(parse_len_px("calc(100% - 1px)"), None);
+    }
+
+    #[test]
+    fn css_breakpoints_override_remove_and_custom() {
+        let mut map = default_map();
+        let css = r#"
+            @theme {
+              --breakpoint-md: 50rem;     /* override */
+              --breakpoint-lg: initial;   /* remove */
+              --breakpoint-tablet: 900px; /* custom */
+            }
+        "#;
+        assert!(apply_css_breakpoints(css, &mut map));
+        assert_eq!(map.get("md"), Some(&800)); // 50rem
+        assert_eq!(map.get("lg"), None); // removed
+        assert_eq!(map.get("tablet"), Some(&900)); // custom name
+        assert_eq!(map.get("sm"), Some(&640)); // untouched default kept
+    }
+
+    #[test]
+    fn css_wildcard_initial_clears_defaults() {
+        let mut map = default_map();
+        let css = "--breakpoint-*: initial;\n--breakpoint-md: 768px;";
+        assert!(apply_css_breakpoints(css, &mut map));
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get("md"), Some(&768));
+    }
+
+    #[test]
+    fn no_css_breakpoints_is_not_touched() {
+        let mut map = default_map();
+        // A var() usage that merely mentions --breakpoint must not count as a decl.
+        assert!(!apply_css_breakpoints(
+            "width: var(--breakpoint-md);",
+            &mut map
+        ));
+        assert_eq!(map.len(), DEFAULT_BREAKPOINTS.len());
+    }
+
+    #[test]
+    fn v3_screens_literal_merges() {
+        let mut map = default_map();
+        let cfg = r#"module.exports = { theme: { screens: { sm: '480px', md: "800px" } } };"#;
+        apply_v3_screens(cfg, &mut map);
+        assert_eq!(map.get("sm"), Some(&480));
+        assert_eq!(map.get("md"), Some(&800));
+        assert_eq!(map.get("lg"), Some(&1024)); // default kept
+    }
+
+    #[test]
+    fn v3_screens_non_literal_is_ignored() {
+        let mut map = default_map();
+        // function/spread screens → keep defaults, don't crash.
+        let cfg = r#"export default { theme: { screens: require('./bp') } }"#;
+        apply_v3_screens(cfg, &mut map);
+        assert_eq!(map, default_map());
     }
 }

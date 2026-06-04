@@ -45,6 +45,133 @@ export function resolveClassnameSource(
   return invoke<Resolution>('resolve_classname_source', { projectPath, signature });
 }
 
+// ───────────────────────────── Breakpoints ──────────────────────────────────
+//
+// The editor edits one responsive *layer* at a time. A layer is either the base
+// (unprefixed) utilities — which apply at all widths — or a Tailwind breakpoint
+// variant like `md:` which applies from its min-width up. Readers/builders stay
+// base-layer-only; we make them variant-aware by stripping/adding the prefix at
+// the edges (see `tokensForVariant` / `withVariant`), never by changing the
+// readers themselves.
+
+/** A responsive layer the editor can target. Base = the unprefixed layer. */
+export interface Breakpoint {
+  /** Display name, e.g. "Base", "sm", "md". */
+  name: string;
+  /** Tailwind variant prefix without the colon (`md`), or null for the base layer. */
+  prefix: string | null;
+  /** Min-width in px the breakpoint activates at (0 for base). */
+  minPx: number;
+}
+
+/** The base (unprefixed) layer — applies at all widths. Prepended to detected breakpoints. */
+export const BASE_BREAKPOINT: Breakpoint = { name: 'Base', prefix: null, minPx: 0 };
+
+/** Tailwind's default breakpoints — the fallback when detection finds none. */
+export const DEFAULT_BREAKPOINTS: Breakpoint[] = [
+  { name: 'sm', prefix: 'sm', minPx: 640 },
+  { name: 'md', prefix: 'md', minPx: 768 },
+  { name: 'lg', prefix: 'lg', minPx: 1024 },
+  { name: 'xl', prefix: 'xl', minPx: 1280 },
+  { name: '2xl', prefix: '2xl', minPx: 1536 },
+];
+
+/** Detect the project's Tailwind breakpoints (real responsive ones only — the
+ *  caller prepends `BASE_BREAKPOINT`). */
+export function detectBreakpoints(projectPath: string): Promise<Breakpoint[]> {
+  return invoke<Breakpoint[]>('detect_breakpoints', { projectPath });
+}
+
+/** The set of breakpoint prefixes used to recognize variant tokens. */
+export function breakpointPrefixes(breakpoints: Breakpoint[]): Set<string> {
+  return new Set(breakpoints.map((b) => b.prefix).filter((p): p is string => p !== null));
+}
+
+/**
+ * The tokens of `className` that belong to one breakpoint layer, prefix stripped,
+ * re-joined as a class string the unprefixed readers understand. `known` is the
+ * set of breakpoint prefixes in play (e.g. {sm, md, lg}).
+ *
+ * - Base layer (`prefix === null`): keep only tokens whose leading modifier is NOT
+ *   a known breakpoint — so `hover:`/`focus:`/`dark:` tokens stay (they're part of
+ *   the base width layer), but `md:p-4` is excluded.
+ * - Breakpoint layer (`prefix === 'md'`): keep only tokens led by exactly `md:`,
+ *   with that one prefix stripped (`md:hover:p-4` → `hover:p-4`).
+ *
+ * Stripping is anchored to the leading modifier only, matched against `known` —
+ * never a blind split, so colon-bearing arbitrary values (`bg-[url(http://…)]`)
+ * are never mis-parsed (their lead isn't a known breakpoint, so they fall to base).
+ */
+export function tokensForVariant(
+  className: string,
+  prefix: string | null,
+  known: Set<string>
+): string {
+  const out: string[] = [];
+  for (const token of className.split(/\s+/)) {
+    if (!token) continue;
+    const colon = token.indexOf(':');
+    const lead = colon === -1 ? null : token.slice(0, colon);
+    if (prefix === null) {
+      if (lead !== null && known.has(lead)) continue; // a breakpoint token — not base
+      out.push(token);
+    } else if (lead === prefix) {
+      out.push(token.slice(colon + 1)); // strip exactly this breakpoint prefix
+    }
+  }
+  return out.join(' ');
+}
+
+/** Prefix a bare token with a breakpoint variant (`md` + `p-6` → `md:p-6`); base
+ *  returns the token unchanged. */
+export function withVariant(prefix: string | null, token: string): string {
+  return prefix ? `${prefix}:${token}` : token;
+}
+
+/**
+ * Resolve a value across the Tailwind min-width cascade: starting at `bp`, walk
+ * DOWN through smaller breakpoints to Base, returning the first layer where `read`
+ * finds a value — plus which breakpoint defined it (powers the inherited-vs-set
+ * indicator in one pass). `read` receives the prefix-stripped tokens for a single
+ * layer. `ordered` is all breakpoints (INCLUDING Base) — order doesn't matter, we
+ * sort the at-or-below subset descending here.
+ */
+export function resolveCascade<T>(
+  className: string,
+  bp: Breakpoint,
+  ordered: Breakpoint[],
+  read: (scopedTokens: string) => T | null | undefined,
+  known: Set<string>
+): { value: T | null; definedAt: Breakpoint | null } {
+  const chain = ordered.filter((b) => b.minPx <= bp.minPx).sort((a, b) => b.minPx - a.minPx);
+  for (const layer of chain) {
+    const value = read(tokensForVariant(className, layer.prefix, known));
+    if (value !== null && value !== undefined) {
+      return { value: value as T, definedAt: layer };
+    }
+  }
+  return { value: null, definedAt: null };
+}
+
+/** The breakpoint layer the panel reads/writes, bundled with what `resolveCascade`
+ *  needs. Built once in the panel and threaded to each control so they read the
+ *  effective value at the active breakpoint (and know which layer defined it). */
+export interface LayerContext {
+  bp: Breakpoint;
+  ordered: Breakpoint[];
+  known: Set<string>;
+}
+
+/** `resolveCascade` bound to a `LayerContext` — the effective value at the layer's
+ *  breakpoint plus where it was defined (for the inherited-vs-set indicator). */
+export function readLayer<T>(
+  className: string,
+  layer: LayerContext,
+  read: (scopedTokens: string) => T | null | undefined
+): { value: T | null; definedAt: Breakpoint | null } {
+  return resolveCascade(className, layer.bp, layer.ordered, read, layer.known);
+}
+
 /**
  * Current scale value of a Tailwind spacing utility (`<prefix>-N`) in a class
  * string, or null if absent / arbitrary (`p-[..]`). `prefix` is a plain utility

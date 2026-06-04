@@ -148,6 +148,49 @@
   padding: 0 6px;
 }
 
+/* Plain-language explainer of the active breakpoint's reach (mobile-first cascade,
+   which trips up desktop-first habits). Sits just under the breakpoint dropdown. */
+.ss-edit-panel__bp-help {
+  margin: calc(-1 * var(--spacing-xs)) 0 var(--spacing-sm);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* Note shown when the selected breakpoint is wider than the preview can display:
+   edits still apply, they just aren't visible until the canvas is widened. */
+.ss-edit-panel__bp-note {
+  margin: 0 0 var(--spacing-sm);
+  padding: var(--spacing-sm);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  border-radius: var(--radius-sm);
+}
+.ss-edit-panel__bp-note strong {
+  color: var(--text-primary);
+}
+
+/* Set-vs-inherited indicator: a filled dot when the value is set on the active
+   breakpoint, a hollow ring when inherited from a smaller one. */
+.ss-layer-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.ss-layer-dot--here {
+  background: var(--action);
+}
+.ss-layer-dot--inherited {
+  background: transparent;
+  border: 1px solid var(--text-muted);
+}
+
 /* Custom dropdown (trigger lives in the panel; menu is portaled to <body>). */
 .ss-dropdown__trigger {
   display: inline-flex;
@@ -472,7 +515,15 @@
 }
 
 .ss-edit-panel__label {
+  display: inline-flex;
+  align-items: center;
   color: var(--text-secondary);
+}
+
+/* A box-model side whose value is inherited from a smaller breakpoint (not set
+   on the active one) reads muted, so it's clear it's not a local override. */
+.ss-box__field--inherited {
+  color: var(--text-muted);
 }
 
 .ss-edit-panel__stepper {

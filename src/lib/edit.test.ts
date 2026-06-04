@@ -13,7 +13,82 @@ import {
   arbitraryColorRaw,
   colorClassToken,
   colorFormatOf,
+  tokensForVariant,
+  withVariant,
+  resolveCascade,
+  breakpointPrefixes,
+  BASE_BREAKPOINT,
+  DEFAULT_BREAKPOINTS,
+  type Breakpoint,
 } from './edit';
+
+const ORDERED: Breakpoint[] = [BASE_BREAKPOINT, ...DEFAULT_BREAKPOINTS];
+const KNOWN = breakpointPrefixes(DEFAULT_BREAKPOINTS);
+const BP = (name: string) => ORDERED.find((b) => b.name === name)!;
+
+describe('tokensForVariant', () => {
+  it('scopes the base layer, keeping hover/focus but dropping breakpoint tokens', () => {
+    expect(tokensForVariant('p-4 md:p-8 hover:p-2 lg:flex', null, KNOWN)).toBe('p-4 hover:p-2');
+  });
+  it('scopes a breakpoint layer, stripping exactly that one prefix', () => {
+    expect(tokensForVariant('p-4 md:p-8 md:hover:p-2 lg:p-12', 'md', KNOWN)).toBe('p-8 hover:p-2');
+  });
+  it('never mis-parses a colon-bearing arbitrary value (stays in base)', () => {
+    // The colon is inside the bracket; its lead isn't a known breakpoint.
+    expect(tokensForVariant('bg-[url(http://x.com/a.png)]', null, KNOWN)).toBe(
+      'bg-[url(http://x.com/a.png)]'
+    );
+    expect(tokensForVariant('bg-[url(http://x.com/a.png)]', 'md', KNOWN)).toBe('');
+  });
+  it('reads a scale value out of a breakpoint layer via the existing reader', () => {
+    expect(scaleValue(tokensForVariant('p-4 md:p-8', 'md', KNOWN), 'p')).toBe(8);
+    expect(scaleValue(tokensForVariant('p-4 md:p-8', null, KNOWN), 'p')).toBe(4);
+  });
+});
+
+describe('withVariant', () => {
+  it('prefixes for a breakpoint and is identity for base', () => {
+    expect(withVariant('md', 'p-6')).toBe('md:p-6');
+    expect(withVariant(null, 'p-6')).toBe('p-6');
+    // Round-trips arbitrary color tokens (escaping already applied upstream).
+    expect(withVariant('md', 'text-[oklch(0.62_0.18_39)]')).toBe('md:text-[oklch(0.62_0.18_39)]');
+  });
+});
+
+describe('resolveCascade', () => {
+  const readP = (scoped: string) => scaleValue(scoped, 'p');
+
+  it('returns the value set on the active breakpoint (set here)', () => {
+    const r = resolveCascade('p-4 md:p-8', BP('md'), ORDERED, readP, KNOWN);
+    expect(r.value).toBe(8);
+    expect(r.definedAt?.name).toBe('md');
+  });
+  it('inherits from a smaller breakpoint when the active one is unset', () => {
+    // At lg there is no lg:p-*; the cascade falls to md:p-8.
+    const r = resolveCascade('p-4 md:p-8', BP('lg'), ORDERED, readP, KNOWN);
+    expect(r.value).toBe(8);
+    expect(r.definedAt?.name).toBe('md');
+  });
+  it('falls all the way to base', () => {
+    const r = resolveCascade('p-4', BP('xl'), ORDERED, readP, KNOWN);
+    expect(r.value).toBe(4);
+    expect(r.definedAt?.name).toBe('Base');
+  });
+  it('returns null/definedAt null when nothing matches', () => {
+    const r = resolveCascade('flex', BP('md'), ORDERED, readP, KNOWN);
+    expect(r.value).toBeNull();
+    expect(r.definedAt).toBeNull();
+  });
+  it('composes with the box-model per-side cascade across breakpoints', () => {
+    // base pt-2 + md:py-8: at md the top side is 8 (md axis beats base side);
+    // at base the top side is 2.
+    const cls = 'pt-2 md:py-8';
+    const topAt = (bp: Breakpoint) =>
+      resolveCascade(cls, bp, ORDERED, (s) => boxSideValue(s, 'padding', 'top'), KNOWN).value;
+    expect(topAt(BP('md'))).toBe(8);
+    expect(topAt(BASE_BREAKPOINT)).toBe(2);
+  });
+});
 
 describe('arbitrary color (any format)', () => {
   it('reads hex / rgb / oklch and un-escapes underscores', () => {

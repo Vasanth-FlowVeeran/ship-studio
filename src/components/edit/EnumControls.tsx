@@ -7,8 +7,15 @@
  */
 
 import type { ReactNode } from 'react';
-import { activeEnumToken, ENUM_CONTROLS, type EnumControl } from '../../lib/edit';
+import {
+  activeEnumToken,
+  readLayer,
+  ENUM_CONTROLS,
+  type EnumControl,
+  type LayerContext,
+} from '../../lib/edit';
 import { EnumDropdown } from './EnumDropdown';
+import { LayerDot } from './LayerDot';
 
 const lineProps = { strokeWidth: 2, strokeLinecap: 'round' as const };
 function Icon({ children }: { children: ReactNode }) {
@@ -134,11 +141,16 @@ const ICONS: Record<string, ReactNode> = {
 
 interface Props {
   currentClass: string;
+  /** The active breakpoint layer — controls read the effective value across the
+   *  Tailwind cascade and apply at this layer (the hook adds the variant prefix). */
+  layer: LayerContext;
   onApplyEnum: (token: string, style: Record<string, string>) => void;
 }
 
-function Control({ control, currentClass, onApplyEnum }: { control: EnumControl } & Props) {
-  const active = activeEnumToken(currentClass, control);
+function Control({ control, currentClass, layer, onApplyEnum }: { control: EnumControl } & Props) {
+  const { value: active, definedAt } = readLayer(currentClass, layer, (s) =>
+    activeEnumToken(s, control)
+  );
 
   let body: ReactNode;
   if (control.variant === 'dropdown') {
@@ -178,13 +190,16 @@ function Control({ control, currentClass, onApplyEnum }: { control: EnumControl 
 
   return (
     <div className="ss-edit-panel__control">
-      <label className="ss-edit-panel__label">{control.label}</label>
+      <label className="ss-edit-panel__label">
+        {control.label}
+        <LayerDot definedAt={definedAt} active={layer.bp} />
+      </label>
       {body}
     </div>
   );
 }
 
-export function EnumControls({ currentClass, onApplyEnum }: Props) {
+export function EnumControls({ currentClass, layer, onApplyEnum }: Props) {
   return (
     <>
       {ENUM_CONTROLS.map((control) => (
@@ -192,6 +207,7 @@ export function EnumControls({ currentClass, onApplyEnum }: Props) {
           key={control.label}
           control={control}
           currentClass={currentClass}
+          layer={layer}
           onApplyEnum={onApplyEnum}
         />
       ))}

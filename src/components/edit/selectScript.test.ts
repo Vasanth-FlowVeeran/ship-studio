@@ -69,12 +69,39 @@ it('live-applies a class to the selected element on ss:mutate', () => {
   expect(btn.getAttribute('class')).toBe('btn p-8');
 });
 
-it('applies an inline style patch on ss:mutate (JIT-independent preview)', () => {
+it('previews a freshly-typed class via an injected stylesheet, not inline styles', () => {
   const btn = document.querySelector('.btn') as HTMLElement;
-  // Tailwind may not have compiled `.p-14`; the inline value drives the preview.
-  send({ type: 'ss:mutate', className: 'btn p-14', style: { padding: '3.5rem' } });
+  // Tailwind may not have compiled `.p-14`; a stylesheet rule keyed to a marker
+  // attribute drives the preview (NOT an inline style — that can't be width-scoped).
+  send({
+    type: 'ss:mutate',
+    className: 'btn p-14',
+    rules: [{ minPx: 0, decls: { padding: '3.5rem' } }],
+  });
   expect(btn.getAttribute('class')).toBe('btn p-14');
-  expect(btn.style.padding).toBe('3.5rem');
+  expect(btn.style.padding).toBe(''); // no inline style
+  const mark = btn.getAttribute('data-ss-sel');
+  expect(mark).toBeTruthy();
+  const sheet = document.getElementById('ss-preview')!.textContent!;
+  expect(sheet).toContain('padding:3.5rem !important');
+  expect(sheet).toContain(`[data-ss-sel="${mark}"]`);
+});
+
+it('wraps a breakpoint edit in a min-width media query, base before variant', () => {
+  // Mutate targets the currently-selected `.btn` (from the prior test).
+  send({
+    type: 'ss:mutate',
+    className: 'btn p-14 md:p-20',
+    rules: [
+      { minPx: 0, decls: { padding: '3.5rem' } },
+      { minPx: 768, decls: { padding: '5rem' } },
+    ],
+  });
+  const sheet = document.getElementById('ss-preview')!.textContent!;
+  expect(sheet).toContain('@media (min-width:768px)');
+  // Ascending minPx order: base rule precedes the media rule so the larger
+  // breakpoint wins by source order without needing extra specificity.
+  expect(sheet.indexOf('padding:3.5rem')).toBeLessThan(sheet.indexOf('@media'));
 });
 
 it('walks up to the nearest classed ancestor when a bare child is clicked', async () => {
@@ -104,4 +131,40 @@ it('reports the count of, and live-mutates, ALL elements sharing the class', asy
     (e) => e.getAttribute('class') === 'name font-bold'
   );
   expect(updated).toHaveLength(3);
+});
+
+it('reverts an UNCOMMITTED preview on deactivate (class, marker, stylesheet)', () => {
+  document.body.innerHTML = '<button class="orig">x</button>';
+  send({ type: 'ss:activate' });
+  document.querySelector('.orig')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const btn = document.querySelector('button') as HTMLElement;
+  send({
+    type: 'ss:mutate',
+    className: 'orig p-8',
+    rules: [{ minPx: 0, decls: { padding: '2rem' } }],
+  });
+  expect(btn.getAttribute('class')).toBe('orig p-8');
+  send({ type: 'ss:deactivate' });
+  expect(btn.getAttribute('class')).toBe('orig'); // reverted to source baseline
+  expect(btn.getAttribute('data-ss-sel')).toBeNull(); // marker removed
+  expect(document.getElementById('ss-preview')!.textContent).toBe(''); // rule dropped
+});
+
+it('KEEPS a committed preview after deactivate (saved edit stays until HMR)', () => {
+  document.body.innerHTML = '<button class="keep">x</button>';
+  send({ type: 'ss:activate' });
+  document.querySelector('.keep')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const btn = document.querySelector('button') as HTMLElement;
+  send({
+    type: 'ss:mutate',
+    className: 'keep md:p-8',
+    rules: [{ minPx: 768, decls: { padding: '2rem' } }],
+  });
+  send({ type: 'ss:commit' }); // saved to source
+  send({ type: 'ss:deactivate' });
+  // Committed: class stays, marker + media rule persist so the edit doesn't vanish
+  // before HMR recompiles the real Tailwind CSS.
+  expect(btn.getAttribute('class')).toBe('keep md:p-8');
+  expect(btn.getAttribute('data-ss-sel')).toBeTruthy();
+  expect(document.getElementById('ss-preview')!.textContent).toContain('@media (min-width:768px)');
 });

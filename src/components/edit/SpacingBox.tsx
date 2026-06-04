@@ -7,7 +7,13 @@
  */
 
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
-import { boxSideValue, type BoxType, type Side } from '../../lib/edit';
+import {
+  boxSideValue,
+  readLayer,
+  type BoxType,
+  type Side,
+  type LayerContext,
+} from '../../lib/edit';
 
 /** Drag axis + direction per side: a bar only scrubs along its own orientation,
  *  pulling outward to grow (top↑, bottom↓, left←, right→) — like Webflow. */
@@ -24,6 +30,9 @@ interface FieldProps {
   label: string;
   className: string;
   dir: { axis: 'x' | 'y'; sign: 1 | -1 };
+  /** True when the shown value is inherited from a smaller breakpoint (not set
+   *  at the active one) — the field is rendered muted to signal that. */
+  inherited?: boolean;
 }
 
 /** Pixels of drag per 1-unit change. */
@@ -35,7 +44,7 @@ const DRAG_SENSITIVITY = 5;
  *  - scroll to scrub,
  *  - click (selects all) then type to replace.
  */
-function SideField({ value, onSet, label, className, dir }: FieldProps) {
+function SideField({ value, onSet, label, className, dir, inherited }: FieldProps) {
   const v = value ?? 0;
   const drag = useRef<{ x: number; y: number; start: number } | null>(null);
   const dragged = useRef(false);
@@ -71,7 +80,7 @@ function SideField({ value, onSet, label, className, dir }: FieldProps) {
 
   return (
     <input
-      className={`ss-box__field ${className}`}
+      className={`ss-box__field ${className}${inherited ? ' ss-box__field--inherited' : ''}`}
       aria-label={label}
       title={`${label} (drag or scroll to adjust)`}
       inputMode="numeric"
@@ -91,19 +100,25 @@ function SideField({ value, onSet, label, className, dir }: FieldProps) {
 
 interface Props {
   currentClass: string;
+  /** Active breakpoint layer — sides read their effective value across the cascade. */
+  layer: LayerContext;
   onSetSide: (type: BoxType, side: Side, n: number) => void;
 }
 
-export function SpacingBox({ currentClass, onSetSide }: Props) {
-  const field = (type: BoxType, side: Side, edge: string) => (
-    <SideField
-      value={boxSideValue(currentClass, type, side)}
-      onSet={(n) => onSetSide(type, side, n)}
-      label={`${type === 'padding' ? 'Padding' : 'Margin'} ${side}`}
-      className={`ss-box__edge--${edge}`}
-      dir={SIDE_DRAG[side]}
-    />
-  );
+export function SpacingBox({ currentClass, layer, onSetSide }: Props) {
+  const field = (type: BoxType, side: Side, edge: string) => {
+    const { value, definedAt } = readLayer(currentClass, layer, (s) => boxSideValue(s, type, side));
+    return (
+      <SideField
+        value={value}
+        onSet={(n) => onSetSide(type, side, n)}
+        label={`${type === 'padding' ? 'Padding' : 'Margin'} ${side}`}
+        className={`ss-box__edge--${edge}`}
+        dir={SIDE_DRAG[side]}
+        inherited={definedAt !== null && definedAt.name !== layer.bp.name}
+      />
+    );
+  };
 
   return (
     <div className="ss-box" data-testid="spacing-box">

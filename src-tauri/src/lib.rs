@@ -346,6 +346,7 @@ pub fn run() {
             commands::projects::check_dependencies_installed,
             commands::edit::resolve_classname_source,
             commands::edit::apply_classname_edit,
+            commands::edit::detect_breakpoints,
             commands::projects::get_terminal_state,
             commands::projects::set_terminal_state,
             commands::projects::extract_template_zip,
