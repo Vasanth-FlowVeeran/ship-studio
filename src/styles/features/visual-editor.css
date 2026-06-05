@@ -22,10 +22,43 @@
 .preview-edit-toggle:hover {
   color: var(--text-primary);
 }
-.preview-edit-toggle.active {
-  background: var(--action);
-  border-color: var(--action);
-  color: var(--action-text);
+
+/* iOS-style toggle pill next to the Edit label, mirroring the Inspect toggle so
+   the two side-by-side controls read as the same kind of switch. Edit mode is
+   shown by the pill flipping on (not by filling the whole button). */
+.preview-edit-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 12px;
+  margin-left: 2px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition:
+    background var(--transition),
+    border-color var(--transition);
+}
+.preview-edit-toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 8px;
+  height: 8px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition:
+    transform var(--transition),
+    background var(--transition);
+}
+.preview-edit-toggle-switch.is-on {
+  background: var(--success-light);
+  border-color: var(--success-light);
+}
+.preview-edit-toggle-switch.is-on::after {
+  transform: translateX(10px);
+  background: #ffffff;
 }
 
 .ss-edit-panel {
