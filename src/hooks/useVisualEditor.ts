@@ -18,6 +18,8 @@ import {
   resolveClassnameSource,
   applyClassnameEdit,
   applyClassnameEditMulti,
+  resolveTextSource,
+  applyTextEdit,
   findComponentUsage,
   spacingValue,
   spacingTokenFor,
@@ -40,6 +42,7 @@ import {
   type ResetSpec,
   type ElementSignature,
   type Resolution,
+  type TextResolution,
   type UsageReport,
 } from '../lib/edit';
 import { logger } from '../lib/logger';
@@ -149,6 +152,18 @@ export function useVisualEditor({
     setMultiTargetState(t);
   }, []);
 
+  // Inline text editing: the resolved text target for the current selection (null
+  // when the element's text isn't a plain editable literal). Mirrored into a ref so
+  // the ss:textCommit handler reads the latest without re-subscribing. `text` is the
+  // source baseline used as the drift guard on write-back.
+  const [textResolution, setTextResolution] = useState<TextResolution | null>(null);
+  const textTargetRef = useRef<{ file: string; line: number; text: string } | null>(null);
+  const setTextTarget = useCallback((res: TextResolution | null) => {
+    textTargetRef.current =
+      res?.status === 'resolved' ? { file: res.file, line: res.line, text: res.text } : null;
+    setTextResolution(res);
+  }, []);
+
   const post = useCallback(
     (msg: unknown) => iframeRef.current?.contentWindow?.postMessage(msg, '*'),
     [iframeRef]
@@ -167,18 +182,56 @@ export function useVisualEditor({
     post({ type: 'ss:deactivate' });
   }, [editMode, post, iframeRef]);
 
-  // Resolve clicked elements.
+  // Resolve clicked elements + handle inline text-edit commits from the iframe.
   useEffect(() => {
     if (!editMode) return;
     const handler = (e: MessageEvent) => {
-      const d = e.data as { type?: string; signature?: ElementSignature; count?: number } | null;
-      if (!d || d.type !== 'ss:select' || !d.signature) return;
+      const d = e.data as {
+        type?: string;
+        signature?: ElementSignature;
+        count?: number;
+        leafText?: boolean;
+        text?: string;
+      } | null;
+      if (!d) return;
+
+      // Inline text edit was confirmed in the iframe — write the new text to source.
+      if (d.type === 'ss:textCommit' && typeof d.text === 'string') {
+        const target = textTargetRef.current;
+        if (!target) return;
+        const next = d.text;
+        if (next === target.text) return; // unchanged
+        // Arm reload suppression before writing (same reasoning as a class commit).
+        post({ type: 'ss:suppressReload' });
+        void (async () => {
+          try {
+            await applyTextEdit(projectPath, target.file, target.line, target.text, next);
+            // Advance the drift baseline so consecutive text edits keep working.
+            target.text = next;
+            setTextResolution((prev) =>
+              prev?.status === 'resolved' ? { ...prev, text: next } : prev
+            );
+            post({ type: 'ss:commit' });
+            onToast?.('Saved to source', 'success');
+          } catch (err) {
+            logger.error('[VisualEditor] text write-back failed', { error: String(err) });
+            onToast?.(String(err), 'error');
+            // Couldn't save — put the original text back in the preview.
+            post({ type: 'ss:textRevert' });
+          }
+        })();
+        return;
+      }
+
+      if (d.type !== 'ss:select' || !d.signature) return;
       const sig = d.signature;
       const instanceCount = d.count ?? 1;
+      const leafText = !!d.leafText;
       setSelection({ signature: sig, resolution: null, instanceCount });
       setLiveClass(sig.className);
       setMultiTarget('all'); // a fresh selection defaults to editing all occurrences
       setUsage(null);
+      setTextTarget(null); // optimistic; iframe allows editing until told otherwise
       const usageToken = ++usageTokenRef.current;
       void (async () => {
         try {
@@ -210,10 +263,28 @@ export function useVisualEditor({
           });
         }
       })();
+      // Text-editability runs in parallel: only for single-text-node leaves. The
+      // iframe gates inline editing on the verdict we post back (ss:textInfo).
+      if (leafText) {
+        void (async () => {
+          try {
+            const textRes = await resolveTextSource(projectPath, sig);
+            // Ignore if the selection changed underneath us.
+            if (usageTokenRef.current !== usageToken) return;
+            setTextTarget(textRes);
+            post({ type: 'ss:textInfo', editable: textRes.status === 'resolved' });
+          } catch {
+            if (usageTokenRef.current === usageToken)
+              post({ type: 'ss:textInfo', editable: false });
+          }
+        })();
+      } else {
+        post({ type: 'ss:textInfo', editable: false });
+      }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [editMode, projectPath, onToast, setLiveClass, setMultiTarget]);
+  }, [editMode, projectPath, onToast, post, setLiveClass, setMultiTarget, setTextTarget]);
 
   /**
    * Merge a Tailwind token into the live class at the active breakpoint and
@@ -362,10 +433,11 @@ export function useVisualEditor({
       if (prev) {
         setSelection(null);
         setLiveClass('');
+        setTextTarget(null);
       }
       return !prev;
     });
-  }, [setLiveClass]);
+  }, [setLiveClass, setTextTarget]);
 
   return {
     editMode,
@@ -373,6 +445,8 @@ export function useVisualEditor({
     selection,
     currentClass,
     usage,
+    /** Text-editability of the current selection (drives the panel's hint). */
+    textResolution,
     multiTarget,
     setMultiTarget,
     autoSave,

@@ -532,6 +532,268 @@ pub fn apply_classname_edit_multi(
     Ok(applied)
 }
 
+// ───────────────────────────── Text content ─────────────────────────────────
+//
+// Live text editing rides on the same select → resolve → write-back rails as class
+// editing. We reuse class resolution as the *anchor*: once an element's className
+// pins a single source location, the static text run inside that tag is the thing
+// we edit. There's no Multi rung in v1 — repeated elements (a `.map`) usually carry
+// per-instance copy, so "edit all" would clobber real text; we offer text editing
+// only when the class resolves to one confident location.
+
+/// Resolution of an element's text content to its source literal.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum TextResolution {
+    /// A single static text run was found and is editable.
+    Resolved {
+        /// Path relative to the project root, POSIX-style.
+        file: String,
+        /// 1-based line of the trimmed text run.
+        line: usize,
+        /// 1-based column of the trimmed text run.
+        column: usize,
+        /// Current static text (trimmed) — the write-back's drift baseline.
+        text: String,
+        /// How the underlying element was reached: "unique" | "tag" | "ancestor".
+        confidence: String,
+    },
+    /// The text isn't a plain editable string (dynamic, mixed, or ambiguous element).
+    ReadOnly { reason: String },
+}
+
+/// A located static text run between an opening tag's `>` and the next `</`.
+#[derive(Debug, Clone)]
+struct TextSpan {
+    /// Trimmed text — what the user edits.
+    value: String,
+    /// Byte offset of the first non-whitespace text character.
+    value_start: usize,
+    /// Byte offset just past the last non-whitespace text character.
+    value_end: usize,
+    line: usize,
+    column: usize,
+}
+
+/// 1-based (line, column) of a byte offset in `src`.
+fn line_col(src: &str, byte: usize) -> (usize, usize) {
+    let prefix = &src[..byte];
+    let line = prefix.bytes().filter(|&b| b == b'\n').count() + 1;
+    let column = byte - prefix.rfind('\n').map(|p| p + 1).unwrap_or(0) + 1;
+    (line, column)
+}
+
+/// Starting just after a className value's closing quote, find the opening tag's
+/// real `>` — skipping `>` inside attribute strings and `{…}` expressions (e.g.
+/// `style={{}}`, `onClick={() => a > b}`) — then the static text run up to the next
+/// `<`. Returns None for self-closing tags, an element-first child (mixed content),
+/// empty/whitespace-only runs, or dynamic text (`{…}`).
+fn text_run_in_tag(src: &str, after_quote: usize) -> Option<TextSpan> {
+    let bytes = src.as_bytes();
+    let mut i = after_quote;
+    let mut in_str: u8 = 0; // the quote char while inside an attribute string, else 0
+    let mut depth: i32 = 0; // `{…}` expression depth within the opening tag
+    let mut gt: Option<usize> = None;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if in_str != 0 {
+            if b == in_str {
+                in_str = 0;
+            }
+        } else if b == b'"' || b == b'\'' || b == b'`' {
+            in_str = b;
+        } else if b == b'{' {
+            depth += 1;
+        } else if b == b'}' {
+            depth = (depth - 1).max(0);
+        } else if depth == 0 {
+            if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'>' {
+                return None; // self-closing — no children
+            }
+            if b == b'>' {
+                gt = Some(i);
+                break;
+            }
+        }
+        i += 1;
+    }
+    let gt = gt?;
+    let run_start = gt + 1;
+    let mut j = run_start;
+    while j < bytes.len() && bytes[j] != b'<' {
+        j += 1;
+    }
+    if j >= bytes.len() || !src[j..].starts_with("</") {
+        return None; // element-first child (mixed content) or unterminated
+    }
+    let run = &src[run_start..j];
+    if run.contains('{') {
+        return None; // dynamic text
+    }
+    let trimmed = run.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let lead = run.len() - run.trim_start().len();
+    let value_start = run_start + lead;
+    let value_end = value_start + trimmed.len();
+    let (line, column) = line_col(src, value_start);
+    Some(TextSpan {
+        value: trimmed.to_string(),
+        value_start,
+        value_end,
+        line,
+        column,
+    })
+}
+
+/// Every static leaf text run in a file (text between `>` and `</` with no `{…}`).
+/// The text write-back uses this to re-locate a span by (line, value). A stray `>`
+/// inside an expression can yield a spurious entry, but the write-back matches on
+/// exact (line, old_text) and re-verifies, so a false span never drives a wrong edit.
+fn find_text_spans(src: &str) -> Vec<TextSpan> {
+    let bytes = src.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'>' {
+            i += 1;
+            continue;
+        }
+        let run_start = i + 1;
+        let mut j = run_start;
+        while j < bytes.len() && bytes[j] != b'<' {
+            j += 1;
+        }
+        if j < bytes.len() && src[j..].starts_with("</") {
+            let run = &src[run_start..j];
+            if !run.contains('{') {
+                let trimmed = run.trim();
+                if !trimmed.is_empty() {
+                    let lead = run.len() - run.trim_start().len();
+                    let value_start = run_start + lead;
+                    let value_end = value_start + trimmed.len();
+                    let (line, column) = line_col(src, value_start);
+                    out.push(TextSpan {
+                        value: trimmed.to_string(),
+                        value_start,
+                        value_end,
+                        line,
+                        column,
+                    });
+                }
+            }
+        }
+        i = j.max(run_start);
+    }
+    out
+}
+
+/// Resolve a clicked element to its editable text source. Anchors on class
+/// resolution, then locates the static text run inside the resolved tag.
+#[tauri::command]
+#[tracing::instrument(skip(signature), fields(project = %project_path, tag = %signature.tag_name))]
+pub fn resolve_text_source(
+    project_path: String,
+    signature: ElementSignature,
+) -> Result<TextResolution, CommandError> {
+    let root = validate_project_path(&project_path)?;
+    let occurrences = index_occurrences_cached(&root);
+    match resolve(occurrences.as_slice(), &signature) {
+        Resolution::Resolved {
+            file,
+            line,
+            class_name,
+            confidence,
+            ..
+        } => {
+            let abs = root.join(&file);
+            let Ok(src) = std::fs::read_to_string(&abs) else {
+                return Ok(TextResolution::ReadOnly {
+                    reason: "Could not read the source file.".into(),
+                });
+            };
+            // Re-find the className span we resolved to, then read the text after its tag.
+            let span = find_attr_spans(&src, attrs_for_path(&file))
+                .into_iter()
+                .find(|s| s.line == line && s.value == class_name);
+            let Some(span) = span else {
+                return Ok(TextResolution::ReadOnly {
+                    reason: "Source changed — reselect the element.".into(),
+                });
+            };
+            // value_end points at the closing quote; scan from just after it.
+            match text_run_in_tag(&src, span.value_end + 1) {
+                Some(ts) => Ok(TextResolution::Resolved {
+                    file,
+                    line: ts.line,
+                    column: ts.column,
+                    text: ts.value,
+                    confidence,
+                }),
+                None => Ok(TextResolution::ReadOnly {
+                    reason: "This text isn't a plain string in source (dynamic, empty, or wraps nested elements)."
+                        .into(),
+                }),
+            }
+        }
+        Resolution::Multi { .. } => Ok(TextResolution::ReadOnly {
+            reason: "This element appears in several places — text editing needs a single, unique element.".into(),
+        }),
+        Resolution::ReadOnly { reason } => Ok(TextResolution::ReadOnly { reason }),
+    }
+}
+
+/// Surgically replace one static text run's value, after verifying the current text
+/// still equals `old_text` (drift guard). Only the trimmed run is touched —
+/// surrounding whitespace and the rest of the file are preserved byte-for-byte.
+/// Rejects `<`/`{` in the replacement: both break JSX/Astro markup.
+#[tauri::command]
+#[tracing::instrument(fields(project = %project_path, file = %file, line = line))]
+pub fn apply_text_edit(
+    project_path: String,
+    file: String,
+    line: usize,
+    old_text: String,
+    new_text: String,
+) -> Result<(), CommandError> {
+    if new_text.contains('<') || new_text.contains('{') {
+        return Err(CommandError::Validation {
+            field: "new_text".into(),
+            reason: "Text can't contain '<' or '{' — those break the markup.".into(),
+        });
+    }
+    let root = validate_project_path(&project_path)?;
+    let abs = root.join(&file);
+    // Defense in depth: the edited file must stay inside the project.
+    let canon_root = root.canonicalize().map_err(CommandError::from)?;
+    let canon_file = abs.canonicalize().map_err(CommandError::from)?;
+    if !canon_file.starts_with(&canon_root) {
+        return Err(CommandError::Validation {
+            field: "file".into(),
+            reason: "edit target is outside the project".into(),
+        });
+    }
+
+    let src = std::fs::read_to_string(&abs).map_err(CommandError::from)?;
+    let span = find_text_spans(&src)
+        .into_iter()
+        .find(|s| s.line == line && s.value == old_text)
+        .ok_or_else(|| CommandError::Validation {
+            field: "old_text".into(),
+            reason: "source no longer matches — reselect the element".into(),
+        })?;
+
+    let mut updated = String::with_capacity(src.len() + new_text.len());
+    updated.push_str(&src[..span.value_start]);
+    updated.push_str(&new_text);
+    updated.push_str(&src[span.value_end..]);
+
+    std::fs::write(&abs, updated).map_err(CommandError::from)?;
+    invalidate_index_cache(&root);
+    Ok(())
+}
+
 // ───────────────────────────── Breakpoints ──────────────────────────────────
 
 /// A responsive breakpoint the editor can target (serialized to the frontend as
@@ -1250,6 +1512,92 @@ const items = [];
             "<div className=\"other\" />\n"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ── Text content ──────────────────────────────────────────────────────
+
+    /// Locate the text after the (single) className span in `src`.
+    fn text_after_class(src: &str) -> Option<TextSpan> {
+        let span = find_classname_spans(src).into_iter().next()?;
+        text_run_in_tag(src, span.value_end + 1)
+    }
+
+    #[test]
+    fn text_run_reads_plain_leaf_text() {
+        let src = "<h1 className=\"hero\">Welcome to Trase</h1>";
+        let ts = text_after_class(src).unwrap();
+        assert_eq!(ts.value, "Welcome to Trase");
+        assert_eq!(ts.line, 1);
+        // Edits the trimmed run only.
+        assert_eq!(&src[ts.value_start..ts.value_end], "Welcome to Trase");
+    }
+
+    #[test]
+    fn text_run_trims_surrounding_whitespace() {
+        let src = "<h1 className=\"hero\">\n  Welcome\n</h1>";
+        let ts = text_after_class(src).unwrap();
+        assert_eq!(ts.value, "Welcome");
+        assert_eq!(ts.line, 2);
+        assert_eq!(&src[ts.value_start..ts.value_end], "Welcome");
+    }
+
+    #[test]
+    fn text_run_rejects_dynamic_mixed_and_selfclosing() {
+        // Dynamic expression child.
+        assert!(text_after_class("<h1 className=\"a\">{title}</h1>").is_none());
+        // Partially dynamic.
+        assert!(text_after_class("<h1 className=\"a\">Total: {n}</h1>").is_none());
+        // Element-first child (mixed content).
+        assert!(text_after_class("<p className=\"a\"><b>x</b> y</p>").is_none());
+        // Self-closing.
+        assert!(text_after_class("<img className=\"a\" />").is_none());
+        // Empty.
+        assert!(text_after_class("<div className=\"a\"></div>").is_none());
+    }
+
+    #[test]
+    fn text_run_ignores_gt_inside_attrs_and_expressions() {
+        // `>` inside an attribute string and inside a `{…}` expression must not be
+        // mistaken for the tag close.
+        let src = "<button className=\"b\" title=\"a > b\" onClick={() => go(1>0)}>Click</button>";
+        let ts = text_after_class(src).unwrap();
+        assert_eq!(ts.value, "Click");
+    }
+
+    #[test]
+    fn text_run_handles_astro_class_attr() {
+        let src = "<h1 class=\"title\">Hello Astro</h1>";
+        let span = find_attr_spans(src, attrs_for_ext("astro"))
+            .into_iter()
+            .next()
+            .unwrap();
+        let ts = text_run_in_tag(src, span.value_end + 1).unwrap();
+        assert_eq!(ts.value, "Hello Astro");
+    }
+
+    #[test]
+    fn text_write_back_replaces_only_trimmed_run() {
+        let src = "<h1 className=\"hero\">\n  Old Title\n</h1>\n";
+        let span = find_text_spans(src)
+            .into_iter()
+            .find(|s| s.value == "Old Title")
+            .unwrap();
+        let mut updated = String::new();
+        updated.push_str(&src[..span.value_start]);
+        updated.push_str("New Title");
+        updated.push_str(&src[span.value_end..]);
+        // Surrounding whitespace/newlines preserved.
+        assert_eq!(updated, "<h1 className=\"hero\">\n  New Title\n</h1>\n");
+    }
+
+    #[test]
+    fn find_text_spans_locates_by_line_and_value() {
+        let src = "<a className=\"x\">Home</a>\n<a className=\"y\">About</a>\n";
+        let spans = find_text_spans(src);
+        let home = spans.iter().find(|s| s.value == "Home").unwrap();
+        let about = spans.iter().find(|s| s.value == "About").unwrap();
+        assert_eq!(home.line, 1);
+        assert_eq!(about.line, 2);
     }
 
     use std::collections::BTreeMap;

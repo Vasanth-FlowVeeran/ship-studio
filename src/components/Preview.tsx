@@ -896,6 +896,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           <VisualEditorPanel
             selection={editor.selection}
             currentClass={editor.currentClass}
+            textResolution={editor.textResolution}
             breakpoints={breakpoints}
             activeBreakpoint={activeBreakpoint}
             breakpointTooWide={breakpointTooWide}

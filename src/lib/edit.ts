@@ -61,6 +61,44 @@ export function resolveClassnameSource(
   return invoke<Resolution>('resolve_classname_source', { projectPath, signature });
 }
 
+// ───────────────────────────── Text content ─────────────────────────────────
+//
+// Inline text editing reuses class resolution as the anchor: once an element's
+// className pins one source location, the static text inside that tag is editable.
+// No `multi` rung — repeated elements usually carry per-instance copy.
+
+/** Outcome of resolving an element's text content to source (mirrors the Rust enum). */
+export type TextResolution =
+  | {
+      status: 'resolved';
+      file: string;
+      line: number;
+      column: number;
+      /** Current static text (trimmed) — the write-back's drift baseline. */
+      text: string;
+      confidence: string;
+    }
+  | { status: 'read_only'; reason: string };
+
+/** Resolve a clicked element to its editable text source. */
+export function resolveTextSource(
+  projectPath: string,
+  signature: ElementSignature
+): Promise<TextResolution> {
+  return invoke<TextResolution>('resolve_text_source', { projectPath, signature });
+}
+
+/** Surgically replace one static text run, verifying it still equals `oldText`. */
+export function applyTextEdit(
+  projectPath: string,
+  file: string,
+  line: number,
+  oldText: string,
+  newText: string
+): Promise<void> {
+  return invoke('apply_text_edit', { projectPath, file, line, oldText, newText });
+}
+
 // ───────────────────────────── Breakpoints ──────────────────────────────────
 //
 // The editor edits one responsive *layer* at a time. A layer is either the base
