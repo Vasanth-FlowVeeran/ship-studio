@@ -104,8 +104,8 @@ function EditorIntro() {
   return (
     <div className="ss-edit-intro">
       <p className="ss-edit-intro__lead">
-        Click any element in the preview to fine-tune its Tailwind styles — spacing, size, type,
-        color, layout, and more — without using any tokens.
+        Click any element to fine-tune its Tailwind styles — spacing, size, type, color, layout, and
+        more — without using any tokens. Double-click text to edit the copy right on the page.
       </p>
       <ul className="ss-edit-intro__list">
         <li>
@@ -113,6 +113,13 @@ function EditorIntro() {
           <span>
             Works with any <strong>Next.js</strong> or <strong>Astro</strong> project that uses
             Tailwind
+          </span>
+        </li>
+        <li>
+          <IntroCheck />
+          <span>
+            Edit styles and text — <strong>double-click</strong> to rewrite text, bold, italic, or
+            link it
           </span>
         </li>
         <li>
@@ -429,8 +436,11 @@ export function VisualEditorPanel({
         )}
 
         <p className="ss-edit-panel__beta">
-          <strong>Visual editor is in beta and works best with Next.js.</strong> Hit a bug or have
-          feedback? We'd genuinely appreciate hearing about it.
+          <strong>
+            Visual editor is in beta. Style editing works best with Next.js; text editing works the
+            same on Next.js and Astro.
+          </strong>{' '}
+          Hit a bug or have feedback? We'd genuinely appreciate hearing about it.
         </p>
       </div>
 
