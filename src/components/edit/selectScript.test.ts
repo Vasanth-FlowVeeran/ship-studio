@@ -134,6 +134,20 @@ it('selects a classless text leaf directly (so its text is editable)', async () 
   expect(msg.leafText).toBe(true);
 });
 
+it('selects the outermost editable element, not a nested inline tag', async () => {
+  // Clicking the inner <strong> must resolve to the <h1> (the run the resolver
+  // indexes), not the <strong> — otherwise the text wouldn't match source.
+  document.body.innerHTML =
+    '<div class="wrap"><h1 class="title"><span><strong>Big bold heading</strong>.</span></h1></div>';
+  send({ type: 'ss:activate' });
+  const selected = nextSelect();
+  document.querySelector('strong')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const msg = await selected;
+  expect(msg.signature.tagName).toBe('h1');
+  expect(msg.signature.className).toBe('title');
+  expect(msg.leafText).toBe(true);
+});
+
 it('reports the count of, and live-mutates, ALL elements sharing the class', async () => {
   // Three testimonials rendered from one .map() → identical class attribute.
   document.body.innerHTML =

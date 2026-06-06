@@ -83,13 +83,15 @@ function serializeInner(el){
   }
   return out;
 }
-/* The element to text-edit for a double-click: the nearest editable-text element at
-   or above the cursor. A class is NOT required — classless tags resolve by content. */
-function textTarget(node){var el=(node&&node.nodeType===3)?node.parentElement:node;while(el&&el!==document.body){if(isEditableText(el))return el;el=el.parentElement;}return null;}
-/* What a single click selects: the editable-text element under the cursor if there is
-   one (so text leaves are directly selectable, even classless), else the nearest
-   classed ancestor (the style-editing target). */
-function pickTarget(node){var el=(node&&node.nodeType===3)?node.parentElement:node;if(el&&el!==document.body&&isEditableText(el))return el;return editable(el);}
+/* The element to text-edit: the OUTERMOST element in the contiguous editable-text
+   chain above the cursor. The resolver indexes the outermost text run (it skips
+   nested inline elements), so selecting an inner <strong>/<span> wouldn't match its
+   source — we select the editable container (e.g. the <h1>) that the run belongs to.
+   A class is NOT required — classless tags resolve by content. */
+function textTarget(node){var el=(node&&node.nodeType===3)?node.parentElement:node,best=null;while(el&&el!==document.body){if(isEditableText(el))best=el;else if(best)break;el=el.parentElement;}return best;}
+/* What a single click selects: the editable-text element (outermost) under the cursor
+   if there is one, else the nearest classed ancestor (the style-editing target). */
+function pickTarget(node){return textTarget(node)||editable((node&&node.nodeType===3)?node.parentElement:node);}
 function startText(el,x,y){
   if(txtEditing||!el)return;
   txtEditing=true;txtEl=el;txtOrig=serializeInner(el);txtOrigHtml=el.innerHTML;
