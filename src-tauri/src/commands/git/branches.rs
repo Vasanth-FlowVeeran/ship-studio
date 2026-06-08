@@ -516,6 +516,18 @@ pub async fn delete_branch(
                 return Err((format!("Failed to delete remote branch: {stderr}")).into());
             }
         }
+
+        // Prune the local remote-tracking ref. A successful `push --delete` already
+        // drops it, but when the remote branch was deleted out-of-band first — e.g.
+        // GitHub's "automatically delete head branches" runs at merge time — the push
+        // fails as handled above and `origin/<branch>` lingers. Since `list_branches`
+        // surfaces remote-tracking refs as branches, that stale ref makes the branch
+        // look undeleted (the reported "auto clean doesn't delete the branch anymore").
+        // `-rD` is a harmless no-op when the ref is already gone or there's no remote.
+        let _ = create_command("git")
+            .args(["branch", "-rD", &format!("origin/{branch_name}")])
+            .current_dir(&validated_path)
+            .output();
     }
 
     // Invalidate caches so next list_branches gets fresh data
