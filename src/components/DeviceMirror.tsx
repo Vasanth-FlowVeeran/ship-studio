@@ -27,8 +27,12 @@ import {
   buildSessionId,
   classifyBuildOutput,
   simulatorAppRunning,
+  androidAppRunning,
   hideSimulator,
+  detectMobileTargets,
   type MirrorInfo,
+  type Platform,
+  type MobileTargets,
 } from '../lib/mobile';
 import { usePolling } from '../hooks/usePolling';
 import { checkDependenciesInstalled } from '../lib/project';
@@ -37,6 +41,7 @@ import { getWindowLabel } from '../lib/window';
 import { SpinnerIcon, ResetIcon, ChevronIcon } from './icons';
 import { Button } from './primitives/Button';
 import { BuildTerminal } from './BuildTerminal';
+import { AndroidMirrorStage } from './AndroidMirrorStage';
 
 interface DeviceMirrorProps {
   /** Project name, for guidance copy. */
@@ -68,6 +73,30 @@ const BUILD_LOG_SCAN_CAP = 262144;
  *  match our exact app instead of "any third-party app". */
 const BUNDLE_ID_RE = /Opening on .*?\(([A-Za-z0-9.-]+)\)/;
 
+/** Pull the Android applicationId from the build log. `run-android` / `run:android`
+ *  launch via `am start`, which logs `Starting: Intent { … cmp=com.x/.MainActivity }`.
+ *  Lets the emulator poll match our exact app. */
+const ANDROID_APP_ID_RE = /cmp=([A-Za-z0-9_.]+)\//;
+
+/** The app id (bundle id / applicationId) for the launch poll, parsed per platform. */
+function appIdFromLog(platform: Platform, log: string): string | undefined {
+  return (platform === 'android' ? log.match(ANDROID_APP_ID_RE) : log.match(BUNDLE_ID_RE))?.[1];
+}
+
+/** Per-platform UI copy so one component serves both without scattered ternaries. */
+const PLATFORM_COPY: Record<Platform, { device: string; surface: string; startHint: string }> = {
+  ios: {
+    device: 'iOS Simulator',
+    surface: 'simulator',
+    startHint: 'Starting the iOS preview… (first boot can take ~30s)',
+  },
+  android: {
+    device: 'Android Emulator',
+    surface: 'emulator',
+    startHint: 'Starting the Android preview… (first boot can take ~30s)',
+  },
+};
+
 /** Auto-heal budget for a dropped mirror: reconnect with exponential backoff,
  *  then give up to the error view rather than looping forever. The budget resets
  *  once the stream is healthy again (a frame loads, or it stays connected for
@@ -77,6 +106,12 @@ const HEAL_BASE_DELAY_MS = 1500;
 const HEAL_STABLE_MS = 5000;
 
 export function DeviceMirror({ projectName, projectPath, onSendToAgent }: DeviceMirrorProps) {
+  // Which platforms the project can target, and which one we're previewing. Platform
+  // starts null until detection resolves, so the first connect targets a platform the
+  // project actually builds for (an Android-only project shouldn't try iOS first).
+  const [targets, setTargets] = useState<MobileTargets | null>(null);
+  const [platform, setPlatform] = useState<Platform | null>(null);
+
   const [status, setStatus] = useState<Status>('starting');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mirror, setMirror] = useState<MirrorInfo | null>(null);
@@ -111,6 +146,27 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
   // Bump to re-run the connect flow (Restart / Try again).
   const [attempt, setAttempt] = useState(0);
 
+  // Detect the project's build targets once, and pick the initial platform —
+  // prefer iOS when available (the dev machine has Xcode), else Android. The picker
+  // (shown only when both are targetable) lets the user switch from here.
+  useEffect(() => {
+    let cancelled = false;
+    void detectMobileTargets(projectPath)
+      .then((t) => {
+        if (cancelled) return;
+        setTargets(t);
+        setPlatform((prev) => prev ?? (t.ios ? 'ios' : 'android'));
+      })
+      .catch(() => {
+        // Detection failed (non-mobile or read error) — default to iOS so the
+        // connect flow can still surface a clear tooling error.
+        if (!cancelled) setPlatform((prev) => prev ?? 'ios');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath]);
+
   // Connect flow: start the backend session → embed stream → wire input →
   // auto-launch the build. Each run owns a local `cancelled` flag so React
   // StrictMode's dev double-mount (and any real unmount/retry) only closes THIS
@@ -121,10 +177,10 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
     let channel: InputChannel | null = null;
     let stableTimer: number | null = null;
 
-    const resolveBuild = async (udid: string) => {
+    const resolveBuild = async (activePlatform: Platform, udid: string) => {
       let cmd: string;
       try {
-        cmd = await getSimulatorLaunchCommand(projectPath, 'ios', udid);
+        cmd = await getSimulatorLaunchCommand(projectPath, activePlatform, udid);
       } catch {
         if (!cancelled) setLaunchStatus('unsupported');
         return;
@@ -147,7 +203,8 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
     };
 
     const run = async () => {
-      if (cancelled) return;
+      // Wait for platform detection before the first connect (see the detect effect).
+      if (cancelled || !platform) return;
       setErrorMsg(null);
       setStatus('starting');
       setLaunchStatus('none');
@@ -155,13 +212,16 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
       setNeedsInstall(false);
       setBuildAlive(false);
       try {
-        logger.info('[DeviceMirror] starting backend mobile preview');
-        // Phase 5 swaps this fixed 'ios' for the platform the user selects.
-        const info = await startMobilePreview(projectPath, getWindowLabel(), 'ios');
+        logger.info('[DeviceMirror] starting backend mobile preview', { platform });
+        const info = await startMobilePreview(projectPath, getWindowLabel(), platform);
         if (cancelled) return;
-        logger.info('[DeviceMirror] preview started', { stream: info.stream_url });
-        channel = connectInputChannel(info.ws_url);
-        inputRef.current = channel;
+        logger.info('[DeviceMirror] preview started', { stream: info.stream_url, platform });
+        // iOS drives input over serve-sim's WebSocket from here; Android's canvas
+        // stage owns its own socket (video + input), so no channel is wired here.
+        if (platform === 'ios') {
+          channel = connectInputChannel(info.ws_url);
+          inputRef.current = channel;
+        }
         setMirror(info);
         setStatus('connected');
 
@@ -173,7 +233,7 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
         }, HEAL_STABLE_MS);
 
         // Auto-launch the app build into the embedded terminal.
-        void resolveBuild(info.udid);
+        void resolveBuild(platform, info.udid);
       } catch (err) {
         if (cancelled) return;
         logger.error('[DeviceMirror] failed', {
@@ -194,13 +254,23 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
       if (inputRef.current === channel) inputRef.current = null;
       // No native teardown here — the backend owns the session lifecycle.
     };
-  }, [attempt, projectPath]);
+    // `platform` is a dep: switching it re-runs the connect flow, and the backend
+    // tears down the previous platform's session before starting the new one.
+  }, [attempt, projectPath, platform]);
 
   // Manual restart (button / "Try again") is a fresh user intent — refill the
   // heal budget so auto-heal gets its full allowance again.
   const restart = useCallback(() => {
     healAttemptsRef.current = 0;
     setAttempt((a) => a + 1);
+  }, []);
+
+  // Switch the previewed platform. Changing `platform` re-runs the connect effect,
+  // and the backend tears down the previous platform's session first. No-op if it's
+  // already the active platform (avoids a needless teardown/reboot).
+  const switchPlatform = useCallback((next: Platform) => {
+    healAttemptsRef.current = 0;
+    setPlatform((prev) => (prev === next ? prev : next));
   }, []);
 
   // Auto-heal: the MJPEG <img> fires onError when the stream drops (serve-sim
@@ -253,18 +323,22 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
   // failed panel to launched. Other verdicts settle only from the initial
   // 'building', so a torn-down Metro (which exits non-zero) can't flip a launched
   // app to 'failed', and a stale 'failed' stays put until the app genuinely comes up.
-  const settleLaunchStatus = useCallback((next: 'launched' | 'failed' | 'exited') => {
-    if (launchStatusRef.current === 'launched') return;
-    if (next !== 'launched' && launchStatusRef.current !== 'building') return;
-    launchStatusRef.current = next;
-    setLaunchStatus(next);
-    if (next === 'launched') {
-      setBuildOpen(false); // app is up — collapse the log
-      // The build tool foregrounded Simulator.app over Ship Studio; the mirror is
-      // headless so the window is redundant — tuck it away. Best-effort.
-      void hideSimulator();
-    }
-  }, []);
+  const settleLaunchStatus = useCallback(
+    (next: 'launched' | 'failed' | 'exited') => {
+      if (launchStatusRef.current === 'launched') return;
+      if (next !== 'launched' && launchStatusRef.current !== 'building') return;
+      launchStatusRef.current = next;
+      setLaunchStatus(next);
+      if (next === 'launched') {
+        setBuildOpen(false); // app is up — collapse the log
+        // iOS only: the build tool foregrounded Simulator.app over Ship Studio; the
+        // mirror is headless so the window is redundant — tuck it away. Android's
+        // emulator window has no equivalent we hide. Best-effort.
+        if (platform === 'ios') void hideSimulator();
+      }
+    },
+    [platform]
+  );
 
   // Ground-truth launch detection: poll the simulator for our actually-running app.
   // This is the authoritative "did it launch" signal and covers two gaps the
@@ -277,20 +351,24 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
   // is still pending; usePolling backs off on error (sim booting / mid-teardown).
   usePolling(
     async () => {
-      const udid = mirror?.udid;
-      if (!udid) return;
-      const bundleId = buildTextRef.current.match(BUNDLE_ID_RE)?.[1];
-      if (await simulatorAppRunning(udid, bundleId)) settleLaunchStatus('launched');
+      const id = mirror?.udid; // iOS: sim udid · Android: emulator serial
+      if (!id || !platform) return;
+      const appId = appIdFromLog(platform, buildTextRef.current);
+      const running =
+        platform === 'android'
+          ? await androidAppRunning(id, appId)
+          : await simulatorAppRunning(id, appId);
+      if (running) settleLaunchStatus('launched');
     },
     {
       intervalMs: 3000,
-      // Include 'exited': bare RN's `react-native run-ios` exits 0 right after
+      // Include 'exited': bare RN's `run-ios` / `run-android` exit 0 right after
       // launching, so the app is up but the build process is gone — the poll is
       // what upgrades that clean exit to 'launched'.
       enabled:
         status === 'connected' &&
         (launchStatus === 'building' || launchStatus === 'failed' || launchStatus === 'exited'),
-      name: 'simulator-app-running',
+      name: 'mobile-app-running',
     }
   );
 
@@ -336,14 +414,16 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
     } catch {
       /* best-effort — send the prompt even if we couldn't grab the log */
     }
+    const surface = platform ? PLATFORM_COPY[platform].surface : 'simulator';
+    const platformName = platform === 'android' ? 'Android' : 'iOS';
     const prompt =
-      `The iOS preview build for "${projectName}" failed. Diagnose the error in the build output below and fix it so the app builds and launches on the simulator, then tell me what you changed.\n\n` +
+      `The ${platformName} preview build for "${projectName}" failed. Diagnose the error in the build output below and fix it so the app builds and launches on the ${surface}, then tell me what you changed.\n\n` +
       (buildCommand ? `Build command: ${buildCommand}\n\n` : '') +
       'Build output:\n```\n' +
       (log || '(no build output captured)') +
       '\n```';
     onSendToAgent?.(prompt);
-  }, [projectPath, projectName, buildCommand, onSendToAgent]);
+  }, [projectPath, projectName, buildCommand, onSendToAgent, platform]);
 
   // Map a pointer event to normalized 0..1 coords over the streamed image.
   const toNorm = (e: React.PointerEvent): { x: number; y: number } | null => {
@@ -375,26 +455,45 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
 
   // ---- Connected: the live mirror ----
   if (status === 'connected' && mirror) {
-    // A successful `expo run:ios` / `flutter run` stays attached to Metro and
-    // never exits, so the verdict comes from log markers (classifyBuildOutput),
-    // not the process exit. 'launched' is the success steady state.
+    const activePlatform: Platform = platform ?? 'ios';
+    const surface = PLATFORM_COPY[activePlatform].surface;
+    // A successful `expo run` / `flutter run` stays attached to Metro and never
+    // exits, so the verdict comes from log markers / the app-running poll, not the
+    // process exit. 'launched' is the success steady state.
     const summary =
       launchStatus === 'building'
         ? 'Building & launching… your app appears in the preview above (first build can take a few minutes)'
         : launchStatus === 'launched'
-          ? 'App running on the simulator'
+          ? `App running on the ${surface}`
           : launchStatus === 'exited'
             ? 'Build process exited'
             : launchStatus === 'failed'
               ? 'Build failed — see log'
               : '';
+    // The picker only appears when the project genuinely targets both platforms.
+    const showPicker = !!targets?.ios && !!targets?.android;
     return (
       <div className="device-mirror">
         <div className="device-mirror-toolbar">
+          {showPicker && (
+            <div className="device-mirror-platform" role="group" aria-label="Preview platform">
+              {(['ios', 'android'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={`device-mirror-platform-btn${activePlatform === p ? ' active' : ''}`}
+                  aria-pressed={activePlatform === p}
+                  onClick={() => switchPlatform(p)}
+                >
+                  {p === 'ios' ? 'iOS' : 'Android'}
+                </button>
+              ))}
+            </div>
+          )}
           <span className="device-mirror-label">
             {mirror.device_name
               ? `${mirror.device_name}${mirror.device_runtime ? ` · ${mirror.device_runtime}` : ''} · live`
-              : 'iOS Simulator · live'}
+              : `${PLATFORM_COPY[activePlatform].device} · live`}
           </span>
           {launchStatus === 'launched' && buildAlive && (
             <Button variant="ghost" size="sm" onClick={reloadApp}>
@@ -406,19 +505,30 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
           </Button>
         </div>
         <div className="device-mirror-stage">
-          <img
-            ref={imgRef}
-            className="device-mirror-screen"
-            src={mirror.stream_url}
-            alt="iOS Simulator"
-            draggable={false}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onError={scheduleHeal}
-            onLoad={onMirrorLoad}
-          />
+          {activePlatform === 'android' ? (
+            // Key by attempt so a heal/Restart remounts the decoder even when the
+            // backend hands back the same bridge port (wsUrl alone wouldn't change).
+            <AndroidMirrorStage
+              key={attempt}
+              wsUrl={mirror.ws_url}
+              onError={scheduleHeal}
+              onFirstFrame={onMirrorLoad}
+            />
+          ) : (
+            <img
+              ref={imgRef}
+              className="device-mirror-screen"
+              src={mirror.stream_url}
+              alt="iOS Simulator"
+              draggable={false}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onError={scheduleHeal}
+              onLoad={onMirrorLoad}
+            />
+          )}
         </div>
         {buildCommand && launchStatus !== 'unsupported' && (
           <div className={`device-mirror-build${buildOpen ? ' open' : ''}`}>
@@ -480,14 +590,22 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
   // ---- Error ----
   if (status === 'error') {
     const needsXcode = /xcrun|xcode|command line tools/i.test(errorMsg ?? '');
+    // Android tooling gaps: no SDK/adb/emulator, or no AVD created yet.
+    const needsAndroid = /\b(adb|emulator|android sdk|avd|virtual device)\b/i.test(errorMsg ?? '');
+    const title = needsXcode
+      ? 'iOS tooling unavailable'
+      : needsAndroid
+        ? 'Android tooling unavailable'
+        : "Couldn't start the preview";
+    const detail = needsXcode
+      ? 'Previewing an iOS app needs Xcode command line tools. Install Xcode, then run xcode-select --install.'
+      : needsAndroid
+        ? 'Previewing an Android app needs the Android SDK and a Virtual Device. Install Android Studio, then create an emulator in Device Manager.'
+        : `Ship Studio couldn't start a ${PLATFORM_COPY[platform ?? 'ios'].surface} preview for ${projectName}.`;
     return (
       <div className="preview-install-prompt">
-        <h3>{needsXcode ? 'iOS tooling unavailable' : "Couldn't start the preview"}</h3>
-        <p className="hint">
-          {needsXcode
-            ? 'Previewing a mobile app needs Xcode command line tools. Install Xcode, then run xcode-select --install.'
-            : `Ship Studio couldn't start a simulator preview for ${projectName}.`}
-        </p>
+        <h3>{title}</h3>
+        <p className="hint">{detail}</p>
         {errorMsg && <p className="hint">{errorMsg}</p>}
         <Button variant="secondary" size="sm" onClick={restart}>
           <ResetIcon size={14} /> Try again
@@ -500,7 +618,7 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
   return (
     <div className="preview-loading">
       <SpinnerIcon size={24} />
-      <span className="hint">Starting the iOS preview… (first boot can take ~30s)</span>
+      <span className="hint">{PLATFORM_COPY[platform ?? 'ios'].startHint}</span>
     </div>
   );
 }

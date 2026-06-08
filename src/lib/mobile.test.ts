@@ -52,4 +52,16 @@ describe('classifyBuildOutput', () => {
     // target succeeding must not be read as the app having launched.
     expect(classifyBuildOutput('=== BUILD TARGET Pods ===\nBUILD SUCCEEDED')).toBeNull();
   });
+
+  it('detects a Gradle (Android) build failure', () => {
+    // `react-native run-android` / `expo run:android` fail through Gradle, whose
+    // marker differs from xcodebuild's. The bare word "android" in a healthy line
+    // must not false-positive.
+    const log = [
+      '> Task :app:compileDebugJavaWithJavac FAILED',
+      'FAILURE: Build failed with an exception.',
+    ].join('\n');
+    expect(classifyBuildOutput(log)).toBe('failed');
+    expect(classifyBuildOutput('Building for Android…\nInstalling APK')).toBeNull();
+  });
 });

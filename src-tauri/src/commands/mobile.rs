@@ -1074,13 +1074,17 @@ pub async fn teardown_mobile_preview(project_path: String) {
         crate::state::drop_boot_lock(&project_path);
         return;
     };
-    if session.platform == crate::state::Platform::Android {
-        teardown_android_session(&project_path, &session).await;
-        crate::state::drop_boot_lock(&project_path);
-        return;
-    }
-    if let Some(build_id) = session.build_session_id {
-        let _ = crate::commands::pty_session::pty_session_kill(build_id);
+    teardown_session(&project_path, &session).await;
+    crate::state::drop_boot_lock(&project_path);
+}
+
+/// Tear down an iOS session's processes (build pty, serve-sim mirror, sim if we
+/// booted it) and release its port. Does **not** touch the registry — the caller
+/// `take`s the entry first — so it's reusable by teardown and the platform-switch
+/// path. The iOS analog of [`teardown_android_session`].
+async fn teardown_ios_session(project_path: &str, session: &crate::state::MobileSession) {
+    if let Some(build_id) = &session.build_session_id {
+        let _ = crate::commands::pty_session::pty_session_kill(build_id.clone());
     }
     kill_serve_sim(&session.udid).await;
     if session.booted_by_us {
@@ -1093,9 +1097,18 @@ pub async fn teardown_mobile_preview(project_path: String) {
         .await;
     }
     if session.port_was_reserved {
-        crate::state::release_port_for_project(&session.window_label, &project_path);
+        crate::state::release_port_for_project(&session.window_label, project_path);
     }
-    crate::state::drop_boot_lock(&project_path);
+}
+
+/// Dispatch teardown to the right platform. Lets a caller holding a `take`n session
+/// clean it up without caring whether it's iOS or Android — the key to switching
+/// platforms within one project without leaking the previous platform's processes.
+async fn teardown_session(project_path: &str, session: &crate::state::MobileSession) {
+    match session.platform {
+        crate::state::Platform::Android => teardown_android_session(project_path, session).await,
+        crate::state::Platform::Ios => teardown_ios_session(project_path, session).await,
+    }
 }
 
 /// Synchronous teardown of every mobile preview owned by a window, for the
@@ -1356,61 +1369,66 @@ pub async fn start_mobile_preview(
     // A session already exists. Reuse it if the mirror is still alive; otherwise
     // heal or rebuild rather than returning a dead port.
     if let Some(existing) = crate::state::get_mobile_session(&project_path) {
-        if serve_sim_alive(existing.serve_sim_port).await {
+        if existing.platform != crate::state::Platform::Ios {
+            // Switching platforms (Android → iOS) in this project: tear the other
+            // platform's session down, then fall through to a fresh iOS boot.
+            crate::state::take_mobile_session(&project_path);
+            teardown_session(&project_path, &existing).await;
+        } else if serve_sim_alive(existing.serve_sim_port).await {
             tracing::info!(udid = %existing.udid, "start_mobile_preview: reusing live session");
             return Ok(reuse_mirror_info(&existing));
-        }
-
-        tracing::warn!(
-            udid = %existing.udid,
-            port = existing.serve_sim_port,
-            "start_mobile_preview: mirror is dead — attempting heal"
-        );
-        // Clear the dead mirror's port and any serve-sim zombie before respawning.
-        kill_serve_sim(&existing.udid).await;
-        if existing.port_was_reserved {
-            crate::state::release_port_for_project(&existing.window_label, &project_path);
-        }
-
-        // Narrow heal: if the sim is still booted, just respawn the mirror —
-        // don't re-boot, and leave the build pty_session running. This preserves
-        // boot ownership and the in-flight build.
-        let sim_still_booted = list_booted_simulators()
-            .await
-            .map(|sims| sims.iter().any(|s| s.udid == existing.udid))
-            .unwrap_or(false);
-        if sim_still_booted {
-            if let Ok(info) = establish_mirror(
-                &project_path,
-                &window_label,
-                &existing.udid,
-                existing.booted_by_us,
-                existing.device_name.clone(),
-                existing.device_runtime.clone(),
-            )
-            .await
-            {
-                tracing::info!(udid = %existing.udid, "start_mobile_preview: healed dead mirror");
-                return Ok(info);
+        } else {
+            tracing::warn!(
+                udid = %existing.udid,
+                port = existing.serve_sim_port,
+                "start_mobile_preview: mirror is dead — attempting heal"
+            );
+            // Clear the dead mirror's port and any serve-sim zombie before respawning.
+            kill_serve_sim(&existing.udid).await;
+            if existing.port_was_reserved {
+                crate::state::release_port_for_project(&existing.window_label, &project_path);
             }
-        }
 
-        // Sim is gone (or the respawn failed) — fully tear down the stale session
-        // and fall through to a fresh boot. The build can't survive a dead sim.
-        // Kill the underlying processes BEFORE dropping the registry entry, so an
-        // interruption here can't orphan them with no record left to find them by.
-        if let Some(build_id) = &existing.build_session_id {
-            let _ = crate::commands::pty_session::pty_session_kill(build_id.clone());
+            // Narrow heal: if the sim is still booted, just respawn the mirror —
+            // don't re-boot, and leave the build pty_session running. This preserves
+            // boot ownership and the in-flight build.
+            let sim_still_booted = list_booted_simulators()
+                .await
+                .map(|sims| sims.iter().any(|s| s.udid == existing.udid))
+                .unwrap_or(false);
+            if sim_still_booted {
+                if let Ok(info) = establish_mirror(
+                    &project_path,
+                    &window_label,
+                    &existing.udid,
+                    existing.booted_by_us,
+                    existing.device_name.clone(),
+                    existing.device_runtime.clone(),
+                )
+                .await
+                {
+                    tracing::info!(udid = %existing.udid, "start_mobile_preview: healed dead mirror");
+                    return Ok(info);
+                }
+            }
+
+            // Sim is gone (or the respawn failed) — fully tear down the stale session
+            // and fall through to a fresh boot. The build can't survive a dead sim.
+            // Kill the underlying processes BEFORE dropping the registry entry, so an
+            // interruption here can't orphan them with no record left to find them by.
+            if let Some(build_id) = &existing.build_session_id {
+                let _ = crate::commands::pty_session::pty_session_kill(build_id.clone());
+            }
+            if existing.booted_by_us {
+                let _ = simctl_stdout(
+                    &["shutdown", &existing.udid],
+                    "xcrun simctl shutdown",
+                    SIMCTL_TIMEOUT_SECS,
+                )
+                .await;
+            }
+            crate::state::take_mobile_session(&project_path);
         }
-        if existing.booted_by_us {
-            let _ = simctl_stdout(
-                &["shutdown", &existing.udid],
-                "xcrun simctl shutdown",
-                SIMCTL_TIMEOUT_SECS,
-            )
-            .await;
-        }
-        crate::state::take_mobile_session(&project_path);
     }
 
     // Fresh start: ensure a simulator (correct preference), then establish the
@@ -1524,9 +1542,10 @@ async fn start_android_preview(
             tracing::info!(serial = %existing.udid, "start_android_preview: reusing live bridge");
             return Ok(android_mirror_info(&existing));
         }
-        // Stale or wrong-platform session — drop it and clean up before rebuilding.
+        // Stale or wrong-platform session (e.g. an iOS preview was up) — drop it and
+        // tear it down via the platform dispatcher before rebuilding for Android.
         crate::state::take_mobile_session(&project_path);
-        teardown_android_session(&project_path, &existing).await;
+        teardown_session(&project_path, &existing).await;
     }
 
     let (device, booted_by_us) = ensure_emulator(preferred).await?;
