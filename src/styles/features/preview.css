@@ -964,6 +964,8 @@
   padding: 2px 0;
 }
 .preview-status__logs-toggle:hover {
+  /* Only brighten the label — override the global button:hover background. */
+  background: none;
   color: var(--text-primary);
 }
 .preview-status__chevron {
