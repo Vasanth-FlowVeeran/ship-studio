@@ -25,6 +25,17 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.6.8', // v0.6.8
+    items: [
+      'Inline text editing in the visual editor — double-click any text on the page to rewrite it right there, Webflow-style. Select text to make it bold, italic, or a link (with an inline URL field), and press Enter for a line break. Works the same on Next.js and Astro, saves straight to your source, and is free (0 tokens)',
+      "When text is rendered from your code or data and can't be edited inline, the panel hands it off with a one-click “Copy request for your agent” — paste it into the terminal and tell the agent the new wording",
+      "Clearer selection — the element you're actively editing is outlined in blue, while the other same-source elements an edit will also change are outlined in orange, so you can tell them apart at a glance",
+      "Restarting the dev server no longer crashes Ship Studio — on some setups it was killing the app's own preview process along with the dev server",
+      'The “Starting dev server…” screen is no longer a black box — Stop waiting instantly instead of sitting through 60 retries, read the live dev-server logs inline to see why it’s stuck, and hand it to your agent with “Fix with agent” (which sends the port and recent logs to the terminal)',
+      'Branch cleanup after a merge now works for repos that auto-delete head branches on GitHub — the merged branch no longer lingers in your branch list',
+    ],
+  },
+  {
     version: '0.6.7', // v0.6.7
     items: [
       "Visual editor now works on Astro + Tailwind sites — including pages built with your own custom CSS classes. Edits reliably win the cascade (using Tailwind's important modifier where needed) and save back to your `.astro` source. The editor only appears when Tailwind is actually wired into the project, so it never adds classes that wouldn't compile",
