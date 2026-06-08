@@ -618,24 +618,27 @@ pub async fn detect_mobile_targets(project_path: String) -> Result<MobileTargets
     Ok(detect_mobile_targets_for(&workspace))
 }
 
-// ============ Android mirror bridge (screenrecord H.264 → WebSocket) ============
+// ============ Android mirror bridge (H.264 → WebSocket) ============
 //
 // iOS uses serve-sim (MJPEG `<img>` + a WS touch channel). Android has no such
-// daemon, so we bridge it ourselves with stock platform tools — deliberately NOT
-// scrcpy's wire protocol, which is undocumented and changes shape per release:
+// daemon, so we bridge it ourselves. Both video sources below emit raw Annex-B
+// H.264, which the frontend decodes with WebCodecs onto a `<canvas>`:
 //
-//   video: `adb exec-out screenrecord --output-format=h264 -` streams raw Annex-B
-//          H.264 (in-band SPS/PPS) to stdout. We pump those bytes unframed to a
-//          WebSocket; the frontend decodes them with WebCodecs onto a `<canvas>`.
-//          screenrecord caps one session at 180s, so we relaunch it in a loop —
-//          each relaunch re-emits SPS/PPS + an IDR, so the decoder recovers on its
-//          own (the resolution is constant, so one decoder config spans relaunches).
-//   input: touches/keys arrive on the SAME socket as JSON and become `adb shell
-//          input` taps/swipes/keyevents. Higher latency than scrcpy's HID channel,
-//          but a preview pane taps occasionally — reliability beats microseconds.
+//   video (preferred): scrcpy-server in `raw_stream` mode — low-latency capture
+//          (~50-100ms) over a forward-tunnelled socket, pure Annex-B with no headers
+//          or dummy byte. We push the jar, forward a port, start the server, and
+//          pump the socket to the WebSocket. scrcpy streams continuously (no cap).
+//   video (fallback): `adb exec-out screenrecord --output-format=h264 -` when the
+//          scrcpy jar isn't available. Always present but file-oriented (~1s
+//          buffered) and capped at 180s, so we relaunch it in a loop (each relaunch
+//          re-emits SPS/PPS+IDR, and the resolution is constant, so the decoder
+//          config spans relaunches).
+//   input: touches/keys arrive on the SAME WebSocket as JSON and become `adb shell
+//          input` taps/swipes/keyevents — decoupled from the video transport, so it
+//          works identically for both sources.
 //
-// The video source is swappable (scrcpy later, for lower latency) without touching
-// the frontend, the input path, or the session machinery.
+// Only the Rust capture source differs between scrcpy and screenrecord; the
+// frontend, the input path, and the session machinery are untouched by the choice.
 
 /// Bridge ports start above the serve-sim range (3100) so iOS and Android mirrors
 /// for different projects never collide; the reserved-port system enforces the rest.
@@ -643,6 +646,13 @@ const ANDROID_BRIDGE_BASE_PORT: u16 = 3200;
 /// `screenrecord`'s hard per-session cap. We relaunch on each expiry for a
 /// continuous stream; the brief gap re-emits SPS/PPS+IDR so the decoder recovers.
 const SCREENRECORD_TIME_LIMIT_SECS: u32 = 180;
+/// scrcpy-server protocol version — MUST match the jar we push (bundled/located).
+const SCRCPY_VERSION: &str = "4.0";
+/// Where the scrcpy-server jar is pushed on the device.
+const SCRCPY_REMOTE_JAR: &str = "/data/local/tmp/scrcpy-server.jar";
+/// Cap on the mirror's long edge (px). Crisp on a 1080-wide phone while keeping the
+/// stream light enough for low latency; scrcpy preserves aspect.
+const SCRCPY_MAX_SIZE: u32 = 1600;
 
 /// A running Android mirror bridge: the supervisor task (abort to stop the WS
 /// server + screenrecord) and the device serial (to clean up the on-device process).
@@ -768,11 +778,225 @@ async fn device_size(serial: &str) -> Option<(u32, u32)> {
     parse_wm_size(&out)
 }
 
-/// Pump screenrecord's raw H.264 to the WebSocket, relaunching on the 180s cap for
-/// a continuous stream. Returns when the client disconnects (send fails) or
-/// screenrecord can't be spawned. The local `adb exec-out` child is killed on drop
-/// (`kill_on_drop`), which tears down the on-device screenrecord with it.
-async fn pump_video(serial: String, mut sink: WsSink) {
+/// Pump live H.264 to the WebSocket. Prefers scrcpy (low-latency, ~50-100ms) when
+/// its server jar is available; otherwise falls back to screenrecord (always
+/// present, but file-oriented and ~1s buffered). Both emit raw Annex-B H.264, so
+/// the WebCodecs decoder is identical — only the capture source differs. Returns
+/// when the client disconnects or the source can't be started.
+async fn pump_video(serial: String, sink: WsSink) {
+    if push_scrcpy_server(&serial).await {
+        pump_video_scrcpy(serial, sink).await;
+    } else {
+        tracing::info!(%serial, "scrcpy-server unavailable — using screenrecord mirror");
+        pump_video_screenrecord(serial, sink).await;
+    }
+}
+
+/// Monotonic scrcpy socket id source (`scrcpy_<scid>`), so concurrent bridges
+/// (multiple projects/emulators) never collide on an abstract socket name.
+fn next_scid() -> String {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static COUNTER: AtomicU32 = AtomicU32::new(1);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed) & 0x7fff_ffff;
+    format!("{n:08x}")
+}
+
+/// Locate the scrcpy-server jar. Falls back to a Homebrew/system install during
+/// development; production bundles it with the app (see resources in tauri.conf).
+fn scrcpy_server_jar() -> Option<std::path::PathBuf> {
+    if let Ok(bundled) = std::env::var("SHIPSTUDIO_SCRCPY_SERVER") {
+        let p = std::path::PathBuf::from(bundled);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    for p in [
+        "/opt/homebrew/share/scrcpy/scrcpy-server",
+        "/usr/local/share/scrcpy/scrcpy-server",
+    ] {
+        let path = std::path::PathBuf::from(p);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+/// Push the scrcpy-server jar to the device. Returns false (→ screenrecord fallback)
+/// when no jar is found or the push fails. adb skips an identical file, so re-pushes
+/// across reconnects are cheap.
+async fn push_scrcpy_server(serial: &str) -> bool {
+    let Some(jar) = scrcpy_server_jar() else {
+        return false;
+    };
+    let mut cmd = adb_command();
+    cmd.args([
+        "-s",
+        serial,
+        "push",
+        &jar.to_string_lossy(),
+        SCRCPY_REMOTE_JAR,
+    ]);
+    run_to_stdout(
+        tokio::process::Command::from(cmd),
+        "adb push scrcpy-server",
+        ADB_TIMEOUT_SECS,
+    )
+    .await
+    .is_ok()
+}
+
+/// Forward a local TCP port to scrcpy's abstract socket; `tcp:0` auto-assigns a free
+/// port which adb prints back. Returns the chosen local port.
+async fn setup_scrcpy_forward(serial: &str, scid: &str) -> Option<u16> {
+    let mut cmd = adb_command();
+    cmd.args([
+        "-s",
+        serial,
+        "forward",
+        "tcp:0",
+        &format!("localabstract:scrcpy_{scid}"),
+    ]);
+    let out = run_to_stdout(
+        tokio::process::Command::from(cmd),
+        "adb forward scrcpy",
+        ADB_TIMEOUT_SECS,
+    )
+    .await
+    .ok()?;
+    out.trim().parse::<u16>().ok()
+}
+
+/// Remove a scrcpy adb forward (best-effort cleanup).
+async fn remove_scrcpy_forward(serial: &str, local_port: u16) {
+    let mut cmd = adb_command();
+    cmd.args([
+        "-s",
+        serial,
+        "forward",
+        "--remove",
+        &format!("tcp:{local_port}"),
+    ]);
+    let _ = run_to_stdout(
+        tokio::process::Command::from(cmd),
+        "adb forward --remove",
+        ADB_TIMEOUT_SECS,
+    )
+    .await;
+}
+
+/// Start scrcpy-server in raw-video mode (no control, no audio). The on-device
+/// process is a child of this adb shell, killed on drop. `raw_stream=true` makes the
+/// socket carry pure Annex-B H.264 — no device meta, codec header, or dummy byte —
+/// so the decoder reads it like screenrecord's output. `max_size` caps the long edge
+/// for a crisp-but-light stream.
+fn start_scrcpy_server(serial: &str, scid: &str) -> Option<tokio::process::Child> {
+    let mut cmd = adb_command();
+    cmd.args([
+        "-s",
+        serial,
+        "shell",
+        &format!("CLASSPATH={SCRCPY_REMOTE_JAR}"),
+        "app_process",
+        "/",
+        "com.genymobile.scrcpy.Server",
+        SCRCPY_VERSION,
+        &format!("scid={scid}"),
+        "tunnel_forward=true",
+        "raw_stream=true",
+        "video=true",
+        "audio=false",
+        "control=false",
+        &format!("max_size={SCRCPY_MAX_SIZE}"),
+        "log_level=error",
+    ]);
+    let mut tcmd = tokio::process::Command::from(cmd);
+    tcmd.stdout(std::process::Stdio::null());
+    tcmd.stderr(std::process::Stdio::null());
+    tcmd.kill_on_drop(true);
+    tcmd.spawn().ok()
+}
+
+/// Connect to the forwarded scrcpy socket and read the first chunk. In adb forward
+/// mode, connecting *before* the server has created its device-side abstract socket
+/// succeeds at the TCP level but is then closed immediately (read → 0 bytes) — so a
+/// bare connect isn't enough; we must see real data. We retry connect+first-read
+/// until bytes arrive (server up) and return them alongside the live stream, or give
+/// up after the server's cold-start window. A blocking first read is safe: scrcpy
+/// raw_stream emits SPS immediately, so a live connection returns promptly.
+async fn connect_scrcpy_socket(local_port: u16) -> Option<(tokio::net::TcpStream, Vec<u8>)> {
+    use tokio::io::AsyncReadExt;
+    use tokio::time::{sleep, Duration};
+    for _ in 0..40 {
+        if let Ok(mut s) = tokio::net::TcpStream::connect(("127.0.0.1", local_port)).await {
+            let _ = s.set_nodelay(true);
+            let mut buf = vec![0u8; 64 * 1024];
+            match s.read(&mut buf).await {
+                Ok(n) if n > 0 => {
+                    buf.truncate(n);
+                    return Some((s, buf));
+                }
+                // 0 bytes / error → connected too early (socket not up yet); retry.
+                _ => {}
+            }
+        }
+        sleep(Duration::from_millis(120)).await;
+    }
+    None
+}
+
+/// scrcpy low-latency mirror: forward a socket, start the server, and pump its raw
+/// Annex-B H.264 to the WebSocket. On exit the server is killed (kill_on_drop) and
+/// the forward removed. No relaunch loop — scrcpy streams continuously (no 180s cap).
+async fn pump_video_scrcpy(serial: String, mut sink: WsSink) {
+    use futures_util::SinkExt;
+    use tokio::io::AsyncReadExt;
+    use tokio_tungstenite::tungstenite::Message;
+
+    let scid = next_scid();
+    let Some(local_port) = setup_scrcpy_forward(&serial, &scid).await else {
+        tracing::warn!(%serial, "scrcpy: adb forward failed — falling back to screenrecord");
+        pump_video_screenrecord(serial, sink).await;
+        return;
+    };
+    let Some(mut server) = start_scrcpy_server(&serial, &scid) else {
+        tracing::warn!(%serial, "scrcpy: server spawn failed");
+        remove_scrcpy_forward(&serial, local_port).await;
+        return;
+    };
+    let Some((mut stream, first)) = connect_scrcpy_socket(local_port).await else {
+        tracing::warn!(%serial, "scrcpy: could not connect the video socket");
+        let _ = server.start_kill();
+        remove_scrcpy_forward(&serial, local_port).await;
+        return;
+    };
+
+    // Forward the first chunk (SPS/PPS+IDR) already read during the connect probe,
+    // then stream the rest.
+    if sink.send(Message::Binary(first)).await.is_ok() {
+        let mut buf = vec![0u8; 64 * 1024];
+        loop {
+            match stream.read(&mut buf).await {
+                Ok(0) => break, // server closed
+                Ok(n) => {
+                    if sink.send(Message::Binary(buf[..n].to_vec())).await.is_err() {
+                        break; // client gone
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    }
+    let _ = server.start_kill();
+    let _ = server.wait().await;
+    remove_scrcpy_forward(&serial, local_port).await;
+}
+
+/// screenrecord fallback mirror: raw H.264 to the WebSocket, relaunched on the 180s
+/// cap for a continuous stream. The local `adb exec-out` child is killed on drop,
+/// tearing down the on-device screenrecord with it. Used only when scrcpy isn't
+/// available; higher latency but zero extra dependencies.
+async fn pump_video_screenrecord(serial: String, mut sink: WsSink) {
     use futures_util::SinkExt;
     use tokio::io::AsyncReadExt;
     use tokio_tungstenite::tungstenite::Message;
@@ -907,8 +1131,8 @@ async fn start_android_bridge(
 }
 
 /// Stop a project's bridge (abort the supervisor → drops the listener and the
-/// in-flight screenrecord child) and best-effort kill any lingering on-device
-/// screenrecord. Idempotent: no bridge → nothing to do.
+/// in-flight capture child) and best-effort kill any lingering on-device capture
+/// process (scrcpy server or screenrecord). Idempotent: no bridge → nothing to do.
 async fn stop_android_bridge(project_path: &str) {
     let handle = ANDROID_BRIDGES
         .lock()
@@ -917,10 +1141,15 @@ async fn stop_android_bridge(project_path: &str) {
     if let Some(h) = handle {
         h.task.abort();
         let mut cmd = adb_command();
-        cmd.args(["-s", &h.serial, "shell", "pkill", "-f", "screenrecord"]);
+        cmd.args([
+            "-s",
+            &h.serial,
+            "shell",
+            "pkill -f scrcpy 2>/dev/null; pkill -f screenrecord 2>/dev/null",
+        ]);
         let _ = run_to_stdout(
             tokio::process::Command::from(cmd),
-            "adb shell pkill screenrecord",
+            "adb shell pkill capture",
             ADB_TIMEOUT_SECS,
         )
         .await;
@@ -928,7 +1157,7 @@ async fn stop_android_bridge(project_path: &str) {
 }
 
 /// Synchronous bridge stop for the window-Destroyed handler (which can't await):
-/// abort the supervisor and blocking-kill the on-device screenrecord. Mirrors the
+/// abort the supervisor and blocking-kill the on-device capture process. Mirrors the
 /// iOS sync teardown's use of blocking `.output()`.
 fn stop_android_bridge_sync(project_path: &str, serial: &str) {
     if let Some(h) = ANDROID_BRIDGES
@@ -939,7 +1168,12 @@ fn stop_android_bridge_sync(project_path: &str, serial: &str) {
         h.task.abort();
     }
     let mut cmd = adb_command();
-    cmd.args(["-s", serial, "shell", "pkill", "-f", "screenrecord"]);
+    cmd.args([
+        "-s",
+        serial,
+        "shell",
+        "pkill -f scrcpy 2>/dev/null; pkill -f screenrecord 2>/dev/null",
+    ]);
     let _ = cmd.output();
 }
 
