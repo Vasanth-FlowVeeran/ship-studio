@@ -287,14 +287,18 @@ pub async fn cleanup_orphaned_processes() -> Result<(), CommandError> {
 pub async fn kill_port(port: u32) -> Result<(), CommandError> {
     #[cfg(unix)]
     {
-        // Use lsof to find the PID listening on the port, then kill it.
-        // -n: skip DNS lookups, -P: skip port name lookups (both speed up macOS significantly)
+        // Use lsof to find the PID LISTENING on the port, then kill it.
+        // -n: skip DNS lookups, -P: skip port name lookups (both speed up macOS significantly).
+        // -sTCP:LISTEN is critical: without it, `-i :PORT` also matches CLIENTS connected to
+        // the port — and our own webview holds an established connection to the dev server's
+        // port (the Preview pane). Killing those client PIDs with `kill -9` takes down the
+        // WebKit process and crashes the whole app on dev-server restart. Listeners only.
         // Wrap in a timeout to prevent hanging when processes are in transitional states.
         let lsof_result = tokio::time::timeout(
             tokio::time::Duration::from_secs(3),
             tokio::task::spawn_blocking(move || {
                 std::process::Command::new("lsof")
-                    .args(["-nPti", &format!(":{port}")])
+                    .args(["-nP", &format!("-iTCP:{port}"), "-sTCP:LISTEN", "-t"])
                     .output()
             }),
         )

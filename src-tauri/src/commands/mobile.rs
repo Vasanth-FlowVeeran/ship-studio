@@ -336,10 +336,14 @@ async fn serve_sim_alive(port: u16) -> bool {
     )
 }
 
-/// Synchronously kill whatever process is listening on a TCP port (macOS `lsof`).
+/// Synchronously kill whatever process is LISTENING on a TCP port (macOS `lsof`).
 /// Used by the window-close handler instead of `npx serve-sim --kill`, which pays
 /// a node/npx cold start (hundreds of ms) that would jank window close. Mirrors
-/// the `kill_port` command's `lsof -nPti` approach.
+/// the `kill_port` command's `lsof -sTCP:LISTEN` approach.
+///
+/// `-sTCP:LISTEN` is critical: a bare `-i tcp:PORT` also matches CLIENTS connected
+/// to the port — including our own webview's established socket to the mirror — and
+/// `kill -9`ing those takes down WebKit and crashes the app. Listeners only.
 ///
 /// `lsof` runs on a worker thread bounded by a timeout: it can wedge on a stuck
 /// socket/filesystem, and this is the window-close path — a hang here freezes the
@@ -352,7 +356,7 @@ fn kill_process_on_port_sync(port: u16) {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let out = create_command("lsof")
-            .args(["-nPti", &format!("tcp:{port}")])
+            .args(["-nP", &format!("-iTCP:{port}"), "-sTCP:LISTEN", "-t"])
             .env("PATH", get_extended_path())
             .output();
         let _ = tx.send(out);
