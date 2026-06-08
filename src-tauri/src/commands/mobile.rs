@@ -618,6 +618,331 @@ pub async fn detect_mobile_targets(project_path: String) -> Result<MobileTargets
     Ok(detect_mobile_targets_for(&workspace))
 }
 
+// ============ Android mirror bridge (screenrecord H.264 → WebSocket) ============
+//
+// iOS uses serve-sim (MJPEG `<img>` + a WS touch channel). Android has no such
+// daemon, so we bridge it ourselves with stock platform tools — deliberately NOT
+// scrcpy's wire protocol, which is undocumented and changes shape per release:
+//
+//   video: `adb exec-out screenrecord --output-format=h264 -` streams raw Annex-B
+//          H.264 (in-band SPS/PPS) to stdout. We pump those bytes unframed to a
+//          WebSocket; the frontend decodes them with WebCodecs onto a `<canvas>`.
+//          screenrecord caps one session at 180s, so we relaunch it in a loop —
+//          each relaunch re-emits SPS/PPS + an IDR, so the decoder recovers on its
+//          own (the resolution is constant, so one decoder config spans relaunches).
+//   input: touches/keys arrive on the SAME socket as JSON and become `adb shell
+//          input` taps/swipes/keyevents. Higher latency than scrcpy's HID channel,
+//          but a preview pane taps occasionally — reliability beats microseconds.
+//
+// The video source is swappable (scrcpy later, for lower latency) without touching
+// the frontend, the input path, or the session machinery.
+
+/// Bridge ports start above the serve-sim range (3100) so iOS and Android mirrors
+/// for different projects never collide; the reserved-port system enforces the rest.
+const ANDROID_BRIDGE_BASE_PORT: u16 = 3200;
+/// `screenrecord`'s hard per-session cap. We relaunch on each expiry for a
+/// continuous stream; the brief gap re-emits SPS/PPS+IDR so the decoder recovers.
+const SCREENRECORD_TIME_LIMIT_SECS: u32 = 180;
+
+/// A running Android mirror bridge: the supervisor task (abort to stop the WS
+/// server + screenrecord) and the device serial (to clean up the on-device process).
+struct AndroidBridgeHandle {
+    serial: String,
+    task: tokio::task::JoinHandle<()>,
+}
+
+/// Live bridges keyed by project path — the same key as [`MOBILE_SESSIONS`], so
+/// teardown can find and stop the bridge for a project.
+static ANDROID_BRIDGES: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, AndroidBridgeHandle>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+type WsStream = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
+type WsSink = futures_util::stream::SplitSink<WsStream, tokio_tungstenite::tungstenite::Message>;
+type WsSource = futures_util::stream::SplitStream<WsStream>;
+
+/// A control message from the webview, sent as JSON on the mirror WebSocket.
+/// Coordinates are normalized 0..1 (origin top-left) so the frontend never needs
+/// the device's pixel size; the bridge maps them with `wm size`.
+#[derive(Deserialize, Debug, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum ControlMsg {
+    Tap {
+        x: f64,
+        y: f64,
+    },
+    Swipe {
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        #[serde(default)]
+        ms: u32,
+    },
+    Key {
+        key: String,
+    },
+    Text {
+        text: String,
+    },
+}
+
+/// Map a recognized key name to an `input keyevent` token. Whitelisted, not
+/// pass-through, so the webview can't inject an arbitrary keyevent argument.
+fn keycode_for(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "BACK" => "KEYCODE_BACK",
+        "HOME" => "KEYCODE_HOME",
+        "APP_SWITCH" => "KEYCODE_APP_SWITCH",
+        "ENTER" => "KEYCODE_ENTER",
+        "DEL" => "KEYCODE_DEL",
+        _ => return None,
+    })
+}
+
+/// Sanitize text for `adb shell input text`, which runs through the device shell:
+/// keep alphanumerics, encode spaces as `%s` (what `input text` expects), and DROP
+/// everything else. Restrictive by design — a preview's text entry is a nice-to-have
+/// and shell-metachar injection through an unsanitized arg is not worth it.
+fn sanitize_input_text(text: &str) -> Option<String> {
+    let mut out = String::new();
+    for c in text.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else if c == ' ' {
+            out.push_str("%s");
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// Translate a control message into `adb shell input` arguments, mapping normalized
+/// coordinates onto the device's pixel size. `None` = nothing safe/known to send.
+/// Pure, so the coordinate math and sanitization are unit-tested without a device.
+fn control_to_adb_args(msg: &ControlMsg, dw: u32, dh: u32) -> Option<Vec<String>> {
+    let px = |n: f64, max: u32| (n.clamp(0.0, 1.0) * max as f64).round() as i64;
+    match msg {
+        ControlMsg::Tap { x, y } => Some(vec![
+            "tap".into(),
+            px(*x, dw).to_string(),
+            px(*y, dh).to_string(),
+        ]),
+        ControlMsg::Swipe { x1, y1, x2, y2, ms } => {
+            let dur = if *ms == 0 { 200 } else { *ms };
+            Some(vec![
+                "swipe".into(),
+                px(*x1, dw).to_string(),
+                px(*y1, dh).to_string(),
+                px(*x2, dw).to_string(),
+                px(*y2, dh).to_string(),
+                dur.to_string(),
+            ])
+        }
+        ControlMsg::Key { key } => Some(vec!["keyevent".into(), keycode_for(key)?.to_string()]),
+        ControlMsg::Text { text } => Some(vec!["text".into(), sanitize_input_text(text)?]),
+    }
+}
+
+/// Parse `adb shell wm size` output into (width, height) px. Prefers an "Override
+/// size" line (set when the display is resized) over "Physical size" by taking the
+/// last `size:` line. Returns `None` if the format is unexpected.
+fn parse_wm_size(stdout: &str) -> Option<(u32, u32)> {
+    let line = stdout.lines().rev().find(|l| l.contains("size:"))?;
+    let dims = line.rsplit(':').next()?.trim();
+    let (w, h) = dims.split_once('x')?;
+    Some((w.trim().parse().ok()?, h.trim().parse().ok()?))
+}
+
+/// The emulator/device display size in px, for mapping normalized touch coords.
+/// Falls back to a 1080×1920 guess at the call site if this can't be read.
+async fn device_size(serial: &str) -> Option<(u32, u32)> {
+    let mut cmd = adb_command();
+    cmd.args(["-s", serial, "shell", "wm", "size"]);
+    let out = run_to_stdout(
+        tokio::process::Command::from(cmd),
+        "adb shell wm size",
+        ADB_TIMEOUT_SECS,
+    )
+    .await
+    .ok()?;
+    parse_wm_size(&out)
+}
+
+/// Pump screenrecord's raw H.264 to the WebSocket, relaunching on the 180s cap for
+/// a continuous stream. Returns when the client disconnects (send fails) or
+/// screenrecord can't be spawned. The local `adb exec-out` child is killed on drop
+/// (`kill_on_drop`), which tears down the on-device screenrecord with it.
+async fn pump_video(serial: String, mut sink: WsSink) {
+    use futures_util::SinkExt;
+    use tokio::io::AsyncReadExt;
+    use tokio_tungstenite::tungstenite::Message;
+    loop {
+        let mut cmd = adb_command();
+        cmd.args([
+            "-s",
+            &serial,
+            "exec-out",
+            "screenrecord",
+            "--output-format=h264",
+            &format!("--time-limit={SCREENRECORD_TIME_LIMIT_SECS}"),
+            "-",
+        ]);
+        let mut tcmd = tokio::process::Command::from(cmd);
+        tcmd.stdout(std::process::Stdio::piped());
+        tcmd.stderr(std::process::Stdio::null());
+        tcmd.kill_on_drop(true);
+        let mut child = match tcmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!(%serial, error = %e, "screenrecord spawn failed");
+                return;
+            }
+        };
+        let Some(mut stdout) = child.stdout.take() else {
+            return;
+        };
+        let mut buf = vec![0u8; 64 * 1024];
+        loop {
+            match stdout.read(&mut buf).await {
+                Ok(0) => break, // screenrecord hit its time limit → respawn below
+                Ok(n) => {
+                    if sink.send(Message::Binary(buf[..n].to_vec())).await.is_err() {
+                        let _ = child.start_kill();
+                        return; // client gone
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = child.wait().await; // reap before relaunching
+    }
+}
+
+/// Read control JSON from the WebSocket and drive `adb shell input`. Returns when
+/// the socket closes. Errors from individual `input` calls are swallowed — a
+/// dropped tap shouldn't kill the input channel.
+async fn control_loop(serial: String, mut source: WsSource, dw: u32, dh: u32) {
+    use futures_util::StreamExt;
+    use tokio_tungstenite::tungstenite::Message;
+    while let Some(Ok(msg)) = source.next().await {
+        let text = match msg {
+            Message::Text(t) => t,
+            Message::Close(_) => break,
+            _ => continue,
+        };
+        let Ok(parsed) = serde_json::from_str::<ControlMsg>(&text) else {
+            continue;
+        };
+        if let Some(args) = control_to_adb_args(&parsed, dw, dh) {
+            let mut cmd = adb_command();
+            cmd.args(["-s", &serial, "shell", "input"]);
+            cmd.args(&args);
+            let _ = run_to_stdout(
+                tokio::process::Command::from(cmd),
+                "adb shell input",
+                ADB_TIMEOUT_SECS,
+            )
+            .await;
+        }
+    }
+}
+
+/// Handle one webview connection: WebSocket handshake, then run video out and
+/// control in concurrently. Whichever side ends first cancels the other (the
+/// dropped future kills its screenrecord child), so a disconnect tears everything
+/// down. Single-client by design — the supervisor loops back to await reconnects.
+async fn handle_bridge_client(serial: &str, stream: tokio::net::TcpStream) {
+    use futures_util::StreamExt;
+    let _ = stream.set_nodelay(true);
+    let ws = match tokio_tungstenite::accept_async(stream).await {
+        Ok(ws) => ws,
+        Err(e) => {
+            tracing::warn!(%serial, error = %e, "android bridge ws handshake failed");
+            return;
+        }
+    };
+    let (sink, source) = ws.split();
+    let (dw, dh) = device_size(serial).await.unwrap_or((1080, 1920));
+    tokio::select! {
+        _ = pump_video(serial.to_string(), sink) => {}
+        _ = control_loop(serial.to_string(), source, dw, dh) => {}
+    }
+}
+
+/// Accept loop: serve one client at a time, looping back on disconnect so a tab
+/// re-open or heal reconnects to the same bridge. Ends only when the listener dies.
+async fn android_bridge_supervisor(serial: String, listener: tokio::net::TcpListener) {
+    loop {
+        match listener.accept().await {
+            Ok((stream, _)) => handle_bridge_client(&serial, stream).await,
+            Err(e) => {
+                tracing::warn!(%serial, error = %e, "android bridge accept failed; stopping");
+                break;
+            }
+        }
+    }
+}
+
+/// Bind the mirror WebSocket on `ws_port` and start its supervisor, registered by
+/// project path so teardown can stop it. Fails if the port can't be bound (the
+/// caller reserved it, so this is rare) — leaving no half-started bridge.
+async fn start_android_bridge(
+    serial: &str,
+    project_path: &str,
+    ws_port: u16,
+) -> Result<(), CommandError> {
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", ws_port))
+        .await
+        .map_err(|e| format!("Failed to bind the Android mirror bridge on port {ws_port}: {e}"))?;
+    let serial = serial.to_string();
+    let task = tokio::spawn(android_bridge_supervisor(serial.clone(), listener));
+    ANDROID_BRIDGES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(
+            project_path.to_string(),
+            AndroidBridgeHandle { serial, task },
+        );
+    Ok(())
+}
+
+/// Stop a project's bridge (abort the supervisor → drops the listener and the
+/// in-flight screenrecord child) and best-effort kill any lingering on-device
+/// screenrecord. Idempotent: no bridge → nothing to do.
+async fn stop_android_bridge(project_path: &str) {
+    let handle = ANDROID_BRIDGES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(project_path);
+    if let Some(h) = handle {
+        h.task.abort();
+        let mut cmd = adb_command();
+        cmd.args(["-s", &h.serial, "shell", "pkill", "-f", "screenrecord"]);
+        let _ = run_to_stdout(
+            tokio::process::Command::from(cmd),
+            "adb shell pkill screenrecord",
+            ADB_TIMEOUT_SECS,
+        )
+        .await;
+    }
+}
+
+/// Synchronous bridge stop for the window-Destroyed handler (which can't await):
+/// abort the supervisor and blocking-kill the on-device screenrecord. Mirrors the
+/// iOS sync teardown's use of blocking `.output()`.
+fn stop_android_bridge_sync(project_path: &str, serial: &str) {
+    if let Some(h) = ANDROID_BRIDGES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(project_path)
+    {
+        h.task.abort();
+    }
+    let mut cmd = adb_command();
+    cmd.args(["-s", serial, "shell", "pkill", "-f", "screenrecord"]);
+    let _ = cmd.output();
+}
+
 /// Determine the command that launches the project's app onto a booted
 /// simulator, based on the project type. Reads project files (not pure) and is
 /// unit-tested via `build_launch_command`; the frontend runs the returned
@@ -749,6 +1074,11 @@ pub async fn teardown_mobile_preview(project_path: String) {
         crate::state::drop_boot_lock(&project_path);
         return;
     };
+    if session.platform == crate::state::Platform::Android {
+        teardown_android_session(&project_path, &session).await;
+        crate::state::drop_boot_lock(&project_path);
+        return;
+    }
     if let Some(build_id) = session.build_session_id {
         let _ = crate::commands::pty_session::pty_session_kill(build_id);
     }
@@ -777,8 +1107,20 @@ pub async fn teardown_mobile_preview(project_path: String) {
 /// the window-Destroyed handler's `release_port_for_window`.
 pub fn teardown_mobile_previews_for_window_sync(window_label: &str) {
     for (project_path, session) in crate::state::take_mobile_sessions_for_window(window_label) {
-        if let Some(build_id) = session.build_session_id {
-            let _ = crate::commands::pty_session::pty_session_kill(build_id);
+        if let Some(build_id) = &session.build_session_id {
+            let _ = crate::commands::pty_session::pty_session_kill(build_id.clone());
+        }
+        if session.platform == crate::state::Platform::Android {
+            // Abort the in-process bridge (our own WS listener; lsof-by-port would
+            // miss it) and blocking-kill the emulator we booted.
+            stop_android_bridge_sync(&project_path, &session.udid);
+            if session.booted_by_us {
+                let mut cmd = adb_command();
+                cmd.args(["-s", &session.udid, "emu", "kill"]);
+                let _ = cmd.output();
+            }
+            crate::state::drop_boot_lock(&project_path);
+            continue;
         }
         // Kill the mirror by its port, not via `npx serve-sim --kill` — the npx
         // cold start would block window close for hundreds of ms.
@@ -1001,10 +1343,10 @@ pub async fn start_mobile_preview(
     platform: crate::state::Platform,
     preferred: Option<String>,
 ) -> Result<MirrorInfo, CommandError> {
-    // Android boot + mirror transport (emulator + scrcpy bridge) land in a later
-    // phase; iOS is the supported path today. Routing here keeps the seam explicit.
+    // Android has its own boot + mirror transport (emulator + screenrecord→WS
+    // bridge); route to it. iOS continues below with serve-sim.
     if platform == crate::state::Platform::Android {
-        return Err("Android preview is coming soon.".into());
+        return start_android_preview(project_path, window_label, preferred).await;
     }
 
     // Serialize per project so two concurrent starts can't both boot a sim.
@@ -1097,6 +1439,134 @@ pub async fn start_mobile_preview(
             Err(e)
         }
     }
+}
+
+/// Best-effort friendly Android version (e.g. "Android 15") for the preview
+/// toolbar — the Android analog of iOS's `friendly_runtime`.
+async fn android_device_runtime(serial: &str) -> Option<String> {
+    let mut cmd = adb_command();
+    cmd.args(["-s", serial, "shell", "getprop", "ro.build.version.release"]);
+    let out = run_to_stdout(
+        tokio::process::Command::from(cmd),
+        "adb getprop ro.build.version.release",
+        ADB_TIMEOUT_SECS,
+    )
+    .await
+    .ok()?;
+    let v = out.trim();
+    (!v.is_empty()).then(|| format!("Android {v}"))
+}
+
+/// Shut down an emulator we booted (`adb emu kill`). Best-effort; no-op for a
+/// physical device that ignores it.
+async fn android_emu_kill(serial: &str) {
+    let mut cmd = adb_command();
+    cmd.args(["-s", serial, "emu", "kill"]);
+    let _ = run_to_stdout(
+        tokio::process::Command::from(cmd),
+        "adb emu kill",
+        ADB_TIMEOUT_SECS,
+    )
+    .await;
+}
+
+/// Reconstruct the canvas-mirror connection info for a live Android session — the
+/// Android analog of [`reuse_mirror_info`]. There's no MJPEG URL: the frontend
+/// decodes the WebSocket's H.264 onto a `<canvas>`, so `stream_url` is empty.
+fn android_mirror_info(s: &crate::state::MobileSession) -> MirrorInfo {
+    MirrorInfo {
+        udid: s.udid.clone(),
+        stream_url: String::new(),
+        ws_url: format!("ws://127.0.0.1:{}", s.serve_sim_port),
+        port: s.serve_sim_port,
+        device_name: s.device_name.clone(),
+        device_runtime: s.device_runtime.clone(),
+    }
+}
+
+/// Tear down an Android session's processes (build pty, mirror bridge, emulator if
+/// we booted it) and release its port. Does **not** touch the registry — the caller
+/// `take`s the entry first — so it's reusable by both teardown and the rebuild path.
+async fn teardown_android_session(project_path: &str, session: &crate::state::MobileSession) {
+    if let Some(build_id) = &session.build_session_id {
+        let _ = crate::commands::pty_session::pty_session_kill(build_id.clone());
+    }
+    stop_android_bridge(project_path).await;
+    if session.booted_by_us {
+        tracing::info!(serial = %session.udid, "tearing down android preview: killing emulator we booted");
+        android_emu_kill(&session.udid).await;
+    }
+    if session.port_was_reserved {
+        crate::state::release_port_for_project(&session.window_label, project_path);
+    }
+}
+
+/// Start (or reuse) an Android mirror preview: ensure an emulator is booted, reserve
+/// a port, start the screenrecord→WebSocket bridge, and register the session so the
+/// backend owns its lifecycle. The Android analog of the iOS path in
+/// [`start_mobile_preview`]; serialized per project by the shared boot lock. A live
+/// session is reused; a dead one is torn down and rebuilt (the bridge supervisor
+/// already survives client churn, so the usual death mode is the emulator itself).
+async fn start_android_preview(
+    project_path: String,
+    window_label: String,
+    preferred: Option<String>,
+) -> Result<MirrorInfo, CommandError> {
+    let lock = crate::state::boot_lock_for(&project_path);
+    let _guard = lock.lock().await;
+
+    if let Some(existing) = crate::state::get_mobile_session(&project_path) {
+        // `serve_sim_alive` is a generic TCP-connect probe; here it checks the
+        // bridge's listener is still up. Live + Android → reuse it as-is.
+        if existing.platform == crate::state::Platform::Android
+            && serve_sim_alive(existing.serve_sim_port).await
+        {
+            tracing::info!(serial = %existing.udid, "start_android_preview: reusing live bridge");
+            return Ok(android_mirror_info(&existing));
+        }
+        // Stale or wrong-platform session — drop it and clean up before rebuilding.
+        crate::state::take_mobile_session(&project_path);
+        teardown_android_session(&project_path, &existing).await;
+    }
+
+    let (device, booted_by_us) = ensure_emulator(preferred).await?;
+    let reserved = crate::commands::pty::find_and_reserve_port(
+        window_label.clone(),
+        project_path.clone(),
+        ANDROID_BRIDGE_BASE_PORT,
+    )?;
+    if let Err(e) = start_android_bridge(&device.serial, &project_path, reserved).await {
+        crate::state::release_port_for_project(&window_label, &project_path);
+        if booted_by_us {
+            android_emu_kill(&device.serial).await;
+        }
+        return Err(e);
+    }
+
+    let device_runtime = android_device_runtime(&device.serial).await;
+    crate::state::register_mobile_session(
+        project_path.clone(),
+        crate::state::MobileSession {
+            platform: crate::state::Platform::Android,
+            udid: device.serial.clone(),
+            booted_by_us,
+            serve_sim_port: reserved,
+            port_was_reserved: true,
+            build_session_id: Some(build_session_id_for(&project_path)),
+            window_label,
+            device_name: device.name.clone(),
+            device_runtime: device_runtime.clone(),
+        },
+    );
+
+    Ok(MirrorInfo {
+        udid: device.serial,
+        stream_url: String::new(),
+        ws_url: format!("ws://127.0.0.1:{reserved}"),
+        port: reserved,
+        device_name: device.name,
+        device_runtime,
+    })
 }
 
 #[cfg(test)]
@@ -1357,5 +1827,157 @@ mod tests {
         }"#;
         assert!(choose_default_simulator(json).is_none());
         assert!(choose_default_simulator(r#"{"devices":{}}"#).is_none());
+    }
+
+    #[test]
+    fn parse_wm_size_prefers_override_and_handles_physical() {
+        assert_eq!(parse_wm_size("Physical size: 320x640"), Some((320, 640)));
+        assert_eq!(
+            parse_wm_size("Physical size: 1080x2400\n"),
+            Some((1080, 2400))
+        );
+        // Override wins (it's the last `size:` line when the display is resized).
+        assert_eq!(
+            parse_wm_size("Physical size: 1080x2400\nOverride size: 720x1280"),
+            Some((720, 1280))
+        );
+        assert_eq!(parse_wm_size("garbage"), None);
+        assert_eq!(parse_wm_size("Physical size: notxdims"), None);
+    }
+
+    #[test]
+    fn control_to_adb_args_maps_and_clamps() {
+        // Tap: normalized → device px, rounded, clamped into range.
+        assert_eq!(
+            control_to_adb_args(&ControlMsg::Tap { x: 0.5, y: 0.25 }, 320, 640),
+            Some(vec!["tap".into(), "160".into(), "160".into()])
+        );
+        assert_eq!(
+            control_to_adb_args(&ControlMsg::Tap { x: 2.0, y: -1.0 }, 320, 640),
+            Some(vec!["tap".into(), "320".into(), "0".into()])
+        );
+        // Swipe: zero ms falls back to a sane default duration.
+        assert_eq!(
+            control_to_adb_args(
+                &ControlMsg::Swipe {
+                    x1: 0.0,
+                    y1: 1.0,
+                    x2: 1.0,
+                    y2: 0.0,
+                    ms: 0
+                },
+                100,
+                200
+            ),
+            Some(vec![
+                "swipe".into(),
+                "0".into(),
+                "200".into(),
+                "100".into(),
+                "0".into(),
+                "200".into()
+            ])
+        );
+        // Key: whitelisted only.
+        assert_eq!(
+            control_to_adb_args(&ControlMsg::Key { key: "BACK".into() }, 1, 1),
+            Some(vec!["keyevent".into(), "KEYCODE_BACK".into()])
+        );
+        assert_eq!(
+            control_to_adb_args(
+                &ControlMsg::Key {
+                    key: "REBOOT".into()
+                },
+                1,
+                1
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn sanitize_input_text_drops_metachars_and_encodes_spaces() {
+        assert_eq!(
+            sanitize_input_text("hello world").as_deref(),
+            Some("hello%sworld")
+        );
+        // Shell metacharacters are dropped, not escaped.
+        assert_eq!(
+            sanitize_input_text("a; rm -rf /").as_deref(),
+            Some("a%srm%srf%s")
+        );
+        assert_eq!(sanitize_input_text("$(whoami)").as_deref(), Some("whoami"));
+        assert_eq!(sanitize_input_text("!@#"), None);
+    }
+
+    #[test]
+    fn control_msg_deserializes_from_webview_json() {
+        assert_eq!(
+            serde_json::from_str::<ControlMsg>(r#"{"type":"tap","x":0.1,"y":0.2}"#).unwrap(),
+            ControlMsg::Tap { x: 0.1, y: 0.2 }
+        );
+        // ms is optional (defaults to 0 → swipe applies its own default).
+        assert_eq!(
+            serde_json::from_str::<ControlMsg>(
+                r#"{"type":"swipe","x1":0.0,"y1":0.0,"x2":0.5,"y2":0.5}"#
+            )
+            .unwrap(),
+            ControlMsg::Swipe {
+                x1: 0.0,
+                y1: 0.0,
+                x2: 0.5,
+                y2: 0.5,
+                ms: 0
+            }
+        );
+    }
+
+    /// Live, non-hermetic proof that the bridge streams decodable H.264 from a real
+    /// emulator. Gated behind `SHIPSTUDIO_LIVE_ANDROID=1` (serial via
+    /// `SHIPSTUDIO_ANDROID_SERIAL`, default `emulator-5554`) so `cargo test` skips it
+    /// in CI. Run manually:
+    ///   SHIPSTUDIO_LIVE_ANDROID=1 cargo test android_bridge_streams_h264 -- --nocapture
+    #[tokio::test]
+    async fn android_bridge_streams_h264() {
+        if std::env::var("SHIPSTUDIO_LIVE_ANDROID").as_deref() != Ok("1") {
+            eprintln!("skipping: set SHIPSTUDIO_LIVE_ANDROID=1 to run against a live emulator");
+            return;
+        }
+        use futures_util::{SinkExt, StreamExt};
+        let serial =
+            std::env::var("SHIPSTUDIO_ANDROID_SERIAL").unwrap_or_else(|_| "emulator-5554".into());
+        let project = "/tmp/ship-android-bridge-test";
+        let port = 3299;
+
+        start_android_bridge(&serial, project, port)
+            .await
+            .expect("bridge should bind");
+
+        let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
+            .await
+            .expect("client should connect");
+
+        // Collect a bit of stream; assert it's Annex-B H.264 (starts 00 00 00 01).
+        let mut acc: Vec<u8> = Vec::new();
+        for _ in 0..200 {
+            if acc.len() > 4096 {
+                break;
+            }
+            match tokio::time::timeout(std::time::Duration::from_secs(15), ws.next()).await {
+                Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(b)))) => acc.extend(b),
+                other => panic!("expected binary frame, got {other:?}"),
+            }
+        }
+        assert!(acc.len() >= 4, "stream too short");
+        assert_eq!(&acc[..4], &[0, 0, 0, 1], "not Annex-B H.264");
+
+        // A tap should round-trip without erroring the socket.
+        ws.send(tokio_tungstenite::tungstenite::Message::Text(
+            r#"{"type":"tap","x":0.5,"y":0.5}"#.into(),
+        ))
+        .await
+        .expect("send tap");
+
+        stop_android_bridge(project).await;
     }
 }

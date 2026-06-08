@@ -57,6 +57,9 @@ ignore = "0.4"
 dunce = "1"
 urlencoding = "2"
 hyper = { version = "1", features = ["http1", "server", "client"] }
+# Android mirror bridge: WebSocket server streaming screenrecord H.264 to the webview.
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
 hyper-util = { version = "0.1", features = ["tokio", "http1", "server", "client-legacy"] }
 http-body-util = "0.1"
 bytes = "1"
