@@ -128,7 +128,7 @@ pub fn run() {
                     .resolve("scrcpy-server.jar", tauri::path::BaseDirectory::Resource)
                 {
                     if jar.is_file() {
-                        std::env::set_var("SHIPSTUDIO_SCRCPY_SERVER", jar);
+                        commands::mobile::set_bundled_scrcpy_jar(jar);
                     }
                 }
             }
@@ -514,6 +514,7 @@ pub fn run() {
             commands::mobile::list_android_devices,
             commands::mobile::android_app_running,
             commands::mobile::detect_mobile_targets,
+            commands::mobile::mobile_platform_support,
             // PTY & Terminal
             commands::pty::spawn_pty,
             commands::pty::kill_pty,

@@ -490,6 +490,14 @@ async fn list_avds() -> Vec<String> {
 /// device if one exists; otherwise boots `preferred` (or the first AVD) detached and
 /// blocks until `sys.boot_completed` — the Android analog of `simctl bootstatus`.
 async fn ensure_emulator(preferred: Option<String>) -> Result<(AndroidDevice, bool), CommandError> {
+    // Distinguish "no SDK at all" from "SDK present but no AVD" — they need different
+    // fixes, and the old message misdiagnosed a missing SDK as a missing AVD.
+    if android_sdk_root().is_none() {
+        return Err(
+            "The Android SDK isn't installed, so there's no emulator to preview on.".into(),
+        );
+    }
+
     // Reuse a device that's already up (booted_by_us = false).
     if let Some(dev) = list_android_devices().await?.into_iter().next() {
         return Ok((dev, false));
@@ -499,7 +507,7 @@ async fn ensure_emulator(preferred: Option<String>) -> Result<(AndroidDevice, bo
     let avd = preferred
         .filter(|p| avds.contains(p))
         .or_else(|| avds.into_iter().next())
-        .ok_or("No Android Virtual Device found. Create one in Android Studio › Device Manager.")?;
+        .ok_or("No Android Virtual Device found. Create an emulator (AVD) to preview on.")?;
 
     // Boot detached — the emulator runs for the session; teardown uses `adb emu kill`.
     let mut emu = emulator_command();
@@ -607,15 +615,51 @@ fn detect_mobile_targets_for(project_path: &std::path::Path) -> MobileTargets {
     }
 }
 
-/// Which platforms a project can build for (iOS / Android). The frontend combines
-/// this with machine capability (Xcode for iOS, the Android SDK for Android) to
-/// decide which platform toggles to show.
+/// Which platforms a project can build for (iOS / Android). Combined by the frontend
+/// with [`mobile_platform_support`] (machine capability) so a platform is only
+/// offered when the project targets it AND the toolchain exists.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn detect_mobile_targets(project_path: String) -> Result<MobileTargets, CommandError> {
     let project = crate::utils::validate_project_path(&project_path)?;
     let workspace = crate::utils::resolve_workspace_path(&project);
     Ok(detect_mobile_targets_for(&workspace))
+}
+
+/// Whether the machine can actually preview each platform — distinct from what a
+/// project *targets*. iOS needs Xcode's command line tools; Android needs the SDK.
+/// The frontend ANDs this with [`MobileTargets`] so it never offers a platform that
+/// would dead-end, routing to agent-driven setup instead.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct MobilePlatformSupport {
+    pub ios: bool,
+    pub android: bool,
+}
+
+/// Is Xcode's command line toolchain installed? `xcode-select -p` resolves the
+/// developer dir only when it is (the bare `xcrun` stub exists even without it).
+async fn ios_tooling_available() -> bool {
+    let mut cmd = create_command("xcode-select");
+    cmd.arg("-p");
+    cmd.env("PATH", get_extended_path());
+    run_to_stdout(
+        tokio::process::Command::from(cmd),
+        "xcode-select -p",
+        SIMCTL_TIMEOUT_SECS,
+    )
+    .await
+    .map(|out| !out.trim().is_empty())
+    .unwrap_or(false)
+}
+
+/// Report which mobile platforms this machine can preview (toolchain present).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn mobile_platform_support() -> Result<MobilePlatformSupport, CommandError> {
+    Ok(MobilePlatformSupport {
+        ios: ios_tooling_available().await,
+        android: android_sdk_root().is_some(),
+    })
 }
 
 // ============ Android mirror bridge (H.264 → WebSocket) ============
@@ -801,13 +845,22 @@ fn next_scid() -> String {
     format!("{n:08x}")
 }
 
-/// Locate the scrcpy-server jar. Falls back to a Homebrew/system install during
-/// development; production bundles it with the app (see resources in tauri.conf).
+/// The bundled scrcpy-server jar path, resolved once at startup from the Tauri
+/// resource (see `lib.rs` setup). A `OnceLock`, not a process-global env var, so we
+/// don't mutate the environment as a side channel.
+static BUNDLED_SCRCPY_JAR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Record the bundled scrcpy-server jar path (called once from app setup).
+pub fn set_bundled_scrcpy_jar(path: std::path::PathBuf) {
+    let _ = BUNDLED_SCRCPY_JAR.set(path);
+}
+
+/// Locate the scrcpy-server jar: the app-bundled resource first, then a
+/// Homebrew/system install (dev / resilience).
 fn scrcpy_server_jar() -> Option<std::path::PathBuf> {
-    if let Ok(bundled) = std::env::var("SHIPSTUDIO_SCRCPY_SERVER") {
-        let p = std::path::PathBuf::from(bundled);
-        if p.is_file() {
-            return Some(p);
+    if let Some(bundled) = BUNDLED_SCRCPY_JAR.get() {
+        if bundled.is_file() {
+            return Some(bundled.clone());
         }
     }
     for p in [
@@ -1794,6 +1847,15 @@ async fn android_device_runtime(serial: &str) -> Option<String> {
     (!v.is_empty()).then(|| format!("Android {v}"))
 }
 
+/// Whether a device/emulator with this serial is still attached and ready. Used to
+/// confirm a reused session's emulator didn't die out from under the live bridge.
+async fn android_device_present(serial: &str) -> bool {
+    list_android_devices()
+        .await
+        .map(|devs| devs.iter().any(|d| d.serial == serial))
+        .unwrap_or(false)
+}
+
 /// Shut down an emulator we booted (`adb emu kill`). Best-effort; no-op for a
 /// physical device that ignores it.
 async fn android_emu_kill(serial: &str) {
@@ -1853,9 +1915,12 @@ async fn start_android_preview(
     let _guard = lock.lock().await;
 
     if let Some(existing) = crate::state::get_mobile_session(&project_path) {
-        // `serve_sim_alive` is a generic TCP-connect probe; here it checks the
-        // bridge's listener is still up. Live + Android → reuse it as-is.
+        // Reuse only if BOTH the bridge port is listening AND the emulator is still
+        // attached — the supervisor can outlive a dead emulator, and reusing that
+        // hands back a frozen mirror with no recovery. `serve_sim_alive` is a generic
+        // TCP-connect probe; here it checks the bridge's listener.
         if existing.platform == crate::state::Platform::Android
+            && android_device_present(&existing.udid).await
             && serve_sim_alive(existing.serve_sim_port).await
         {
             tracing::info!(serial = %existing.udid, "start_android_preview: reusing live bridge");

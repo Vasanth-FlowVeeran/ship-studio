@@ -24,11 +24,25 @@ export interface MobileTargets {
   android: boolean;
 }
 
+/** Whether this machine's toolchain can preview each platform (Xcode CLT for iOS,
+ *  the Android SDK for Android) — distinct from what a project targets. */
+export interface MobilePlatformSupport {
+  ios: boolean;
+  android: boolean;
+}
+
 /** Detect a project's mobile build targets (Expo → both; bare RN/Flutter → which
- *  native folders exist). The UI further gates these by machine capability
- *  (Xcode for iOS, the Android SDK for Android). */
+ *  native folders exist). AND this with {@link mobilePlatformSupport} so the UI only
+ *  offers a platform the project targets AND the machine can build. */
 export async function detectMobileTargets(projectPath: string): Promise<MobileTargets> {
   return invoke<MobileTargets>('detect_mobile_targets', { projectPath });
+}
+
+/** Which platforms this machine can preview (toolchain installed). Combined with
+ *  {@link detectMobileTargets} to avoid offering a platform that would dead-end —
+ *  the UI routes a missing toolchain to agent-driven setup instead. */
+export async function mobilePlatformSupport(): Promise<MobilePlatformSupport> {
+  return invoke<MobilePlatformSupport>('mobile_platform_support');
 }
 
 /** Whether the project's app is running on an Android emulator/device — the Android

@@ -30,9 +30,11 @@ import {
   androidAppRunning,
   hideSimulator,
   detectMobileTargets,
+  mobilePlatformSupport,
   type MirrorInfo,
   type Platform,
   type MobileTargets,
+  type MobilePlatformSupport,
 } from '../lib/mobile';
 import { usePolling } from '../hooks/usePolling';
 import { checkDependenciesInstalled } from '../lib/project';
@@ -73,14 +75,26 @@ const BUILD_LOG_SCAN_CAP = 262144;
  *  match our exact app instead of "any third-party app". */
 const BUNDLE_ID_RE = /Opening on .*?\(([A-Za-z0-9.-]+)\)/;
 
-/** Pull the Android applicationId from the build log. `run-android` / `run:android`
- *  launch via `am start`, which logs `Starting: Intent { … cmp=com.x/.MainActivity }`.
- *  Lets the emulator poll match our exact app. */
-const ANDROID_APP_ID_RE = /cmp=([A-Za-z0-9_.]+)\//;
+/** Pull the Android applicationId from the build log, across launch styles:
+ *  - bare RN `run-android` → `am start` logs `Starting: Intent { … cmp=com.x/.Act }`
+ *  - Expo `run:android` → dev-client deep link `Opening com.x://expo-development-client/…`
+ *    (no `cmp=`, so the bare-RN regex alone left Expo's launch poll stuck forever).
+ *  Both require a dotted package so a plain `http://` URL can't match. */
+const ANDROID_APP_ID_RES: RegExp[] = [
+  /cmp=([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\//,
+  /Opening ([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+):\/\//,
+];
 
 /** The app id (bundle id / applicationId) for the launch poll, parsed per platform. */
 function appIdFromLog(platform: Platform, log: string): string | undefined {
-  return (platform === 'android' ? log.match(ANDROID_APP_ID_RE) : log.match(BUNDLE_ID_RE))?.[1];
+  if (platform === 'android') {
+    for (const re of ANDROID_APP_ID_RES) {
+      const m = log.match(re);
+      if (m) return m[1];
+    }
+    return undefined;
+  }
+  return log.match(BUNDLE_ID_RE)?.[1];
 }
 
 /** Per-platform UI copy so one component serves both without scattered ternaries. */
@@ -97,6 +111,35 @@ const PLATFORM_COPY: Record<Platform, { device: string; surface: string; startHi
   },
 };
 
+/** What the user sees, and the prompt handed to the embedded agent, when a platform
+ *  the project targets has no toolchain on this machine. We lean on the agent to do
+ *  the heavy, nuanced setup rather than dead-ending the user with manual steps. The
+ *  Android prompt bakes in the lessons that bit us (Homebrew owned by another user →
+ *  install to $HOME without sudo; create an AVD; set ANDROID_HOME). */
+const MOBILE_SETUP: Record<Platform, { need: string; prompt: string }> = {
+  ios: {
+    need: 'Previewing iOS apps needs the Xcode command line tools and a Simulator.',
+    prompt:
+      "I want to preview iOS apps in Ship Studio, but the iOS toolchain isn't set up on " +
+      'this Mac. Please do the heavy lifting to set it up: install the Xcode command line ' +
+      'tools (`xcode-select --install`) if missing, verify `xcrun simctl list devices` ' +
+      'works, and make sure at least one iOS Simulator runtime + device is available ' +
+      '(walk me through any Xcode GUI steps that need me). When it works, tell me to click ' +
+      '“Try again”.',
+  },
+  android: {
+    need: 'Previewing Android apps needs the Android SDK, a JDK, and an emulator (AVD).',
+    prompt:
+      "I want to preview Android apps in Ship Studio, but the Android toolchain isn't set " +
+      'up on this Mac. Please do the heavy lifting end-to-end without making me fiddle with ' +
+      'config: install the Android SDK command line tools (sdkmanager, platform-tools/adb, ' +
+      'emulator), a recent system image, and a JDK 17 for Gradle; create an emulator (AVD); ' +
+      'and set ANDROID_HOME. If Homebrew is owned by another user, install to my home ' +
+      'directory without sudo instead. Verify `adb devices` and `emulator -list-avds` work. ' +
+      'When it works, tell me to click “Try again”.',
+  },
+};
+
 /** Auto-heal budget for a dropped mirror: reconnect with exponential backoff,
  *  then give up to the error view rather than looping forever. The budget resets
  *  once the stream is healthy again (a frame loads, or it stays connected for
@@ -106,10 +149,12 @@ const HEAL_BASE_DELAY_MS = 1500;
 const HEAL_STABLE_MS = 5000;
 
 export function DeviceMirror({ projectName, projectPath, onSendToAgent }: DeviceMirrorProps) {
-  // Which platforms the project can target, and which one we're previewing. Platform
-  // starts null until detection resolves, so the first connect targets a platform the
-  // project actually builds for (an Android-only project shouldn't try iOS first).
+  // Which platforms the project targets, which this machine can actually preview, and
+  // which one we're showing. Platform stays null until detection resolves (so we don't
+  // connect to a platform the project can't build or the machine can't run) — and
+  // stays null when NO platform is available, which renders the agent-setup view.
   const [targets, setTargets] = useState<MobileTargets | null>(null);
+  const [support, setSupport] = useState<MobilePlatformSupport | null>(null);
   const [platform, setPlatform] = useState<Platform | null>(null);
 
   const [status, setStatus] = useState<Status>('starting');
@@ -146,26 +191,33 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
   // Bump to re-run the connect flow (Restart / Try again).
   const [attempt, setAttempt] = useState(0);
 
-  // Detect the project's build targets once, and pick the initial platform —
-  // prefer iOS when available (the dev machine has Xcode), else Android. The picker
-  // (shown only when both are targetable) lets the user switch from here.
+  // Detect the project's build targets AND this machine's toolchain, then pick the
+  // initial platform — only one we can actually preview (targeted + supported),
+  // preferring iOS. If neither is available, platform stays null and we render the
+  // agent-setup view. Re-runs on `attempt` so "Try again" (after the agent installs a
+  // toolchain) re-checks support and proceeds. Picker shows only available platforms.
   useEffect(() => {
     let cancelled = false;
-    void detectMobileTargets(projectPath)
-      .then((t) => {
+    void Promise.all([detectMobileTargets(projectPath), mobilePlatformSupport()])
+      .then(([t, s]) => {
         if (cancelled) return;
         setTargets(t);
-        setPlatform((prev) => prev ?? (t.ios ? 'ios' : 'android'));
+        setSupport(s);
+        const avail = { ios: t.ios && s.ios, android: t.android && s.android };
+        setPlatform((prev) => prev ?? (avail.ios ? 'ios' : avail.android ? 'android' : null));
       })
       .catch(() => {
-        // Detection failed (non-mobile or read error) — default to iOS so the
-        // connect flow can still surface a clear tooling error.
-        if (!cancelled) setPlatform((prev) => prev ?? 'ios');
+        // Detection failed — assume capable and attempt iOS, so the connect flow
+        // surfaces a concrete error (which itself offers agent setup).
+        if (!cancelled) {
+          setSupport((prev) => prev ?? { ios: true, android: true });
+          setPlatform((prev) => prev ?? 'ios');
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [projectPath]);
+  }, [projectPath, attempt]);
 
   // Connect flow: start the backend session → embed stream → wire input →
   // auto-launch the build. Each run owns a local `cancelled` flag so React
@@ -291,7 +343,7 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
     if (healTimerRef.current !== null) return; // a heal is already pending
     if (healAttemptsRef.current >= MAX_HEAL_ATTEMPTS) {
       // Mirror won't come back on its own — stop looping and let the user act.
-      setErrorMsg('Lost the connection to the simulator mirror.');
+      setErrorMsg('Lost the connection to the device mirror.');
       setStatus('error');
       return;
     }
@@ -425,6 +477,15 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
     onSendToAgent?.(prompt);
   }, [projectPath, projectName, buildCommand, onSendToAgent, platform]);
 
+  // Hand the toolchain setup for a platform to the embedded agent — the heavy,
+  // nuanced work (installers, SDKs, AVDs, env) the user shouldn't have to do by hand.
+  const handleAgentSetup = useCallback(
+    (p: Platform) => {
+      onSendToAgent?.(MOBILE_SETUP[p].prompt);
+    },
+    [onSendToAgent]
+  );
+
   // Map a pointer event to normalized 0..1 coords over the streamed image.
   const toNorm = (e: React.PointerEvent): { x: number; y: number } | null => {
     const el = imgRef.current;
@@ -453,6 +514,41 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
     if (p) inputRef.current?.sendTouch('up', p.x, p.y);
   };
 
+  // A platform is usable only if the project targets it AND this machine can build
+  // it; null means detection is still running.
+  const available =
+    targets && support
+      ? { ios: targets.ios && support.ios, android: targets.android && support.android }
+      : null;
+  const anyAvailable = !!available && (available.ios || available.android);
+
+  // ---- Agent-driven setup: a targeted platform with no toolchain ----
+  // Rather than dead-end the user with manual install steps, hand the heavy setup to
+  // the embedded agent. Prefer iOS when both are targeted-but-unavailable.
+  if (targets && support && !anyAvailable && status !== 'connected') {
+    const setupPlatform: Platform | null = targets.ios ? 'ios' : targets.android ? 'android' : null;
+    if (setupPlatform) {
+      const platformName = setupPlatform === 'android' ? 'Android' : 'iOS';
+      return (
+        <div className="preview-install-prompt">
+          <h3>Set up {platformName} previews</h3>
+          <p className="hint">{MOBILE_SETUP[setupPlatform].need}</p>
+          {onSendToAgent && (
+            <>
+              <p className="hint">Let the agent install and configure it for you.</p>
+              <Button variant="primary" size="sm" onClick={() => handleAgentSetup(setupPlatform)}>
+                Set up with AI
+              </Button>
+            </>
+          )}
+          <Button variant="secondary" size="sm" onClick={restart}>
+            <ResetIcon size={14} /> Try again
+          </Button>
+        </div>
+      );
+    }
+  }
+
   // ---- Connected: the live mirror ----
   if (status === 'connected' && mirror) {
     const activePlatform: Platform = platform ?? 'ios';
@@ -470,8 +566,9 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
             : launchStatus === 'failed'
               ? 'Build failed — see log'
               : '';
-    // The picker only appears when the project genuinely targets both platforms.
-    const showPicker = !!targets?.ios && !!targets?.android;
+    // The picker only appears when BOTH platforms are usable here (targeted + the
+    // toolchain present) — never offer a tab that would dead-end.
+    const showPicker = !!available?.ios && !!available?.android;
     return (
       <div className="device-mirror">
         <div className="device-mirror-toolbar">
@@ -597,16 +694,22 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
       : needsAndroid
         ? 'Android tooling unavailable'
         : "Couldn't start the preview";
-    const detail = needsXcode
-      ? 'Previewing an iOS app needs Xcode command line tools. Install Xcode, then run xcode-select --install.'
-      : needsAndroid
-        ? 'Previewing an Android app needs the Android SDK and a Virtual Device. Install Android Studio, then create an emulator in Device Manager.'
-        : `Ship Studio couldn't start a ${PLATFORM_COPY[platform ?? 'ios'].surface} preview for ${projectName}.`;
+    // A tooling gap is fixable by the agent — offer the same hand-off as the proactive
+    // setup view rather than telling the user to go install things by hand.
+    const setupPlatform: Platform | null = needsXcode ? 'ios' : needsAndroid ? 'android' : null;
+    const detail = setupPlatform
+      ? MOBILE_SETUP[setupPlatform].need
+      : `Ship Studio couldn't start a ${PLATFORM_COPY[platform ?? 'ios'].surface} preview for ${projectName}.`;
     return (
       <div className="preview-install-prompt">
         <h3>{title}</h3>
         <p className="hint">{detail}</p>
         {errorMsg && <p className="hint">{errorMsg}</p>}
+        {setupPlatform && onSendToAgent && (
+          <Button variant="primary" size="sm" onClick={() => handleAgentSetup(setupPlatform)}>
+            Set up with AI
+          </Button>
+        )}
         <Button variant="secondary" size="sm" onClick={restart}>
           <ResetIcon size={14} /> Try again
         </Button>
