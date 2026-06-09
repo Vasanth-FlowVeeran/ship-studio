@@ -62,6 +62,7 @@ import { getAgentById } from '../lib/agent';
 import type { AgentConfig } from '../lib/agent';
 import type { Project } from '../lib/project';
 import { isMobileProjectType, type ProjectType } from '../lib/static-server';
+import { isMac } from '../lib/setup';
 import type { TerminalTab } from '../hooks/useTerminalManagement';
 import type { TerminalHandle } from './Terminal';
 import type { Toast, ToastType } from '../hooks/useToasts';
@@ -608,10 +609,12 @@ export const WorkspaceView = memo(function WorkspaceView({
 
   // Generic/unknown (Tauri, CLI) projects have no preview pane at all. Web
   // projects get the iframe Preview; native mobile (RN/Expo, Flutter) gets the
-  // device mirror. `hasPreview` = either kind of previewable project.
+  // device mirror — but only on macOS, where the simulator/emulator toolchains are
+  // validated (mobile preview is untested on Windows, so we don't offer it there).
   const isMobileProject = isMobileProjectType(projectType);
+  const mobilePreviewAvailable = isMobileProject && isMac();
   const isWebProject = projectType !== 'generic' && projectType !== 'unknown' && !isMobileProject;
-  const hasPreview = isWebProject || isMobileProject;
+  const hasPreview = isWebProject || mobilePreviewAvailable;
 
   // Reset the preview-side tab to its default whenever the user switches
   // projects. Web projects land on Preview; generic/unknown projects land
@@ -1393,7 +1396,7 @@ export const WorkspaceView = memo(function WorkspaceView({
                           />
                         </div>
                       )}
-                      {workspaceTab === 'preview' && isMobileProject && (
+                      {workspaceTab === 'preview' && mobilePreviewAvailable && (
                         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
                           <DeviceMirror
                             key={currentProject.path}
@@ -1416,6 +1419,7 @@ export const WorkspaceView = memo(function WorkspaceView({
                         workspaceTab={workspaceTab}
                         setWorkspaceTab={setWorkspaceTab}
                         hasPreview={hasPreview}
+                        projectTypeResolved={projectType !== 'unknown'}
                         integrations={integrations}
                         branches={branches}
                         openPRs={openPRs}

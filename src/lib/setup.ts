@@ -38,6 +38,9 @@ const platform = (): string => {
 
 /** Platform detection helpers */
 export const isWindows = () => platform() === 'windows';
+/** macOS only. Gates Mac-only features (e.g. the native mobile preview, which
+ *  depends on Xcode/simctl and hasn't been validated on Windows). */
+export const isMac = () => platform() === 'macos';
 
 /** Status of a single setup item */
 export type SetupItemStatus =

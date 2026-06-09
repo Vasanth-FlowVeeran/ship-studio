@@ -19,6 +19,11 @@ export interface BranchPRTabContainerProps {
    *  device mirror). Projects without one show the branches pane in the
    *  "preview" tab slot; projects with one must not. */
   hasPreview: boolean;
+  /** Whether the project type has finished detecting. While it's still resolving,
+   *  `hasPreview` is transiently false, so we must NOT fall back to the branches
+   *  pane (and its GitHub connect overlay) on the preview tab — that's the ~1s
+   *  "Connect GitHub" flash seen when opening a mobile project. */
+  projectTypeResolved: boolean;
   integrations: IntegrationState;
   branches: BranchInfo[];
   openPRs: PullRequestInfo[];
@@ -36,6 +41,7 @@ export function BranchPRTabContainer({
   workspaceTab,
   setWorkspaceTab,
   hasPreview,
+  projectTypeResolved,
   integrations,
   branches,
   openPRs,
@@ -49,7 +55,8 @@ export function BranchPRTabContainer({
   handleGitHubConnect,
 }: BranchPRTabContainerProps) {
   const showBranchesPane =
-    workspaceTab === 'branches' || (!hasPreview && workspaceTab === 'preview');
+    workspaceTab === 'branches' ||
+    (!hasPreview && projectTypeResolved && workspaceTab === 'preview');
   const showPRsPane = workspaceTab === 'prs';
   const githubConnected =
     integrations.github.cliStatus.authenticated &&

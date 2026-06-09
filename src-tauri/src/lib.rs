@@ -118,6 +118,21 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|_app| {
+            // Point the Android mirror bridge at the bundled scrcpy-server jar (its
+            // low-latency video source). If the resource is missing, the bridge
+            // falls back to a system scrcpy install, then to screenrecord.
+            {
+                use tauri::Manager;
+                if let Ok(jar) = _app
+                    .path()
+                    .resolve("scrcpy-server.jar", tauri::path::BaseDirectory::Resource)
+                {
+                    if jar.is_file() {
+                        std::env::set_var("SHIPSTUDIO_SCRCPY_SERVER", jar);
+                    }
+                }
+            }
+
             // Build the main window programmatically so we can attach an
             // initialization script that runs in all frames (including the
             // cross-origin preview iframe). Config here mirrors what used to
@@ -496,6 +511,9 @@ pub fn run() {
             commands::mobile::get_simulator_launch_command,
             commands::mobile::simulator_app_running,
             commands::mobile::hide_simulator,
+            commands::mobile::list_android_devices,
+            commands::mobile::android_app_running,
+            commands::mobile::detect_mobile_targets,
             // PTY & Terminal
             commands::pty::spawn_pty,
             commands::pty::kill_pty,

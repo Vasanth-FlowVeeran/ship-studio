@@ -26,13 +26,27 @@ pub static RESERVED_PORT_SET: LazyLock<Mutex<HashSet<u16>>> =
 
 // ============ Mobile Preview Sessions ============
 
-/// A live native mobile preview: the booted simulator, its `serve-sim` mirror,
-/// and the optional app-build PTY session. Owned by the backend (not the React
-/// component) so it survives tab switches and is torn down deterministically on
-/// suspend / project-close / window-close.
+/// Which mobile platform a preview targets. Drives the per-platform boot, mirror
+/// transport, and launch-detection while the rest of the session lifecycle (locks,
+/// ports, teardown, registry) stays shared. Serializes as `"ios"` / `"android"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Platform {
+    #[default]
+    Ios,
+    Android,
+}
+
+/// A live native mobile preview: the booted device, its mirror, and the optional
+/// app-build PTY session. Owned by the backend (not the React component) so it
+/// survives tab switches and is torn down deterministically on suspend /
+/// project-close / window-close.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MobileSession {
-    /// The booted simulator's UDID — also what `serve-sim --kill <udid>` takes.
+    /// Which platform this session targets (iOS simulator vs Android emulator).
+    pub platform: Platform,
+    /// The booted device id — a UDID on iOS, an emulator serial (`emulator-5554`)
+    /// on Android. On iOS it's also what `serve-sim --kill <udid>` takes.
     pub udid: String,
     /// True only if WE booted the sim — drives whether it's shut down on close.
     pub booted_by_us: bool,
@@ -584,6 +598,7 @@ mod mobile_session_tests {
 
     fn sample(window_label: &str) -> MobileSession {
         MobileSession {
+            platform: Platform::Ios,
             udid: "UDID-1".into(),
             booted_by_us: true,
             serve_sim_port: 3100,

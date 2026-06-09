@@ -13,6 +13,31 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
+/** Which mobile platform a preview targets. Serializes to the Rust `Platform`
+ *  enum (`"ios"` / `"android"`). */
+export type Platform = 'ios' | 'android';
+
+/** Which platforms a project can actually build for, from its layout/framework.
+ *  Drives the platform picker so it only offers real targets. */
+export interface MobileTargets {
+  ios: boolean;
+  android: boolean;
+}
+
+/** Detect a project's mobile build targets (Expo → both; bare RN/Flutter → which
+ *  native folders exist). The UI further gates these by machine capability
+ *  (Xcode for iOS, the Android SDK for Android). */
+export async function detectMobileTargets(projectPath: string): Promise<MobileTargets> {
+  return invoke<MobileTargets>('detect_mobile_targets', { projectPath });
+}
+
+/** Whether the project's app is running on an Android emulator/device — the Android
+ *  analog of {@link simulatorAppRunning}. `appId` is the Gradle applicationId; without
+ *  it we can't distinguish our app, so the backend reports not-running. */
+export async function androidAppRunning(serial: string, appId?: string): Promise<boolean> {
+  return invoke<boolean>('android_app_running', { serial, appId: appId ?? null });
+}
+
 /** A booted iOS simulator that can be mirrored. */
 export interface MobileSimulator {
   udid: string;
@@ -63,12 +88,13 @@ export async function hideSimulator(): Promise<void> {
   return invoke<void>('hide_simulator');
 }
 
-/** The command that launches the project's app onto a booted simulator. */
+/** The command that launches the project's app onto a booted device. */
 export async function getSimulatorLaunchCommand(
   projectPath: string,
+  platform: Platform,
   udid: string
 ): Promise<string> {
-  return invoke<string>('get_simulator_launch_command', { projectPath, udid });
+  return invoke<string>('get_simulator_launch_command', { projectPath, platform, udid });
 }
 
 /**
@@ -82,11 +108,13 @@ export async function getSimulatorLaunchCommand(
 export async function startMobilePreview(
   projectPath: string,
   windowLabel: string,
+  platform: Platform,
   preferred?: string
 ): Promise<MirrorInfo> {
   return invoke<MirrorInfo>('start_mobile_preview', {
     projectPath,
     windowLabel,
+    platform,
     preferred: preferred ?? null,
   });
 }
@@ -121,6 +149,7 @@ const BUILD_FAILURE_MARKERS = [
   'Could not build the application for the simulator', // flutter
   'Encountered error while building', // flutter
   'Error launching application on', // flutter
+  'FAILURE: Build failed with an exception', // gradle (android expo / react-native)
 ] as const;
 
 /**

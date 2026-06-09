@@ -33,7 +33,8 @@
       "icons/icon.png"
     ],
     "resources": {
-      "fonts/*": "fonts/"
+      "fonts/*": "fonts/",
+      "resources/scrcpy-server.jar": "scrcpy-server.jar"
     },
     "createUpdaterArtifacts": true
   },
