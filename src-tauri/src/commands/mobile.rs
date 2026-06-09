@@ -1188,36 +1188,54 @@ fn start_scrcpy_server(serial: &str, scid: &str) -> Option<tokio::process::Child
     tcmd.spawn().ok()
 }
 
-/// Connect to the forwarded scrcpy socket and read the first chunk. In adb forward
-/// mode, connecting *before* the server has created its device-side abstract socket
-/// succeeds at the TCP level but is then closed immediately (read → 0 bytes) — so a
-/// bare connect isn't enough; we must see real data. We retry connect+first-read
-/// until bytes arrive (server up) and return them alongside the live stream, or give
-/// up after the server's cold-start window. A blocking first read is safe: scrcpy
-/// raw_stream emits SPS immediately, so a live connection returns promptly.
-async fn connect_scrcpy_socket(local_port: u16) -> Option<(tokio::net::TcpStream, Vec<u8>)> {
-    use tokio::io::AsyncReadExt;
-    use tokio::time::{sleep, timeout, Duration};
+/// Wait until the server's device-side abstract socket (`@scrcpy_<scid>`)
+/// appears in `/proc/net/unix` — the deterministic "server is accepting"
+/// signal. This matters because in adb forward mode a connect made BEFORE the
+/// socket exists is accepted locally and then closed; and with `control=true`
+/// the server doesn't start streaming until BOTH sockets are connected, so the
+/// old probe-by-first-read approach (read video bytes before connecting
+/// control) deadlocks against the server waiting for the control accept.
+async fn wait_for_scrcpy_socket(serial: &str, scid: &str) -> bool {
     for _ in 0..40 {
-        if let Ok(mut s) = tokio::net::TcpStream::connect(("127.0.0.1", local_port)).await {
-            let _ = s.set_nodelay(true);
-            let mut buf = vec![0u8; 64 * 1024];
-            // Bound the first read: a live raw_stream connection emits SPS
-            // promptly, but a server that accepted and then wedged must not hang
-            // the whole connect attempt — time out and retry instead.
-            match timeout(Duration::from_secs(2), s.read(&mut buf)).await {
-                Ok(Ok(n)) if n > 0 => {
-                    buf.truncate(n);
-                    return Some((s, buf));
-                }
-                // 0 bytes / error / timeout → connected too early (socket not up
-                // yet) or a wedged server; retry.
-                _ => {}
-            }
+        let mut cmd = adb_command();
+        cmd.args([
+            "-s",
+            serial,
+            "shell",
+            &format!("grep -c scrcpy_{scid} /proc/net/unix"),
+        ]);
+        // grep exits non-zero on no match → Err → keep waiting.
+        if run_to_stdout(
+            tokio::process::Command::from(cmd),
+            "adb grep scrcpy socket",
+            ADB_TIMEOUT_SECS,
+        )
+        .await
+        .map(|out| out.trim() != "0")
+        .unwrap_or(false)
+        {
+            return true;
         }
-        sleep(Duration::from_millis(120)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(120)).await;
     }
-    None
+    false
+}
+
+/// Connect to the forwarded scrcpy port with TCP_NODELAY, bounded.
+async fn connect_forwarded(local_port: u16) -> Option<tokio::net::TcpStream> {
+    use tokio::time::{timeout, Duration};
+    match timeout(
+        Duration::from_secs(5),
+        tokio::net::TcpStream::connect(("127.0.0.1", local_port)),
+    )
+    .await
+    {
+        Ok(Ok(s)) => {
+            let _ = s.set_nodelay(true);
+            Some(s)
+        }
+        _ => None,
+    }
 }
 
 /// Removes its scrcpy adb forward when dropped — crucially including when the bridge
@@ -1238,12 +1256,14 @@ impl Drop for ForwardGuard {
 }
 
 /// Establish a full scrcpy session: push the jar, forward a port, start the
-/// server, connect-and-probe the VIDEO socket, then connect the CONTROL socket
-/// (the server accepts them in that order in `tunnel_forward` mode). `None` on
-/// any failure — every path cleans up after itself (the forward via the guard,
-/// the server via `start_kill`), so the caller can simply fall back to
-/// screenrecord.
+/// server, wait for its device-side socket to exist, connect the VIDEO then the
+/// CONTROL socket (the server accepts them in that order in `tunnel_forward`
+/// mode), and read the first video bytes — the server only starts the encoder
+/// once every enabled socket is connected. `None` on any failure — every path
+/// cleans up after itself (the forward via the guard, the server via
+/// `start_kill`), so the caller can simply fall back to screenrecord.
 async fn establish_scrcpy(serial: &str) -> Option<ScrcpySession> {
+    use tokio::io::AsyncReadExt;
     use tokio::time::{timeout, Duration};
 
     if !push_scrcpy_server(serial).await {
@@ -1263,25 +1283,32 @@ async fn establish_scrcpy(serial: &str) -> Option<ScrcpySession> {
             return None;
         }
     };
-    let Some((video, first)) = connect_scrcpy_socket(local_port).await else {
+    if !wait_for_scrcpy_socket(serial, &scid).await {
+        tracing::warn!(%serial, "scrcpy: server socket never appeared");
+        let _ = server.start_kill();
+        return None;
+    }
+    let Some(mut video) = connect_forwarded(local_port).await else {
         tracing::warn!(%serial, "scrcpy: could not connect the video socket");
         let _ = server.start_kill();
         return None;
     };
-    // The control socket is the server's SECOND accept; the video socket is
-    // already live, so this connect resolves immediately — bound it anyway.
-    let control = match timeout(
-        Duration::from_secs(5),
-        tokio::net::TcpStream::connect(("127.0.0.1", local_port)),
-    )
-    .await
-    {
-        Ok(Ok(s)) => {
-            let _ = s.set_nodelay(true);
-            s
+    let Some(control) = connect_forwarded(local_port).await else {
+        tracing::warn!(%serial, "scrcpy: could not connect the control socket");
+        let _ = server.start_kill();
+        return None;
+    };
+    // Both sockets are connected → the server starts the encoder; the first
+    // bytes (SPS/PPS + IDR) follow within moments. Bound it so a wedged server
+    // can't hang the bridge — on failure we fall back to screenrecord.
+    let mut buf = vec![0u8; 64 * 1024];
+    let first = match timeout(Duration::from_secs(10), video.read(&mut buf)).await {
+        Ok(Ok(n)) if n > 0 => {
+            buf.truncate(n);
+            buf
         }
         _ => {
-            tracing::warn!(%serial, "scrcpy: could not connect the control socket");
+            tracing::warn!(%serial, "scrcpy: no video bytes after connect");
             let _ = server.start_kill();
             return None;
         }
@@ -2910,6 +2937,13 @@ mod tests {
         let project = "/tmp/ship-android-bridge-test";
         let port = 3299;
 
+        // Register the repo's bundled jar like the app's setup does (the OnceLock
+        // is only populated via lib.rs in a real run) — the test must exercise
+        // the scrcpy path, not silently pass on the screenrecord fallback.
+        set_bundled_scrcpy_jar(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/scrcpy-server.jar"),
+        );
+
         start_android_bridge(&serial, project, port)
             .await
             .expect("bridge should bind");
@@ -2956,6 +2990,7 @@ mod tests {
             r#"{"type":"touch","phase":"move","x":0.6,"y":0.5,"vw":720,"vh":1600}"#,
             r#"{"type":"touch","phase":"up","x":0.6,"y":0.5,"vw":720,"vh":1600}"#,
             r#"{"type":"key","key":"BACK"}"#,
+            r#"{"type":"text","text":"hello @scrcpy!"}"#,
         ] {
             ws.send(Message::Text(msg.into())).await.expect("send ctrl");
         }
@@ -2967,6 +3002,45 @@ mod tests {
                 other => panic!("stream died after control injection: {other:?}"),
             }
         }
+
+        // End-to-end coordinate proof: a streamed DOWN at normalized (0.25, 0.75)
+        // must dispatch at exactly (0.25·dw, 0.75·dh) — scrcpy maps video→display
+        // linearly, so the normalized point passes through unchanged. dumpsys
+        // input logs every dispatched MotionEvent with its coordinates.
+        //
+        // NOTE: the claimed 720x1600 video size must equal the encoder's actual
+        // video size or scrcpy silently drops the event — true for a standard
+        // 1080x2400 emulator (Pixel-class AVD) under max_size=1600.
+        let (dw, dh) = device_size(&serial).await.expect("wm size readable");
+        let expected = format!(
+            "pointers=[0: ({:.1}, {:.1})]",
+            0.25 * f64::from(dw),
+            0.75 * f64::from(dh)
+        );
+        for msg in [
+            r#"{"type":"touch","phase":"down","x":0.25,"y":0.75,"vw":720,"vh":1600}"#,
+            r#"{"type":"touch","phase":"up","x":0.25,"y":0.75,"vw":720,"vh":1600}"#,
+        ] {
+            ws.send(Message::Text(msg.into())).await.expect("send ctrl");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        let mut cmd = adb_command();
+        cmd.args(["-s", &serial, "shell", "dumpsys", "input"]);
+        let dump = run_to_stdout(
+            tokio::process::Command::from(cmd),
+            "adb dumpsys input",
+            ADB_TIMEOUT_SECS,
+        )
+        .await
+        .expect("dumpsys input");
+        let landed = dump
+            .lines()
+            .any(|l| l.contains("action=DOWN") && l.contains(&expected));
+        assert!(
+            landed,
+            "no dispatched DOWN at {expected} — touch did not land where claimed"
+        );
+        eprintln!("touch landed at {expected} ✓");
 
         stop_android_bridge(project).await;
     }
