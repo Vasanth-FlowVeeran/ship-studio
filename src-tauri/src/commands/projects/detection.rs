@@ -351,7 +351,11 @@ pub(crate) fn scan_nextjs_pages(
                 let relative = parent.strip_prefix(base_dir).unwrap_or(parent);
 
                 // Filter out route group directories (parenthesized like "(dashboard)")
-                // These are for organization only and don't affect the URL path
+                // These are for organization only and don't affect the URL path.
+                // Also drop the `[locale]` segment that i18n setups (next-intl)
+                // wrap all routes in — middleware redirects bare paths to the
+                // active locale, so `/about` is the navigable form of
+                // `app/[locale]/about/page.tsx`.
                 let filtered_components: Vec<_> = relative
                     .components()
                     .filter_map(|c| {
@@ -359,6 +363,8 @@ pub(crate) fn scan_nextjs_pages(
                             let segment = s.to_string_lossy();
                             // Skip route groups: directories starting with '(' and ending with ')'
                             if segment.starts_with('(') && segment.ends_with(')') {
+                                None
+                            } else if segment == "[locale]" {
                                 None
                             } else {
                                 Some(segment.to_string())
@@ -661,9 +667,15 @@ fn scan_html_pages_recursive(
     Ok(())
 }
 
-/// Sort pages with root first, then alphabetically
+/// Sort pages with root first, then alphabetically.
+/// The equality short-circuit keeps the comparator a total order even with
+/// duplicate "/" routes (possible after `[locale]` stripping) — `sort_by`
+/// may panic on non-total comparators.
 pub(crate) fn sort_pages(pages: &mut [PageInfo]) {
     pages.sort_by(|a, b| {
+        if a.route == b.route {
+            return std::cmp::Ordering::Equal;
+        }
         if a.route == "/" {
             return std::cmp::Ordering::Less;
         }
@@ -854,6 +866,46 @@ mod tests {
         .unwrap();
         let second = detect_project_type(tmp.path());
         assert_eq!(second, ProjectType::Nextjs, "must re-detect after change");
+    }
+
+    #[test]
+    fn nextjs_scan_strips_locale_segment() {
+        // next-intl setups wrap every route in app/[locale]/ — the page
+        // selector must show navigable paths, not "/:locale/...".
+        let tmp = TempDir::new().unwrap();
+        let app = tmp.path().join("app");
+        std::fs::create_dir_all(app.join("[locale]/about")).unwrap();
+        std::fs::write(app.join("[locale]/page.tsx"), "export default ...").unwrap();
+        std::fs::write(app.join("[locale]/about/page.tsx"), "export default ...").unwrap();
+        let mut pages = scan_nextjs_pages(&app, &app).unwrap();
+        sort_pages(&mut pages);
+        let routes: Vec<_> = pages.iter().map(|p| p.route.as_str()).collect();
+        assert_eq!(routes, vec!["/", "/about"]);
+    }
+
+    #[test]
+    fn sort_pages_total_order_with_duplicate_roots() {
+        // Two "/" entries can exist after [locale] stripping (alias case);
+        // the comparator must stay a total order and keep them adjacent so
+        // the caller's dedup works.
+        let mut pages = vec![
+            PageInfo {
+                route: "/".to_string(),
+                file_path: "app/page.tsx".to_string(),
+            },
+            PageInfo {
+                route: "/about".to_string(),
+                file_path: "app/[locale]/about/page.tsx".to_string(),
+            },
+            PageInfo {
+                route: "/".to_string(),
+                file_path: "app/[locale]/page.tsx".to_string(),
+            },
+        ];
+        sort_pages(&mut pages);
+        assert_eq!(pages[0].route, "/");
+        assert_eq!(pages[1].route, "/");
+        assert_eq!(pages[2].route, "/about");
     }
 
     #[test]
