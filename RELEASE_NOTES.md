@@ -6,6 +6,17 @@ The latest entry is rendered inside the in-app update dialog, so write user-
 facing language — what changed, in plain English — not commit subjects.
 -->
 
+## What's New in v0.7.0
+
+- **Mobile app previews** - Open a React Native, Expo, or Flutter project and the preview pane becomes a real, interactive device. Ship Studio boots an iOS Simulator or Android emulator, builds and launches your app onto it (build log streams in), and mirrors the screen live — tap, swipe, and type right in the workspace. macOS only for now.
+- **Android, no setup required** - Android runs on a low-latency scrcpy stream with the server bundled. Projects targeting both platforms get an iOS | Android picker in the preview toolbar.
+- **Set up with AI** - Missing Xcode or the Android SDK? A one-click hand-off sends your agent a detailed install prompt instead of dead-ending you with manual steps.
+- **Multilingual sites** - Cmd+K → "Languages" to add languages to any Next.js or Astro site. Search every language, pick a default, and Ship Studio edits your i18n config surgically — it never guesses, and unusual configs fall back to a "Fix with AI" hand-off instead of being overwritten.
+- **Translate with AI** - "Save & translate with AI" shows you the exact translation prompt to review, then copies or pastes it straight into your agent terminal. App Router projects get a guided next-intl setup the same way.
+- **Preview in any language** - A globe switcher appears in the preview toolbar once you have 2+ languages, and switching pages keeps the language you are viewing. Removing a language warns about leftover translated files and offers an AI cleanup prompt.
+- **"Open in Browser" is now "Open"** - Same button, shorter label.
+
+
 ## What's New in v0.6.8
 
 - **Inline text editing in the visual editor** - Double-click any text on the page to rewrite it right there, Webflow-style. Select text to make it bold, italic, or a link, and press Enter for a line break. Works the same on Next.js and Astro, saves to your source, and is free (0 tokens).
