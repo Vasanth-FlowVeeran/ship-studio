@@ -43,8 +43,10 @@ import { useVisualEditor } from '../hooks/useVisualEditor';
 import { useBreakpoints } from '../hooks/useBreakpoints';
 import { BASE_BREAKPOINT, isTailwindActive, type Breakpoint as TwBreakpoint } from '../lib/edit';
 import { VisualEditorPanel } from './edit/VisualEditorPanel';
+import { ElementTreePanel } from './edit/ElementTreePanel';
+import { useElementTree } from '../hooks/useElementTree';
 import { PreviewLocaleSwitcher, type PreviewLocaleConfig } from './PreviewLocaleSwitcher';
-import { CompactIcon, ExpandIcon, ResetIcon } from './icons';
+import { CompactIcon, ExpandIcon, PanelLeftIcon, ResetIcon } from './icons';
 import { pathLocale, switchPathLocale } from '../lib/i18n';
 import type { ProjectType } from '../lib/static-server';
 
@@ -508,6 +510,21 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     onToast,
   });
 
+  // Element tree (navigator) — left column in fullscreen edit mode, like
+  // Webflow's navigator: read-only, select-only. Toggleable from the toolbar;
+  // the choice persists cross-project like the editor pin.
+  const [treeVisible, setTreeVisible] = useState(
+    () => localStorage.getItem('elementTreeVisible') !== '0'
+  );
+  const toggleTreeVisible = useCallback(() => {
+    setTreeVisible((v) => {
+      localStorage.setItem('elementTreeVisible', v ? '0' : '1');
+      return !v;
+    });
+  }, []);
+  const showTree = isFullscreen && editor.editMode && treeVisible;
+  const elementTree = useElementTree({ iframeRef, enabled: showTree });
+
   const [iframeSize, setIframeSize] = useState<{ w: number; h: number } | null>(null);
   const iframeSizeObserverRef = useRef<ResizeObserver | null>(null);
 
@@ -652,7 +669,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     <div
       className={`preview-container${isFullscreen ? ' preview-container--fullscreen' : ''}${
         editor.editMode && editorPinned ? ' preview-container--editor-pinned' : ''
-      }`}
+      }${showTree ? ' preview-container--tree' : ''}`}
       data-logs={showLogs ? 'open' : 'closed'}
       style={{
         ...(showLogs && inspectPanelHeight !== null
@@ -805,6 +822,18 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
         >
           {isFullscreen ? <CompactIcon size={14} /> : <ExpandIcon size={14} />}
         </button>
+
+        {isFullscreen && editor.editMode && (
+          <button
+            type="button"
+            className={`preview-tree-btn${treeVisible ? ' active' : ''}`}
+            onClick={toggleTreeVisible}
+            title={treeVisible ? 'Hide element tree' : 'Show element tree'}
+            aria-pressed={treeVisible}
+          >
+            <PanelLeftIcon size={14} />
+          </button>
+        )}
 
         {previewPlugins}
 
@@ -988,6 +1017,15 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
         healthPanelRef={healthPanelRef}
         onHealthOutput={onHealthOutput}
       />
+      {showTree && (
+        <ElementTreePanel
+          tree={elementTree.tree}
+          truncated={elementTree.truncated}
+          selectedId={elementTree.selectedId}
+          onSelect={elementTree.selectNode}
+          onHover={elementTree.hoverNode}
+        />
+      )}
       {editor.editMode &&
         (() => {
           // Floating mode portals to <body> (position:fixed is the only way to
