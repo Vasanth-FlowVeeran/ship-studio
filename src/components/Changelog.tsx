@@ -25,6 +25,19 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.8.0', // v0.8.0
+    items: [
+      'Shopify themes — Ship Studio now builds Online Store 2.0 themes. Create one from the new Shopify Theme starter (or import any theme repo), connect your store through a guided setup right in the preview pane, and the preview renders real Liquid against your actual store — products, collections, the lot — with hot reload on every save',
+      'Agent-first theme workflow — Cmd+K commands to build a new section with AI and push your theme to the store for review, plus a “Set up with AI” hand-off that has your agent install and authenticate the Shopify CLI for you. Visual edit mode works on rendered theme pages and saves classes back to your .liquid sections',
+      'Replace images visually — select any image in edit mode (even a classless one) and the panel shows the current asset with a Replace button: pick from your assets folder (thumbnails + inline upload) and the new path is written straight into your source',
+      'Dev server logs are now interactive — when a CLI asks a question (a login, a y/n confirm), click the logs and type your answer right there. The logs auto-follow new output and stay scrollable',
+      'Clickable terminal links now survive line wraps — a URL split across lines highlights and opens as one link, including in agent output with indented continuations',
+      'Importing a GitHub repo without a package.json (Flutter, Rust, plain HTML) no longer fails at the dependency step',
+      'Security hardening — closed path-traversal, command-injection, and IPC trust gaps across backend commands',
+      'Fixes — renaming a project no longer leaves the old name in open-project guards or shows “[object Object]” errors',
+    ],
+  },
+  {
     version: '0.7.1', // v0.7.1
     items: [
       'Element tree — fullscreen edit mode now shows a Webflow-style navigator on the left: every element on the page as a collapsible tree. Click a row to select it (the edit panel picks it up instantly), hover to highlight it on the canvas, and selections stay in sync both ways. Toggle it from the toolbar',
