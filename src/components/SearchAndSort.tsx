@@ -6,10 +6,9 @@
  * @module components/SearchAndSort
  */
 
-import { useCallback, useRef } from 'react';
 import { Button } from './primitives/Button';
+import { Dropdown, DropdownItem } from './primitives/Dropdown';
 import { ChevronIcon, CheckIcon, FolderPlusIcon } from './icons';
-import { useClickOutside } from '../hooks/useClickOutside';
 import { trackEvent } from '../lib/analytics';
 
 export type SortOption = 'last_opened' | 'name';
@@ -24,8 +23,6 @@ export interface SearchAndSortProps {
   totalCount: number;
   sortBy: SortOption;
   onSortChange: (option: SortOption) => void;
-  showSortDropdown: boolean;
-  onToggleSortDropdown: (show: boolean) => void;
   onNewFolder: () => void;
 }
 
@@ -34,46 +31,35 @@ export function SearchAndSort({
   totalCount,
   sortBy,
   onSortChange,
-  showSortDropdown,
-  onToggleSortDropdown,
   onNewFolder,
 }: SearchAndSortProps) {
-  const sortDropdownRef = useRef<HTMLDivElement>(null);
-  const closeSortDropdown = useCallback(() => onToggleSortDropdown(false), [onToggleSortDropdown]);
-  useClickOutside(sortDropdownRef, closeSortDropdown, showSortDropdown);
-
   return (
     <div className="dashboard-section-header">
       <span className="dashboard-section-title">
         {title} {totalCount > 0 && `(${totalCount})`}
       </span>
       <div className="dashboard-section-controls">
-        <div className="sort-dropdown" ref={sortDropdownRef} data-education-id="sort-projects">
-          <button
-            className="sort-dropdown-btn"
-            onClick={() => onToggleSortDropdown(!showSortDropdown)}
-          >
-            {SORT_LABELS[sortBy]}
-            <ChevronIcon />
-          </button>
-          {showSortDropdown && (
-            <div className="sort-dropdown-menu">
-              {(Object.keys(SORT_LABELS) as SortOption[]).map((option) => (
-                <button
-                  key={option}
-                  className={`sort-dropdown-item ${sortBy === option ? 'active' : ''}`}
-                  onClick={() => {
-                    onSortChange(option);
-                    onToggleSortDropdown(false);
-                  }}
-                >
-                  {SORT_LABELS[option]}
-                  {sortBy === option && <CheckIcon />}
-                </button>
-              ))}
-            </div>
+        <Dropdown
+          align="right"
+          menuClassName="sort-dropdown-menu"
+          trigger={(p) => (
+            <button className="sort-dropdown-btn" data-education-id="sort-projects" {...p}>
+              {SORT_LABELS[sortBy]}
+              <ChevronIcon />
+            </button>
           )}
-        </div>
+        >
+          {(Object.keys(SORT_LABELS) as SortOption[]).map((option) => (
+            <DropdownItem
+              key={option}
+              active={sortBy === option}
+              onSelect={() => onSortChange(option)}
+            >
+              <span>{SORT_LABELS[option]}</span>
+              {sortBy === option && <CheckIcon />}
+            </DropdownItem>
+          ))}
+        </Dropdown>
         <Button
           variant="secondary"
           size="sm"
