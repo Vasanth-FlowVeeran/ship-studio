@@ -115,12 +115,12 @@
   border-radius: var(--radius);
   color: var(--text-primary);
   font-family: monospace;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .page-switcher-btn:hover {
@@ -160,7 +160,7 @@
   border: none;
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   outline: none;
 }
 
@@ -177,7 +177,7 @@
   padding: 16px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 
 .page-item {
@@ -192,13 +192,13 @@
   border-radius: 0;
   color: var(--text-secondary);
   font-family: monospace;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 0.1s,
-    color 0.1s,
-    border-color 0.1s;
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .page-item:hover {
@@ -207,7 +207,7 @@
 }
 
 .page-item.active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--tint);
   color: var(--text-primary);
 }
 
@@ -224,14 +224,14 @@
 
 .page-item-hint {
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
   font-style: italic;
 }
 
 .preview-url {
   font-family: monospace;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--text-muted);
 }
 
@@ -372,16 +372,16 @@
   border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
   user-select: none;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .preview-dimensions:hover:not(:disabled) {
@@ -429,7 +429,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color var(--transition);
   outline: none;
 }
 
@@ -475,7 +475,7 @@
   background: transparent;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--font-size-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -493,7 +493,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   text-align: center;
 }
 
@@ -517,7 +517,7 @@
   gap: 16px;
   z-index: var(--z-dropdown);
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--font-size-lg);
 }
 
 .preview-branch-switching-spinner {
@@ -526,13 +526,7 @@
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: var(--radius-full);
-  animation: preview-spin 0.8s linear infinite;
-}
-
-@keyframes preview-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: spin 0.8s linear infinite;
 }
 
 /* Preview Viewport */
@@ -596,7 +590,7 @@
   width: 100%;
   height: 100%;
   border: none;
-  background: #1e1e1e;
+  background: var(--bg-primary);
 }
 
 /* Preview resize overlay (captures mouse during drag) */
@@ -625,8 +619,8 @@
   align-items: center;
   justify-content: center;
   transition:
-    background 0.15s,
-    border-color 0.15s;
+    background var(--transition),
+    border-color var(--transition);
 }
 
 .preview-resize-handle:hover {
@@ -670,7 +664,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   cursor: pointer;
   transition:
     background var(--transition),
@@ -720,7 +714,7 @@
 
 .preview-logs-toggle-switch.is-on::after {
   transform: translateX(10px);
-  background: #ffffff;
+  background: var(--text-bright);
 }
 
 /* Collapsible dev server logs panel (bottom of preview) */
@@ -729,7 +723,7 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  background: #1a1a1a;
+  background: #1a1a1a; /* css-ok: must match xterm theme bg */
   border-top: 1px solid var(--border);
   /* Isolate the panel's internal layout from ancestors: any Network
      row / DOM tree / console line change inside the panel won't
@@ -760,7 +754,7 @@
   border-radius: 0;
   color: var(--text-muted);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 500;
   cursor: pointer;
   transition: color var(--transition);
@@ -861,7 +855,7 @@
 }
 
 /* DevServerLogs layout: optional toolbar above the xterm container.
-   The terminal area keeps its hard-coded #1a1a1a to match xterm's
+   The terminal area keeps its hard-coded 1a1a1a to match xterm's
    theme background exactly — tokenizing this pulls in a theme-aware
    value that won't match the renderer. */
 .dev-server-logs {
@@ -870,7 +864,7 @@
   width: 100%;
   height: 100%;
   min-height: 0;
-  background: #1a1a1a;
+  background: #1a1a1a; /* css-ok: must match xterm theme bg */
 }
 
 .dev-server-logs-toolbar {
@@ -886,7 +880,7 @@
 
 .dev-server-logs-hint {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -898,7 +892,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   cursor: pointer;
   transition:
     color var(--transition),
@@ -918,7 +912,7 @@
 .dev-server-logs-terminal {
   flex: 1;
   min-height: 0;
-  background: #1a1a1a;
+  background: #1a1a1a; /* css-ok: must match xterm theme bg */
 }
 
 /* Crop selection overlay */
@@ -934,9 +928,9 @@
 
 .crop-selection {
   position: absolute;
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(var(--white-rgb), 0.8);
   background: transparent;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 9999px var(--overlay-50);
   pointer-events: none;
 }
 
@@ -945,11 +939,11 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
+  background: var(--overlay-80);
+  color: var(--text-bright);
   padding: 16px 24px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: var(--font-size-lg);
   text-align: center;
   pointer-events: none;
   display: flex;
@@ -958,8 +952,8 @@
 }
 
 .crop-hint {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: var(--font-size-base);
+  color: rgba(var(--white-rgb), 0.6);
 }
 
 /* Preview loading and error states */
@@ -977,7 +971,7 @@
 .preview-loading .hint,
 .preview-error .hint {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--font-size-lg);
 }
 
 .preview-install-prompt {
@@ -993,14 +987,14 @@
 }
 
 .preview-install-prompt h3 {
-  font-size: 16px;
+  font-size: var(--font-size-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: var(--spacing-xs) 0 0;
 }
 
 .preview-install-prompt .hint {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-muted);
   margin: 0 0 var(--spacing-md);
 }
@@ -1010,7 +1004,7 @@
   background: var(--bg-tertiary);
   padding: 1px 5px;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--text-secondary);
 }
 
@@ -1033,7 +1027,7 @@
 }
 .preview-status .hint {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   margin: 0;
   max-width: 420px;
 }
@@ -1050,7 +1044,7 @@
   color: var(--warning);
 }
 .preview-status__attempt {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
   margin: 0;
 }
@@ -1070,7 +1064,7 @@
   align-items: center;
   gap: 5px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text-secondary);
   padding: 2px 0;
@@ -1096,7 +1090,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   line-height: 1.5;
   color: var(--text-secondary);
   white-space: pre-wrap;
@@ -1115,7 +1109,7 @@
 
 .preview-status__logs-hint {
   margin: var(--spacing-xs) 0 0;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -1134,7 +1128,7 @@
   border-radius: var(--radius);
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   cursor: pointer;
   transition: border-color var(--transition);
 }
@@ -1171,7 +1165,7 @@
   background: none;
   border: none;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
   transition: background var(--transition);
@@ -1187,6 +1181,6 @@
 
 .locale-item-code {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }

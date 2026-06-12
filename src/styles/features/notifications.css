@@ -2,7 +2,7 @@
 .notification-settings-modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay-60);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -29,14 +29,14 @@
 
 .notification-settings-header h2 {
   margin: 0 0 4px 0;
-  font-size: 18px;
+  font-size: var(--font-size-2xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .notification-settings-header p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-secondary);
 }
 
@@ -65,13 +65,13 @@
 }
 
 .notification-setting-title {
-  font-size: 14px;
+  font-size: var(--font-size-lg);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .notification-setting-description {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--text-secondary);
   margin-top: 2px;
 }
@@ -119,13 +119,13 @@
 }
 
 .notification-toggle input:checked + .notification-toggle-slider {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: var(--info);
+  border-color: var(--info);
 }
 
 .notification-toggle input:checked + .notification-toggle-slider::before {
   transform: translateX(18px);
-  background: white;
+  background: var(--text-bright);
 }
 
 /* Sound Picker */
@@ -143,16 +143,16 @@
 
 .notification-sound-option {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .notification-sound-option:hover {
@@ -161,13 +161,13 @@
 }
 
 .notification-sound-option.selected {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.4);
-  color: #3b82f6;
+  background: rgba(var(--info-rgb), 0.15);
+  border-color: rgba(var(--info-rgb), 0.4);
+  color: var(--info);
 }
 
 .notification-custom-path {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
   padding: 4px 8px;
   background: var(--bg-tertiary);
@@ -182,16 +182,16 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
   width: fit-content;
 }
 

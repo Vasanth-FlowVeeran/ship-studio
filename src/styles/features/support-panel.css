@@ -1,12 +1,29 @@
 /* ─── Support Panel (slide-out from right) ─────────────────────────────────── */
 
+/* Support-local colors — intentional one-offs, not part of the global scale. */
+:root {
+  /* Slack CTA — Slack brand aubergine gradient + lavender accents */
+  --support-slack-aubergine-rgb: 97, 31, 105;
+  --support-slack-violet-rgb: 78, 29, 129;
+  /* Ticket status pills (Tailwind-derived hues with no global token) */
+  --support-ticket-open: #facc15;
+  --support-ticket-open-rgb: 234, 179, 8;
+  --support-ticket-resolved: #4ade80;
+  --support-ticket-closed: #9ca3af;
+  --support-ticket-closed-rgb: 107, 114, 128;
+  /* Form submit hover + soft error banner */
+  --support-submit-hover: #16a34a;
+  --support-error-soft: #f87171;
+  --support-error-soft-rgb: 255, 77, 77;
+}
+
 .support-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay-40);
   z-index: var(--z-app-overlay);
   animation: support-fade-in 0.2s ease;
 }
@@ -53,7 +70,7 @@
 }
 
 .support-panel-header h2 {
-  font-size: 14px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   margin: 0;
   color: var(--text-primary);
@@ -67,7 +84,7 @@
   cursor: pointer;
   padding: 4px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -85,7 +102,7 @@
   cursor: pointer;
   padding: 4px;
   border-radius: var(--radius-sm);
-  font-size: 18px;
+  font-size: var(--font-size-2xl);
   line-height: 1;
   display: flex;
   align-items: center;
@@ -129,32 +146,40 @@
   width: 100%;
   padding: 10px 12px;
   margin-bottom: 20px;
-  background: linear-gradient(135deg, rgba(97, 31, 105, 0.15) 0%, rgba(78, 29, 129, 0.1) 100%);
-  border: 1px solid rgba(147, 51, 234, 0.2);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--support-slack-aubergine-rgb), 0.15) 0%,
+    rgba(var(--support-slack-violet-rgb), 0.1) 100%
+  );
+  border: 1px solid rgba(var(--purple-deep-rgb), 0.2);
   border-radius: 10px;
   color: var(--text-secondary);
   font: inherit;
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    border-color var(--transition);
 }
 
 .support-slack-cta:hover {
-  background: linear-gradient(135deg, rgba(97, 31, 105, 0.25) 0%, rgba(78, 29, 129, 0.18) 100%);
-  border-color: rgba(147, 51, 234, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--support-slack-aubergine-rgb), 0.25) 0%,
+    rgba(var(--support-slack-violet-rgb), 0.18) 100%
+  );
+  border-color: rgba(var(--purple-deep-rgb), 0.35);
 }
 
 .support-slack-cta svg {
   flex-shrink: 0;
-  color: #e9a7fb;
+  color: var(--slack-pink);
 }
 
 .support-slack-cta-text {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   line-height: 1.4;
 }
 
@@ -165,8 +190,8 @@
 
 .support-slack-cta-arrow {
   flex-shrink: 0;
-  color: #c4b5fd;
-  font-size: 14px;
+  color: var(--slack-lavender);
+  font-size: var(--font-size-lg);
   line-height: 1;
 }
 
@@ -184,7 +209,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-family: inherit;
 }
 
@@ -209,7 +234,7 @@
 /* ─── Section Headers ──────────────────────────────────────────────────────── */
 
 .support-section-label {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -235,7 +260,7 @@
   border: none;
   border-radius: var(--radius);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   text-align: left;
   width: 100%;
@@ -269,7 +294,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   width: 100%;
   text-align: left;
@@ -281,7 +306,7 @@
 }
 
 .support-action-btn .action-icon {
-  font-size: 16px;
+  font-size: var(--font-size-xl);
   flex-shrink: 0;
   width: 20px;
   text-align: center;
@@ -290,7 +315,7 @@
 .support-action-btn .action-arrow {
   margin-left: auto;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
 }
 
 /* ─── Ticket List ──────────────────────────────────────────────────────────── */
@@ -304,7 +329,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   width: 100%;
   text-align: left;
@@ -318,7 +343,7 @@
 .support-ticket-badge {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   padding: 1px 6px;
   border-radius: 10px;
   margin-left: 4px;
@@ -357,7 +382,7 @@
 }
 
 .support-ticket-item-subject {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-primary);
   flex: 1;
   overflow: hidden;
@@ -366,7 +391,7 @@
 }
 
 .support-ticket-status {
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
   padding: 2px 6px;
@@ -375,24 +400,24 @@
 }
 
 .support-ticket-status.new {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
+  background: rgba(var(--info-rgb), 0.15);
+  color: var(--info-light);
 }
 .support-ticket-status.open {
-  background: rgba(234, 179, 8, 0.15);
-  color: #facc15;
+  background: rgba(var(--support-ticket-open-rgb), 0.15);
+  color: var(--support-ticket-open);
 }
 .support-ticket-status.resolved {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: rgba(var(--success-light-rgb), 0.15);
+  color: var(--support-ticket-resolved);
 }
 .support-ticket-status.closed {
-  background: rgba(107, 114, 128, 0.15);
-  color: #9ca3af;
+  background: rgba(var(--support-ticket-closed-rgb), 0.15);
+  color: var(--support-ticket-closed);
 }
 
 .support-ticket-item-meta {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -416,7 +441,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   cursor: pointer;
   text-align: center;
   display: flex;
@@ -436,7 +461,7 @@
 }
 
 .support-type-btn .type-icon {
-  font-size: 18px;
+  font-size: var(--font-size-2xl);
 }
 
 .support-field {
@@ -446,7 +471,7 @@
 }
 
 .support-field label {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -459,7 +484,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-family: inherit;
 }
 
@@ -480,7 +505,7 @@
 }
 
 .support-field .field-hint {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -494,7 +519,7 @@
 .support-form-actions button {
   padding: 8px 16px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 500;
   cursor: pointer;
 }
@@ -513,11 +538,11 @@
 .support-form-actions .support-submit-btn {
   background: var(--success-light);
   border: none;
-  color: white;
+  color: var(--text-bright);
 }
 
 .support-form-actions .support-submit-btn:hover:not(:disabled) {
-  background: #16a34a;
+  background: var(--support-submit-hover);
 }
 
 .support-form-actions button:disabled {
@@ -537,7 +562,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-primary);
   cursor: pointer;
   user-select: none;
@@ -551,8 +576,8 @@
   border: 1px solid var(--border);
   border-radius: 9px;
   transition:
-    background 0.15s,
-    border-color 0.15s;
+    background var(--transition),
+    border-color var(--transition);
   flex-shrink: 0;
 }
 
@@ -566,18 +591,18 @@
   background: var(--text-muted);
   border-radius: var(--radius-full);
   transition:
-    transform 0.15s,
-    background 0.15s;
+    transform var(--transition),
+    background var(--transition);
 }
 
 .support-toggle.on {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--info-hover);
+  border-color: var(--info-hover);
 }
 
 .support-toggle.on::after {
   transform: translateX(14px);
-  background: white;
+  background: var(--text-bright);
 }
 
 .support-project-info-preview {
@@ -595,7 +620,7 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -613,7 +638,7 @@
 }
 
 .support-article-title {
-  font-size: 16px;
+  font-size: var(--font-size-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 8px 0;
@@ -624,7 +649,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -633,12 +658,12 @@
   border: 1px solid var(--border);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
 }
 
 .support-article-content {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   line-height: 1.7;
   color: var(--text-primary);
   overflow-wrap: break-word;
@@ -654,13 +679,13 @@
 }
 
 .support-article-content h1 {
-  font-size: 18px;
+  font-size: var(--font-size-2xl);
 }
 .support-article-content h2 {
   font-size: 15px;
 }
 .support-article-content h3 {
-  font-size: 14px;
+  font-size: var(--font-size-lg);
 }
 
 .support-article-content p {
@@ -671,7 +696,7 @@
   background: var(--bg-tertiary);
   padding: 2px 6px;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
 }
 
 .support-article-content pre {
@@ -688,7 +713,7 @@
 }
 
 .support-article-content a {
-  color: #60a5fa;
+  color: var(--info-light);
   text-decoration: none;
 }
 
@@ -719,7 +744,7 @@
 }
 
 .support-article-footer p {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-secondary);
   margin: 0 0 8px 0;
 }
@@ -757,21 +782,21 @@
 }
 
 .support-message-sender {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
 .support-message-bubble {
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   line-height: 1.5;
   word-wrap: break-word;
 }
 
 .support-message.customer .support-message-bubble {
-  background: #2563eb;
-  color: white;
+  background: var(--info-hover);
+  color: var(--text-bright);
   border-bottom-right-radius: 2px;
 }
 
@@ -783,7 +808,7 @@
 }
 
 .support-message-time {
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
 }
 
@@ -802,7 +827,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-family: inherit;
 }
 
@@ -817,17 +842,17 @@
 
 .support-reply-input button {
   padding: 8px 14px;
-  background: #2563eb;
+  background: var(--info-hover);
   border: none;
   border-radius: var(--radius);
-  color: white;
-  font-size: 13px;
+  color: var(--text-bright);
+  font-size: var(--font-size-md);
   font-weight: 500;
   cursor: pointer;
 }
 
 .support-reply-input button:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--info-dark);
 }
 
 .support-reply-input button:disabled {
@@ -841,7 +866,7 @@
   text-align: center;
   padding: 32px 16px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 
 .support-empty-icon {
@@ -855,16 +880,16 @@
   justify-content: center;
   padding: 32px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 
 .support-error {
-  background: rgba(255, 77, 77, 0.1);
-  border: 1px solid rgba(255, 77, 77, 0.3);
+  background: rgba(var(--support-error-soft-rgb), 0.1);
+  border: 1px solid rgba(var(--support-error-soft-rgb), 0.3);
   border-radius: var(--radius);
   padding: 10px 12px;
-  color: #f87171;
-  font-size: 13px;
+  color: var(--support-error-soft);
+  font-size: var(--font-size-md);
   margin-bottom: 12px;
 }
 
@@ -881,19 +906,19 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  background: rgba(34, 197, 94, 0.1);
+  background: rgba(var(--success-light-rgb), 0.1);
   border-radius: var(--radius-full);
-  font-size: 24px;
+  font-size: var(--font-size-3xl);
   margin-bottom: 12px;
 }
 
 .support-success p {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--font-size-lg);
   margin: 0 0 4px 0;
 }
 
 .support-success .support-success-sub {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
 }

@@ -30,14 +30,14 @@
 }
 
 .changelog-header h3 {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .changelog-subtitle {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
   margin-top: 2px;
   display: block;
@@ -71,7 +71,7 @@
 }
 
 .changelog-version {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--accent);
   font-family: 'SF Mono', Monaco, monospace;
@@ -113,7 +113,7 @@
 }
 
 .changelog-items li {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
   padding: 1px 0;
   padding-left: 10px;
@@ -126,14 +126,14 @@
   position: absolute;
   left: 0;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
 }
 
 /* Rewind Modal */
 .rewind-modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--overlay-80);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -172,7 +172,7 @@
 
 .rewind-body p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -213,7 +213,7 @@
 .rewind-body p.rewind-error-text {
   color: var(--error);
   font-family: 'SF Mono', Monaco, monospace;
-  font-size: 12px;
+  font-size: var(--font-size-base);
 }
 
 .rewind-actions {

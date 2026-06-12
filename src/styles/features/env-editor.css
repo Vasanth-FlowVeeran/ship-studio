@@ -15,7 +15,7 @@
 }
 
 .env-editor-header h3 {
-  font-size: 18px;
+  font-size: var(--font-size-2xl);
   font-weight: 600;
   margin: 0;
 }
@@ -59,13 +59,13 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-family: monospace;
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .env-file-tab:hover {
@@ -76,13 +76,13 @@
 .env-file-tab.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #1e1e1e;
+  color: var(--bg-primary);
 }
 
 .env-file-tab.env-add-file {
   padding: 6px 10px;
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--font-size-lg);
   font-weight: 500;
 }
 
@@ -98,7 +98,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-family: monospace;
   width: 140px;
 }
@@ -155,7 +155,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-family: monospace;
 }
 
@@ -176,7 +176,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-family: monospace;
 }
 
@@ -245,12 +245,12 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .env-add-btn:hover {
@@ -263,14 +263,14 @@
   background: var(--accent);
   border: none;
   border-radius: var(--radius);
-  color: #1e1e1e;
-  font-size: 13px;
+  color: var(--bg-primary);
+  font-size: var(--font-size-md);
   font-weight: 600;
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .env-save-btn:hover:not(:disabled) {
@@ -289,16 +289,16 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .env-delete-file-btn:hover {
-  background: rgba(244, 71, 71, 0.1);
+  background: rgba(var(--error-rgb), 0.1);
   border-color: var(--error);
   color: var(--error);
 }
@@ -307,7 +307,7 @@
   padding: 40px 20px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--font-size-lg);
 }
 
 .env-empty-state {
@@ -336,14 +336,14 @@
 }
 
 .env-empty-state h4 {
-  font-size: 16px;
+  font-size: var(--font-size-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 8px 0;
 }
 
 .env-empty-state p {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-muted);
   margin: 0 0 20px 0;
   max-width: 260px;
@@ -354,14 +354,14 @@
   background: var(--accent);
   border: none;
   border-radius: var(--radius);
-  color: #1e1e1e;
-  font-size: 13px;
+  color: var(--bg-primary);
+  font-size: var(--font-size-md);
   font-weight: 600;
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .env-create-btn:hover {
@@ -376,9 +376,9 @@
 
 .env-error {
   color: var(--error);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   padding: 8px 12px;
-  background: rgba(244, 71, 71, 0.1);
+  background: rgba(var(--error-rgb), 0.1);
   border-radius: var(--radius);
 }
 
@@ -390,8 +390,8 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(var(--warning-light-rgb), 0.1);
+  border: 1px solid rgba(var(--warning-light-rgb), 0.3);
   border-radius: var(--radius-md);
 }
 
@@ -407,7 +407,7 @@
   align-items: center;
   gap: 8px;
   color: var(--warning-light);
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 
 .env-sync-info svg {
@@ -416,22 +416,22 @@
 
 .env-sync-btn {
   padding: 6px 12px;
-  background: rgba(251, 191, 36, 0.2);
-  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(var(--warning-light-rgb), 0.2);
+  border: 1px solid rgba(var(--warning-light-rgb), 0.4);
   border-radius: var(--radius);
   color: var(--warning-light);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .env-sync-btn:hover {
-  background: rgba(251, 191, 36, 0.3);
+  background: rgba(var(--warning-light-rgb), 0.3);
   border-color: var(--warning-light);
 }
 
@@ -445,12 +445,12 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .env-paste-btn:hover {
@@ -466,7 +466,7 @@
 .env-paste-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay-60);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -493,14 +493,14 @@
 }
 
 .env-paste-header h4 {
-  font-size: 16px;
+  font-size: var(--font-size-xl);
   font-weight: 600;
   margin: 0;
   color: var(--text-primary);
 }
 
 .env-paste-hint {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-muted);
   margin: 0;
 }
@@ -513,7 +513,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-family: monospace;
   line-height: 1.5;
   resize: vertical;
@@ -542,12 +542,12 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .env-paste-cancel:hover {
@@ -560,14 +560,14 @@
   background: var(--accent);
   border: none;
   border-radius: var(--radius);
-  color: #1e1e1e;
-  font-size: 13px;
+  color: var(--bg-primary);
+  font-size: var(--font-size-md);
   font-weight: 600;
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .env-paste-confirm:hover:not(:disabled) {

@@ -25,7 +25,7 @@
 }
 
 .backups-modal-subtitle {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--text-muted);
   margin: 4px 0 0 0;
 }
@@ -41,8 +41,8 @@
   justify-content: center;
   border-radius: var(--radius-sm);
   transition:
-    background-color 0.15s,
-    color 0.15s;
+    background-color var(--transition),
+    color var(--transition);
 }
 
 .backups-close-btn:hover {
@@ -72,31 +72,31 @@
   gap: 12px;
   padding: 40px 20px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 
 .backups-empty-hint {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   opacity: 0.7;
 }
 
 .backups-error {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(var(--error-light-rgb), 0.1);
+  border: 1px solid rgba(var(--error-light-rgb), 0.3);
   color: var(--error-light);
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   margin-bottom: 12px;
 }
 
 .backups-success {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: rgba(var(--success-light-rgb), 0.1);
+  border: 1px solid rgba(var(--success-light-rgb), 0.3);
   color: var(--success-light);
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -130,7 +130,7 @@
 }
 
 .backup-message {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -142,7 +142,7 @@
   align-items: center;
   gap: 8px;
   margin-top: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -153,7 +153,7 @@
 
 .backup-restore-btn {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-weight: 500;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -161,8 +161,8 @@
   color: var(--text-primary);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    border-color var(--transition);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -180,7 +180,7 @@
 }
 
 .backup-current {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
   padding: 4px 8px;
   background: var(--bg-tertiary);
@@ -196,7 +196,7 @@
 }
 
 .backups-footer-hint {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -221,7 +221,7 @@
 }
 
 .backups-confirm-description {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.5;
@@ -234,7 +234,7 @@
 }
 
 .backups-confirm-backup .backup-message {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-primary);
   margin-bottom: 4px;
 }
@@ -243,7 +243,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -256,7 +256,7 @@
 
 .backups-confirm-cancel {
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 500;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -264,9 +264,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s,
-    color 0.15s;
+    background-color var(--transition),
+    border-color var(--transition),
+    color var(--transition);
 }
 
 .backups-confirm-cancel:hover:not(:disabled) {
@@ -282,7 +282,7 @@
 
 .backups-confirm-restore {
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 500;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -290,8 +290,8 @@
   color: var(--text-primary);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    border-color var(--transition);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -326,7 +326,7 @@
   width: 48px;
   height: 48px;
   border-radius: var(--radius-full);
-  background: rgba(34, 197, 94, 0.1);
+  background: rgba(var(--success-light-rgb), 0.1);
   color: var(--success-light);
   display: flex;
   align-items: center;
@@ -343,7 +343,7 @@
 }
 
 .backups-badge {
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
   padding: 3px 6px;
@@ -352,18 +352,18 @@
 }
 
 .backups-badge-preview {
-  color: rgba(96, 165, 250, 0.9);
-  background: rgba(96, 165, 250, 0.12);
+  color: rgba(var(--info-light-rgb), 0.9);
+  background: rgba(var(--info-light-rgb), 0.12);
 }
 
 .backups-branch-name {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-primary);
 }
 
 .backups-success-description {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -372,7 +372,7 @@
   text-align: left;
   margin: 4px 0 12px;
   padding-left: 20px;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   color: var(--text-secondary);
 }
 
@@ -390,7 +390,7 @@
 
 .backups-success-pr-btn {
   padding: 10px 16px;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 500;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -398,8 +398,8 @@
   color: var(--text-primary);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    border-color var(--transition);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -414,7 +414,7 @@
 
 .backups-success-close-btn {
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 500;
   background: transparent;
   border: 1px solid var(--border);
@@ -422,9 +422,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s,
-    color 0.15s;
+    background-color var(--transition),
+    border-color var(--transition),
+    color var(--transition);
   width: 100%;
 }
 

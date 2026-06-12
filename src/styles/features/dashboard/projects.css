@@ -7,7 +7,7 @@
 }
 
 .dashboard-section-title {
-  font-size: 14px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -28,7 +28,7 @@
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-size-base);
 }
 
 .dashboard-section-controls .btn-icon:hover {
@@ -53,12 +53,12 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .sort-dropdown-btn:hover {
@@ -91,13 +91,13 @@
   border: none;
   border-radius: 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 0.1s,
-    color 0.1s,
-    border-color 0.1s;
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .sort-dropdown-item:hover {
@@ -119,7 +119,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--text-muted);
   margin-top: 2px;
   min-width: 0;
@@ -154,7 +154,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--text-muted);
   margin-top: 4px;
   min-width: 0;
@@ -268,18 +268,18 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .integration-bar-item-connect:hover {
   background: var(--accent);
   border-color: var(--accent);
-  color: white;
+  color: var(--text-bright);
 }
 
 /* ============ Project Card Menu ============ */
@@ -311,13 +311,13 @@
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 0.1s,
-    color 0.1s,
-    border-color 0.1s;
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .project-card-menu-item:hover {
@@ -326,7 +326,7 @@
 }
 
 .project-card-menu-item-danger:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(var(--error-light-rgb), 0.1);
   color: var(--error);
 }
 
@@ -385,7 +385,7 @@
   .dashboard-header-actions .btn-primary,
   .dashboard-header-actions .btn-secondary {
     padding: 6px 10px;
-    font-size: 11px;
+    font-size: var(--font-size-sm);
   }
 
   /* Section header adjustments */
@@ -395,7 +395,7 @@
   }
 
   .dashboard-section-title {
-    font-size: 13px;
+    font-size: var(--font-size-md);
   }
 
   /* Integration card — tighter spacing on narrow screens */
