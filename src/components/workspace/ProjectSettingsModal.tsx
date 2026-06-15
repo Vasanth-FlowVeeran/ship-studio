@@ -5,11 +5,13 @@
  * The parent component handles persistence via Tauri commands.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import '../../styles/features/notifications.css';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { useModal } from '../../contexts/ModalContext';
+import { getForceStaticServe, setForceStaticServe } from '../../lib/project';
+import { logger } from '../../lib/logger';
 
 interface ProjectSettingsModalProps {
   currentPort: number;
@@ -18,6 +20,8 @@ interface ProjectSettingsModalProps {
   customDevCommand?: string | null;
   onSaveDevCommand?: (command: string | null) => void;
   isWebProject?: boolean;
+  /** Absolute project path — enables the "serve as static site" override. */
+  projectPath?: string;
 }
 
 export function ProjectSettingsModal({
@@ -26,11 +30,43 @@ export function ProjectSettingsModal({
   customDevCommand,
   onSaveDevCommand,
   isWebProject,
+  projectPath,
 }: ProjectSettingsModalProps) {
   const { isOpen, close: onClose } = useModal('projectSettings');
   const [port, setPort] = useState(currentPort);
   const [devCommand, setDevCommand] = useState(customDevCommand ?? '');
   const showDevCommand = !isWebProject && onSaveDevCommand;
+  // The static-serve override is only meaningful for non-web (generic) projects
+  // — a detected framework already serves itself.
+  const showForceStatic = !isWebProject && !!projectPath;
+  const [forceStatic, setForceStatic] = useState(false);
+  // The on-disk value once loaded for the current project, or null while the
+  // load is still in flight. Persisting is gated on this so a Save before the
+  // load resolves (or right after switching projects) can't clobber the real
+  // value with the stale default. A ref (not state) — it's only read at save
+  // time and must not trigger a render.
+  const loadedForceStatic = useRef<boolean | null>(null);
+
+  // Load the persisted override whenever the modal opens (or the project changes).
+  useEffect(() => {
+    if (!isOpen || !showForceStatic || !projectPath) return;
+    let cancelled = false;
+    loadedForceStatic.current = null;
+    getForceStaticServe(projectPath)
+      .then((value) => {
+        if (cancelled) return;
+        setForceStatic(value);
+        loadedForceStatic.current = value;
+      })
+      .catch((err) => {
+        logger.warn('[ProjectSettings] Failed to load force_static_serve', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, showForceStatic, projectPath]);
 
   const isValid = Number.isInteger(port) && port >= 1 && port <= 65535;
 
@@ -40,6 +76,20 @@ export function ProjectSettingsModal({
       if (showDevCommand) {
         const trimmed = devCommand.trim();
         onSaveDevCommand(trimmed || null);
+      }
+      // Only persist when the current value has loaded and the user actually
+      // changed it — never write the stale default over an unread value.
+      if (
+        showForceStatic &&
+        projectPath &&
+        loadedForceStatic.current !== null &&
+        forceStatic !== loadedForceStatic.current
+      ) {
+        void setForceStaticServe(projectPath, forceStatic).catch((err) => {
+          logger.error('[ProjectSettings] Failed to save force_static_serve', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
       }
       onClose();
     }
@@ -134,6 +184,49 @@ export function ProjectSettingsModal({
                   toolbar. Leave blank to manage the dev server yourself in the terminal.
                 </span>
               </div>
+            </div>
+          )}
+          {showForceStatic && (
+            <div className="notification-setting-section">
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 'var(--spacing-sm)',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={forceStatic}
+                  onChange={(e) => setForceStatic(e.target.checked)}
+                  style={{ marginTop: 2 }}
+                />
+                <span
+                  style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}
+                >
+                  <span
+                    style={{
+                      fontSize: 'var(--font-size-sm)',
+                      fontWeight: 500,
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    Serve as a static site
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 'var(--font-size-xs)',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Serve files directly even though a <code>package.json</code> is present. Use
+                    this for plain HTML/CSS sites that keep a <code>package.json</code> only for
+                    build tooling. Reopen the project to apply.
+                  </span>
+                </span>
+              </label>
             </div>
           )}
         </div>
