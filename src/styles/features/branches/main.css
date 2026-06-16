@@ -27,6 +27,13 @@
   padding: 0 var(--spacing-md);
 }
 
+/* In the header the chip shares the row with the tabs and toolbar, so truncate
+   the branch name much sooner than the standalone chip's 280px to keep long
+   names from crowding out the tabs. */
+.workspace-header .branch-name {
+  max-width: 150px;
+}
+
 .branch-indicator-button:hover {
   background: var(--border);
   color: var(--text-primary);
