@@ -584,10 +584,6 @@ pub struct SpawnPtyOptions {
     pub cwd: String,
     pub command: String,
     pub args: Vec<String>,
-    #[allow(dead_code)]
-    pub rows: u32,
-    #[allow(dead_code)]
-    pub cols: u32,
 }
 
 // ============ Code Health ============
