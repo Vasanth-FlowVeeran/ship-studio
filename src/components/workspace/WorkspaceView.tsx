@@ -56,7 +56,6 @@ import {
 import { useSnapshots } from '../../hooks/useSnapshots';
 import { ToolbarDropdown } from './ToolbarDropdown';
 import { TerminalSplitHeaders } from './TerminalSplitHeaders';
-import { AgentWorkingIndicator } from './AgentWorkingIndicator';
 import { TerminalSplitDividers } from './TerminalSplitDividers';
 import { PluginsDropdown } from '../plugins/PluginsDropdown';
 import { getAgentById } from '../../lib/agent';
@@ -1121,10 +1120,6 @@ export const WorkspaceView = memo(function WorkspaceView({
                               <RedoIcon size={12} />
                             </button>
                           </div>
-                          <AgentWorkingIndicator
-                            projectPath={currentProject?.path}
-                            tabId={activeTerminalTab}
-                          />
                           <div style={{ flex: 1 }} />
                           <div className="terminal-tabs-bar-right">
                             {canSplit && (

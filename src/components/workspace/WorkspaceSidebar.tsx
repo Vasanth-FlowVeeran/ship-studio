@@ -30,7 +30,7 @@ type GroupId = 'pinned' | 'projects';
 interface SidebarItem {
   key: string;
   label: string;
-  dotState: 'idle' | 'active' | 'attention' | 'muted';
+  dotState: 'idle' | 'active' | 'thinking' | 'attention' | 'muted';
   onSelect?: () => void;
   onClose?: () => void;
   isActive?: boolean;
@@ -175,7 +175,8 @@ function projectInitials(name: string): string {
  *   - tab has attention flag               → `attention` (amber pulse)
  *   - status === 'crashed'                 → `attention` (amber; TODO: red)
  *   - status === 'exited'                  → `muted` (grey, dimmed)
- *   - status === 'thinking' | 'waiting'    → `active` (green; agent busy)
+ *   - status === 'thinking'                → `thinking` (green; dot spins)
+ *   - status === 'waiting'                 → `active` (green; agent busy)
  *   - status === 'running' | 'starting'    → `active` (green; PTY alive)
  *   - no status yet (freshly-created tab)  → `active`
  *
@@ -187,6 +188,7 @@ function tabDotState(tab: { attention?: boolean; status?: TabStatus }): SidebarI
   if (tab.attention) return 'attention';
   if (tab.status === 'crashed') return 'attention';
   if (tab.status === 'exited') return 'muted';
+  if (tab.status === 'thinking') return 'thinking';
   return 'active';
 }
 

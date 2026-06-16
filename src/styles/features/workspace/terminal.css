@@ -624,14 +624,3 @@
   background: rgba(var(--warning-rgb), 0.2);
   color: var(--warning);
 }
-
-/* Inline "Agent is working…" indicator in the terminal pane header. */
-.terminal-agent-working {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-left: var(--spacing-sm);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-}
