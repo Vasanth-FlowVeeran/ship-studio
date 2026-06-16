@@ -13,7 +13,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { spawn, IPty } from 'tauri-pty';
 import { homeDir } from '@tauri-apps/api/path';
-import { invoke } from '@tauri-apps/api/core';
+import { getSystemEnv } from '../../lib/project';
 import { readDir, exists } from '@tauri-apps/plugin-fs';
 import { loadNerdFonts } from '../../lib/fonts';
 import { isWindows } from '../../lib/setup';
@@ -162,7 +162,7 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
 
         if (isWin) {
           // Windows: get system env vars from backend and build Windows-compatible env
-          const systemEnv = await invoke<Record<string, string>>('get_system_env');
+          const systemEnv = await getSystemEnv();
 
           // Add extra tool installation paths to the front of PATH
           const programFiles = systemEnv['ProgramFiles'] || 'C:\\Program Files';

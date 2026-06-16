@@ -45,7 +45,7 @@ import { WorkspaceView } from './components/workspace/WorkspaceView';
 import { WorkspaceSidebar } from './components/workspace/WorkspaceSidebar';
 import { useProjectRail } from './hooks/useProjectRail';
 import { OnboardingScreen } from './components/setup';
-import { Project } from './lib/project';
+import { Project, setTerminalState } from './lib/project';
 import { markSetupComplete, getDefaultAgentId as fetchDefaultAgentId } from './lib/setup';
 import { initDefaultAgent } from './lib/agent';
 import { sessionRegistry } from './lib/sessionRegistry';
@@ -552,16 +552,13 @@ function AppContents({ initialProjectPath }: AppProps) {
         const idx = snap?.terminalTabs.findIndex((t) => t.sessionId === tabSessionId) ?? -1;
         if (snap && idx >= 0) {
           try {
-            await invoke('set_terminal_state', {
-              projectPath,
-              state: {
-                tabs: snap.terminalTabs.map((t) => ({
-                  agent_id: t.agentId,
-                  session_id: t.sessionId,
-                  custom_title: t.customTitle,
-                })),
-                active_tab_index: idx,
-              },
+            await setTerminalState(projectPath, {
+              tabs: snap.terminalTabs.map((t) => ({
+                agent_id: t.agentId,
+                session_id: t.sessionId,
+                custom_title: t.customTitle,
+              })),
+              active_tab_index: idx,
             });
           } catch (err) {
             logger.warn('[SelectProjectTab] Failed to persist active tab', {
