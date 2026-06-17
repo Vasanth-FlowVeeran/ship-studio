@@ -6,6 +6,11 @@ The latest entry is rendered inside the in-app update dialog, so write user-
 facing language — what changed, in plain English — not commit subjects.
 -->
 
+## What's New in v0.8.2
+
+- **Preview reliability** - Live preview now opens reliably on slow-compiling dev servers (Next.js 16 / Turbopack) instead of getting stuck on "Stopped waiting". **Edit panel scroll** - The pinned visual editor panel now scrolls when its content is tall.
+
+
 ## What's New in v0.8.1
 
 - **Start faster** - An empty dashboard now offers a one-click "Create your first project" instead of a blank screen
