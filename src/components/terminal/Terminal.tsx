@@ -136,6 +136,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   // "press Enter to restart" prompt. While set, keystrokes don't go to the
   // (dead) PTY — Enter relaunches the agent instead.
   const exitedRef = useRef(false);
+  // Guards a held Enter from dispatching multiple restarts before the tab
+  // remounts: only the first Enter after exit relaunches, the rest are swallowed.
+  const restartRequestedRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false); // Start unfocused to show overlay until user clicks
 
@@ -859,7 +862,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           // into it. Enter relaunches; everything else is ignored so a
           // stray keypress can't look like it's being swallowed silently.
           if (exitedRef.current) {
-            if (data.includes('\r')) onRequestRestartRef.current?.();
+            if (data.includes('\r') && !restartRequestedRef.current) {
+              restartRequestedRef.current = true;
+              onRequestRestartRef.current?.();
+            }
             return;
           }
           const sid = ptyRef.current?.sessionId;
@@ -933,6 +939,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     // then restart into it without closing the tab.
     const offerRestart = () => {
       exitedRef.current = true;
+      restartRequestedRef.current = false;
       terminalRef.current?.write(
         `\r\n\x1b[2m[Process exited] — press \x1b[0m\x1b[1mEnter\x1b[0m\x1b[2m to restart ${agent.displayName}\x1b[0m\r\n`
       );
