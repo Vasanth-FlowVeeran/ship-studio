@@ -752,6 +752,12 @@ pub struct AppState {
     /// macOS beta / GPU-driver combinations).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub terminal_gpu_enabled: Option<bool>,
+    /// User-configured root directory where projects are listed and created.
+    /// None falls back to the built-in default (`~/ShipStudio`). The default root
+    /// always stays valid even when a custom one is set, so projects already in
+    /// `~/ShipStudio` keep opening.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub projects_root: Option<String>,
 }
 
 // ============ Compact Mode ============

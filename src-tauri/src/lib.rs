@@ -461,6 +461,12 @@ pub fn run() {
             commands::settings::set_slack_cta_hidden,
             commands::settings::get_terminal_gpu_enabled,
             commands::settings::set_terminal_gpu_enabled,
+            commands::settings::get_projects_root,
+            commands::settings::set_projects_root,
+            commands::settings::is_custom_projects_root,
+            commands::settings::pick_projects_root,
+            commands::projects::list_movable_projects,
+            commands::projects::move_projects_to_root,
             // AI generation
             commands::ai::generate_pr_description,
             commands::ai::generate_commit_message,

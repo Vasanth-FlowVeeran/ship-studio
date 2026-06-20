@@ -746,6 +746,7 @@ export function ProjectList({
           onClose={() => setShowSettings(false)}
           onCalendarHiddenChange={setCalendarHidden}
           onSlackCtaHiddenChange={setSlackCtaHidden}
+          onProjectsRootChanged={() => void loadProjects()}
         />
 
         {/* What's New Modal */}

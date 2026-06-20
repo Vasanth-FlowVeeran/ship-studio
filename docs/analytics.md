@@ -138,6 +138,15 @@ The modal id is baked into the event name (`modal_<id>_opened` / `modal_<id>_clo
 
 To get an aggregate "any modal opened" count in PostHog, use a regex match on event name (`modal_.*_opened`) or a property filter on `modal_id`.
 
+### Settings
+
+| Event | Properties |
+|---|---|
+| `calendar_visibility_toggled` | `visible` |
+| `terminal_gpu_toggled` | `enabled` |
+| `projects_root_changed` | `is_custom` (false when reset to the default `~/ShipStudio`) |
+| `projects_moved` | `moved_count`, `skipped_count` (after moving projects into a newly-chosen folder) |
+
 ### Plugins / Skills / MCP
 
 | Event | Properties |
