@@ -41,11 +41,7 @@ export interface AccountCredentialStatus {
 }
 
 /** Credential key identifiers accepted by set/clear commands. */
-export type CredentialKey =
-  | 'anthropic_base_url'
-  | 'vercel_token'
-  | 'git_name'
-  | 'git_email';
+export type CredentialKey = 'anthropic_base_url' | 'vercel_token' | 'git_name' | 'git_email';
 
 /** Human-readable labels for each credential key. */
 export const CREDENTIAL_LABELS: Record<CredentialKey, string> = {
@@ -188,4 +184,3 @@ export async function assignActiveWorkspaceToNewProject(projectPath: string): Pr
     // Non-fatal: the project still opens; it just lands in Default until moved.
   }
 }
-

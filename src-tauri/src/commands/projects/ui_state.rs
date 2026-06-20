@@ -301,9 +301,7 @@ pub async fn move_project_to_account(
         let target_root = crate::utils::projects_root_for_account(&account_id);
         let target_root_canon =
             dunce::canonicalize(&target_root).unwrap_or_else(|_| target_root.clone());
-        let current_parent_canon = project
-            .parent()
-            .and_then(|p| dunce::canonicalize(p).ok());
+        let current_parent_canon = project.parent().and_then(|p| dunce::canonicalize(p).ok());
 
         let needs_move = current_parent_canon.is_some_and(|cp| cp != target_root_canon);
 
@@ -314,11 +312,9 @@ pub async fn move_project_to_account(
                 || crate::state::get_session(&project_path)
                     .is_some_and(|s| s.status == crate::state::SessionStatus::Active);
             if is_open {
-                return Err(
-                    "Close this project before moving it to another workspace."
-                        .to_string()
-                        .into(),
-                );
+                return Err("Close this project before moving it to another workspace."
+                    .to_string()
+                    .into());
             }
 
             let name = project.file_name().ok_or("Invalid project path")?;
@@ -342,7 +338,8 @@ pub async fn move_project_to_account(
             if let Err(e) = super::pins::rename_pinned_path(&project_path, &dest_str) {
                 tracing::warn!(error = %e, "Failed to rekey pins after workspace move");
             }
-            if let Err(e) = crate::commands::folders::rename_project_path(&project_path, &dest_str) {
+            if let Err(e) = crate::commands::folders::rename_project_path(&project_path, &dest_str)
+            {
                 tracing::warn!(error = %e, "Failed to rekey folder membership after workspace move");
             }
             crate::state::rename_session_path(&project_path, &dest_str);

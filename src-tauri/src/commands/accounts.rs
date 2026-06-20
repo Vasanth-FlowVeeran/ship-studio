@@ -42,7 +42,12 @@ const CRED_ENV_VARS: &[(&str, &str)] = &[
 
 /// All credential keys storable in the keychain (including git identity,
 /// which isn't injected via `CRED_ENV_VARS` but via `GIT_*` env vars).
-const ALL_CRED_KEYS: &[&str] = &["anthropic_base_url", "vercel_token", "git_name", "git_email"];
+const ALL_CRED_KEYS: &[&str] = &[
+    "anthropic_base_url",
+    "vercel_token",
+    "git_name",
+    "git_email",
+];
 
 /// Validates a frontend-supplied account id before it's joined into filesystem
 /// paths (`~/.ship-studio/accounts/<id>/`), keychain service names, or env vars.
