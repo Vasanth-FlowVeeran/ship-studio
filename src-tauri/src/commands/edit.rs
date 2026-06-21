@@ -24,17 +24,17 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Source file extensions we index for class literals.
-const SOURCE_EXTS: &[&str] = &["tsx", "jsx", "astro", "liquid"];
+const SOURCE_EXTS: &[&str] = &["tsx", "jsx", "astro", "liquid", "html"];
 
 /// Class-bearing attribute names to scan, by file extension. React/JSX
 /// (`.tsx`/`.jsx`) authors write `className`; Astro `.astro` templates use the
 /// HTML `class` attribute, while React/Preact islands embedded in `.astro` still
-/// use `className` — so Astro files scan for both. Shopify Liquid templates
-/// are plain HTML and only ever use `class`.
+/// use `className` — so Astro files scan for both. Shopify Liquid and plain
+/// `.html` templates only ever use `class`.
 fn attrs_for_ext(ext: &str) -> &'static [&'static str] {
     match ext {
         "astro" => &["className", "class"],
-        "liquid" => &["class"],
+        "liquid" | "html" => &["class"],
         _ => &["className"],
     }
 }

@@ -527,7 +527,9 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   // Astro: no Tailwind). Mutually exclusive with the Tailwind editor above:
   // Astro+Tailwind → `editor`; Astro without Tailwind → `cssEditor`. Same toggle
   // and selection experience; edits write CSS rules instead of utility classes.
-  const cssEditorEnabled = conn.serverReady && projectType === 'astro' && !tailwindActive;
+  const cssEditorEnabled =
+    conn.serverReady &&
+    ((projectType === 'astro' && !tailwindActive) || projectType === 'statichtml');
   const cssEditor = useCssEditor({
     iframeRef,
     projectPath,
@@ -780,8 +782,8 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
               <strong>Visual editing</strong>
               <span>
                 Click elements in the preview to edit their styles — no code. Works with Next.js,
-                Astro, and Shopify projects styled with Tailwind, and Astro projects using plain
-                CSS.
+                Astro, and Shopify projects styled with Tailwind, and with Astro or plain HTML/CSS
+                projects styled with regular CSS.
               </span>
             </span>
           </span>

@@ -284,7 +284,6 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
                           name={template.name}
                           description={template.description}
                           selected={selectedTemplate?.id === template.id && !hasZipTemplate}
-                          recommended={template.id === defaultTemplateId}
                           onSelect={() => {
                             handleTemplateSelect(template);
                             void trackEvent('template_selected', {
