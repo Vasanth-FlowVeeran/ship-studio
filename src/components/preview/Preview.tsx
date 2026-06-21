@@ -724,7 +724,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
       }}
     >
       <div className="preview-toolbar">
-        {editorMode && (
+        {editorMode ? (
           <button
             type="button"
             className={`preview-edit-toggle${activeEditMode ? ' active' : ''}`}
@@ -751,6 +751,40 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
               aria-hidden
             />
           </button>
+        ) : (
+          // Preview-capable but not editable: show the toggle grayed out with a
+          // tooltip explaining what visual editing is and where it works.
+          <span className="preview-edit-toggle-wrap">
+            <button
+              type="button"
+              className="preview-edit-toggle preview-edit-toggle--disabled"
+              aria-disabled="true"
+              tabIndex={-1}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 4l7.07 17 2.51-7.39L21 11.07z" />
+              </svg>
+              <span>Edit</span>
+            </button>
+            <span className="preview-edit-tooltip" role="tooltip">
+              <strong>Visual editing</strong>
+              <span>
+                Click elements in the preview to edit their styles — no code. Works with Next.js,
+                Astro, and Shopify projects styled with Tailwind, and Astro projects using plain
+                CSS.
+              </span>
+            </span>
+          </span>
         )}
 
         {onToggleLogs && (

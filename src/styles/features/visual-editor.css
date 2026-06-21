@@ -23,6 +23,54 @@
   color: var(--text-primary);
 }
 
+/* Grayed-out toggle for preview-capable but non-editable projects, with a
+   hover tooltip explaining what visual editing is and where it works. */
+.preview-edit-toggle-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.preview-edit-toggle--disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.preview-edit-toggle--disabled:hover {
+  color: var(--text-secondary);
+}
+.preview-edit-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: var(--z-tooltip);
+  width: 256px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-2px);
+  transition:
+    opacity var(--transition),
+    transform var(--transition),
+    visibility var(--transition);
+  pointer-events: none;
+}
+.preview-edit-tooltip strong {
+  color: var(--text-primary);
+}
+.preview-edit-toggle-wrap:hover .preview-edit-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 /* iOS-style toggle pill next to the Edit label, mirroring the Inspect toggle so
    the two side-by-side controls read as the same kind of switch. Edit mode is
    shown by the pill flipping on (not by filling the whole button). */
