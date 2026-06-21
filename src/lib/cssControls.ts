@@ -278,3 +278,18 @@ export const CSS_CATEGORIES: CssCategory[] = [
   },
   { id: 'custom', label: 'Custom', controls: [] },
 ];
+
+/** Map a CSS property to the category whose controls edit it — powers "add a
+ *  property" jumping to the right section. Spacing shorthands/longhands map to
+ *  the box-model editor's category. */
+export const PROP_TO_CATEGORY: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const cat of CSS_CATEGORIES) {
+    for (const c of cat.controls) map[c.prop] = cat.id;
+  }
+  for (const t of ['padding', 'margin']) {
+    map[t] = 'spacing';
+    for (const s of ['top', 'right', 'bottom', 'left']) map[`${t}-${s}`] = 'spacing';
+  }
+  return map;
+})();

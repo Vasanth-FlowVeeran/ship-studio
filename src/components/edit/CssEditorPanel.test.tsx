@@ -71,6 +71,19 @@ describe('CssEditorPanel', () => {
     expect(onSave).toHaveBeenCalledWith('display', 'flex');
   });
 
+  it('renders accordion sections and adds a typed property', () => {
+    const onSave = vi.fn();
+    renderPanel(resolved([{ property: 'color', value: 'red', important: false }]), { onSave });
+    // Sections are present (collapsible <details>), not tabs.
+    expect(screen.getByText('Layout')).toBeInTheDocument();
+    expect(screen.getByText('Effects')).toBeInTheDocument();
+    // The always-available add row writes any property.
+    fireEvent.change(screen.getByPlaceholderText('property'), { target: { value: 'opacity' } });
+    fireEvent.change(screen.getByPlaceholderText('value'), { target: { value: '0.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(onSave).toHaveBeenCalledWith('opacity', '0.5');
+  });
+
   it('Code view shows raw CSS and saves the diff', () => {
     const onSaveMany = vi.fn();
     renderPanel(resolved([{ property: 'color', value: 'red', important: false }]), { onSaveMany });

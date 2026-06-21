@@ -21,8 +21,13 @@ import { PinIcon } from '../icons/layout';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { trackEvent } from '../../lib/analytics';
 import { buildCssPrepPrompt } from '../../lib/edit-css';
-import { CssControls } from './CssControls';
-import { CSS_CATEGORIES } from '../../lib/cssControls';
+import { CssControls, AddProp } from './CssControls';
+import { CSS_CATEGORIES, PROP_TO_CATEGORY } from '../../lib/cssControls';
+
+/** Common sections start open; the long-tail ones collapse to keep it scannable. */
+function defaultSectionOpen(id: string): boolean {
+  return !['position', 'effects'].includes(id);
+}
 import type { CssSelection } from '../../hooks/useCssEditor';
 import type { CssDeclaration } from '../../lib/edit-css';
 
@@ -174,7 +179,29 @@ export function CssEditorPanel({
       /* ignore */
     }
   }, []);
-  const [activeCat, setActiveCat] = useState('layout');
+  // Accordion section open-state (per category) + a transient highlight used when
+  // "add property" jumps to an existing control.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [highlightProp, setHighlightProp] = useState<string | null>(null);
+  const hlTimer = useRef<number | null>(null);
+  const jumpToProp = useCallback((prop: string) => {
+    const cat = PROP_TO_CATEGORY[prop];
+    if (!cat) return; // arbitrary property with no structured control — just added
+    setOpenSections((o) => ({ ...o, [cat]: true }));
+    setHighlightProp(prop);
+    requestAnimationFrame(() => {
+      const root = rootRef.current;
+      const el =
+        root?.querySelector(`[data-prop="${prop}"]`) ?? root?.querySelector(`[data-cat="${cat}"]`);
+      try {
+        (el as HTMLElement | null)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } catch {
+        /* scrollIntoView is unavailable in some environments (tests) */
+      }
+    });
+    if (hlTimer.current) window.clearTimeout(hlTimer.current);
+    hlTimer.current = window.setTimeout(() => setHighlightProp(null), 1800);
+  }, []);
 
   // Agent-prep flow: a reviewable prompt that refactors an off-spec project
   // toward the editor's conventions.
@@ -329,26 +356,49 @@ export function CssEditorPanel({
 
             {view === 'visual' ? (
               <>
-                <div className="ss-css-tabs" role="tablist">
+                <div className="ss-css-sections">
                   {CSS_CATEGORIES.filter((c) => c.id !== 'custom').map((cat) => (
-                    <button
+                    <details
                       key={cat.id}
-                      type="button"
-                      role="tab"
-                      className={`ss-css-tab${activeCat === cat.id ? ' is-active' : ''}`}
-                      aria-selected={activeCat === cat.id}
-                      onClick={() => setActiveCat(cat.id)}
+                      className="ss-edit-panel__section"
+                      data-cat={cat.id}
+                      open={openSections[cat.id] ?? defaultSectionOpen(cat.id)}
+                      onToggle={(e) =>
+                        setOpenSections((o) => ({ ...o, [cat.id]: e.currentTarget.open }))
+                      }
                     >
-                      {cat.label}
-                    </button>
+                      <summary className="ss-edit-panel__section-head">
+                        <span className="ss-edit-panel__section-row">
+                          <span className="ss-edit-panel__section-title">{cat.label}</span>
+                          <svg
+                            className="ss-edit-panel__section-chevron"
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </span>
+                      </summary>
+                      <div className="ss-edit-panel__section-body">
+                        <CssControls
+                          category={cat.id}
+                          declarations={res.declarations}
+                          onPreview={onPreview}
+                          onSave={onSave}
+                          highlightProp={highlightProp}
+                        />
+                      </div>
+                    </details>
                   ))}
                 </div>
-                <CssControls
-                  category={activeCat}
-                  declarations={res.declarations}
-                  onPreview={onPreview}
-                  onSave={onSave}
-                />
+                <AddProp onSave={onSave} onAdded={jumpToProp} />
               </>
             ) : (
               <CodeView

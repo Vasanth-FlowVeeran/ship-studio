@@ -402,11 +402,18 @@ function CssSpacingBox({
   );
 }
 
-function Control({ control, value, onPreview, onSave }: { control: CssControl } & ControlProps) {
+function Control({
+  control,
+  value,
+  onPreview,
+  onSave,
+  highlight,
+}: { control: CssControl; highlight?: boolean } & ControlProps) {
   const key = `${control.prop}:${value}`;
+  let inner: ReactNode;
   switch (control.kind) {
     case 'segmented':
-      return (
+      inner = (
         <Segmented
           prop={control.prop}
           label={control.label}
@@ -416,8 +423,9 @@ function Control({ control, value, onPreview, onSave }: { control: CssControl } 
           onSave={onSave}
         />
       );
+      break;
     case 'select':
-      return (
+      inner = (
         <SelectControl
           prop={control.prop}
           label={control.label}
@@ -427,8 +435,9 @@ function Control({ control, value, onPreview, onSave }: { control: CssControl } 
           onSave={onSave}
         />
       );
+      break;
     case 'length':
-      return (
+      inner = (
         <LengthControl
           key={key}
           prop={control.prop}
@@ -439,8 +448,9 @@ function Control({ control, value, onPreview, onSave }: { control: CssControl } 
           onSave={onSave}
         />
       );
+      break;
     case 'color':
-      return (
+      inner = (
         <ColorControl
           key={key}
           prop={control.prop}
@@ -450,19 +460,34 @@ function Control({ control, value, onPreview, onSave }: { control: CssControl } 
           onSave={onSave}
         />
       );
+      break;
   }
+  return (
+    <div data-prop={control.prop} className={`ss-cc-ctrl${highlight ? ' ss-cc-hl' : ''}`}>
+      {inner}
+    </div>
+  );
 }
 
 /** Type any CSS property + value and add it to the rule. Always available so no
- *  property is ever out of reach of the visual editor. */
-function AddProp({ onSave }: { onSave: (property: string, value: string | null) => void }) {
+ *  property is ever out of reach of the visual editor. `onAdded` fires with the
+ *  property so the panel can jump to (and highlight) its structured control. */
+export function AddProp({
+  onSave,
+  onAdded,
+}: {
+  onSave: (property: string, value: string | null) => void;
+  onAdded?: (property: string) => void;
+}) {
   const [prop, setProp] = useState('');
   const [value, setValue] = useState('');
   const ready =
     isValidProperty(prop) && value.trim() !== '' && cssSupports(prop.trim(), value.trim());
   const add = () => {
     if (!ready) return;
-    onSave(prop.trim().toLowerCase(), value.trim());
+    const p = prop.trim().toLowerCase();
+    onSave(p, value.trim());
+    onAdded?.(p);
     setProp('');
     setValue('');
   };
@@ -500,11 +525,13 @@ export function CssControls({
   declarations,
   onPreview,
   onSave,
+  highlightProp,
 }: {
   category: string;
   declarations: CssDeclaration[];
   onPreview: (property: string, value: string | null) => void;
   onSave: (property: string, value: string | null) => void;
+  highlightProp?: string | null;
 }) {
   const get = (p: string) => cssValueOf(declarations, p);
   const cat = CSS_CATEGORIES.find((c) => c.id === category);
@@ -522,10 +549,10 @@ export function CssControls({
             value={get(c.prop)}
             onPreview={onPreview}
             onSave={onSave}
+            highlight={highlightProp === c.prop}
           />
         ))
       )}
-      <AddProp onSave={onSave} />
     </div>
   );
 }

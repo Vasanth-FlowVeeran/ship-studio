@@ -228,6 +228,22 @@
   flex-direction: column;
   gap: var(--spacing-md);
 }
+/* Transient flash when "add property" jumps to an existing control. */
+.ss-cc-ctrl {
+  border-radius: var(--radius-sm);
+}
+@keyframes ss-cc-flash {
+  0%,
+  100% {
+    background: transparent;
+  }
+  30% {
+    background: color-mix(in srgb, var(--action) 24%, transparent);
+  }
+}
+.ss-cc-hl {
+  animation: ss-cc-flash 1.6s ease;
+}
 .ss-cc-field {
   display: flex;
   flex-direction: column;
