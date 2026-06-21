@@ -171,6 +171,23 @@
 .page-list {
   max-height: 240px;
   overflow-y: auto;
+  /* Custom, theme-matched scrollbar — never the device's white default. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.page-list::-webkit-scrollbar {
+  width: 10px;
+}
+.page-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.page-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid var(--bg-secondary);
+}
+.page-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .page-list-empty {

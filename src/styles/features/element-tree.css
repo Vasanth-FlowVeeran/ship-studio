@@ -110,7 +110,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--spacing-md);
+  padding: var(--spacing-sm);
 }
 /* The highlighted editor fills the main area. */
 .ss-htmltab__main .ss-codeedit {

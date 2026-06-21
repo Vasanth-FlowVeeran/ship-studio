@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeAll } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { EditorView } from '@codemirror/view';
 import { CssEditorPanel } from './CssEditorPanel';
 import type { CssSelection } from '../../hooks/useCssEditor';
 
@@ -133,8 +134,17 @@ describe('CssEditorPanel', () => {
     const onSaveMany = vi.fn();
     renderPanel(resolved([{ property: 'color', value: 'red', important: false }]), { onSaveMany });
     fireEvent.click(screen.getByRole('button', { name: 'Code' }));
-    const area = screen.getByDisplayValue(/color: red;/);
-    fireEvent.change(area, { target: { value: 'color: blue;\npadding: 8px;' } });
+    // The Code view is a CodeMirror editor (contenteditable), not a textarea —
+    // assert it shows the serialized rule, then drive an edit through the view.
+    const editor = document.querySelector('.cm-editor') as HTMLElement;
+    expect(editor).toBeTruthy();
+    expect(editor.textContent).toContain('color: red;');
+    const view = EditorView.findFromDOM(editor)!;
+    act(() => {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: 'color: blue;\npadding: 8px;' },
+      });
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(onSaveMany).toHaveBeenCalledWith([
       { property: 'color', value: 'blue' },

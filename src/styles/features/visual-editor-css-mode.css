@@ -609,6 +609,17 @@
   min-height: 0;
   position: relative;
   overflow: hidden;
+  /* Full-bleed: cancel the panel body's side/bottom padding so the editor box's
+     only inset is its own `__main` padding — not body + main doubled (which
+     left a fat margin around the box). Mirrors the HTML editor's container,
+     whose cell has padding: 0. The top keeps the body's flex gap as the divider
+     below the Visual/Code toggle. */
+  margin: 0 calc(-1 * var(--spacing-md)) calc(-1 * var(--spacing-md));
+}
+/* No head row in the code view, so drop the top padding — the box sits just
+   under the toggle without a doubled gap above it. */
+.ss-css-code .ss-htmltab__main {
+  padding-top: 0;
 }
 
 /* ── Agent-prep flow ─────────────────────────────────────────────── */
