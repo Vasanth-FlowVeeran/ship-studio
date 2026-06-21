@@ -66,41 +66,70 @@
   padding: var(--spacing-xs) 0;
 }
 
-/* Code (Edit-HTML) view: a flex column so the editor fills the full width and
-   height of the (widened) panel rather than collapsing to its intrinsic size. */
+/* Code (Edit-HTML) view. The body is just the positioning context; the tab
+   itself fills it absolutely (see below) so nothing can shrink it. */
 .ss-tree-panel__body--code {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   padding: 0;
-}
-.ss-tree-panel__body--code > * {
-  width: 100%;
-  min-width: 0;
+  overflow: hidden;
 }
 
-/* Edit-HTML (Code) view. */
-.ss-tree-html {
+/* ── HTML code tab ──────────────────────────────────────────────────
+   Absolute-fill so the editor always spans the full panel cell — flex/intrinsic
+   sizing of the highlighted editor was collapsing the column to a partial width.
+   A header (what you're editing) + the editor + a footer (Revert/Save). */
+.ss-htmltab {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  min-width: 0;
+}
+.ss-htmltab__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--border);
+}
+.ss-htmltab__tag {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--accent);
+}
+.ss-htmltab__cls {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+.ss-htmltab__main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-md);
+}
+/* The highlighted editor fills the main area. */
+.ss-htmltab__main .ss-codeedit {
   flex: 1;
   min-height: 0;
   width: 100%;
-  box-sizing: border-box;
-  padding: var(--spacing-md);
 }
-.ss-tree-html__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-xs);
-}
-.ss-tree-html__error {
-  width: 100%;
-  box-sizing: border-box;
-  padding: var(--spacing-md);
+.ss-htmltab__msg {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   line-height: 1.5;
+}
+.ss-htmltab__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-top: 1px solid var(--border);
 }
 
 .ss-tree-row {

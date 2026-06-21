@@ -34,7 +34,10 @@
    band above it. */
 .ss-css-context {
   position: sticky;
-  top: calc(-1 * var(--spacing-md));
+  /* Stick flush to the top of the scroll area — the panel header's own
+     border-bottom is the divider above it, so this carries only a
+     border-bottom (a border-top here would double up against the header). */
+  top: 0;
   z-index: 1;
   display: flex;
   align-items: baseline;
@@ -43,14 +46,28 @@
   margin: 0 calc(-1 * var(--spacing-md));
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-secondary);
-  border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+}
+.ss-css-target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-xs);
+  min-width: 0;
 }
 .ss-css-selector {
   font-family: var(--font-mono, monospace);
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--accent);
+}
+/* The breakpoint the edit targets (Base / SM / MD / LG / XL), muted next to the
+   selector so you always know which layer you're editing. */
+.ss-css-bp {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .ss-css-file {
   font-size: var(--font-size-xs);

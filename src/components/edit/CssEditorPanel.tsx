@@ -24,7 +24,7 @@ import { buildCssPrepPrompt } from '../../lib/edit-css';
 import { CssControls, AddProp } from './CssControls';
 import { CssClassBar, CssStateSwitcher, CssBreakpointBar } from './CssClassBar';
 import { CodeOverlayEditor } from './CodeOverlayEditor';
-import { CSS_CATEGORIES, PROP_TO_CATEGORY } from '../../lib/cssControls';
+import { CSS_CATEGORIES, PROP_TO_CATEGORY, CSS_BREAKPOINTS } from '../../lib/cssControls';
 
 /** Common sections start open; the long-tail ones collapse to keep it scannable. */
 function defaultSectionOpen(id: string): boolean {
@@ -371,7 +371,12 @@ export function CssEditorPanel({
         {!prep && selection && res?.status === 'resolved' && (
           <>
             <div className="ss-css-context">
-              <code className="ss-css-selector">{res.selector}</code>
+              <span className="ss-css-target">
+                <code className="ss-css-selector">{res.selector}</code>
+                <span className="ss-css-bp">
+                  {CSS_BREAKPOINTS.find((b) => b.minPx === breakpointMinPx)?.label ?? 'Base'}
+                </span>
+              </span>
               <span className="ss-css-file" title={res.file}>
                 {res.file}
               </span>
