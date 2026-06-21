@@ -241,6 +241,9 @@
 .ss-css-states {
   margin-bottom: var(--spacing-sm);
 }
+.ss-css-breakpoints {
+  margin-bottom: var(--spacing-sm);
+}
 .ss-css-state-add {
   border: none;
   background: none;

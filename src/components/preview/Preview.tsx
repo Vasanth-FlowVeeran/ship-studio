@@ -1182,10 +1182,17 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
               targetClass={cssEditor.targetClass}
               pseudo={cssEditor.pseudo}
               allClasses={cssEditor.allClasses}
+              breakpointMinPx={cssEditor.breakpointMinPx}
               onSelectClass={cssEditor.setTargetClass}
               onAddClass={(name) => void cssEditor.addClass(name)}
               onRemoveClass={(name) => void cssEditor.removeClass(name)}
               onSetPseudo={cssEditor.setPseudo}
+              onSetBreakpoint={(minPx) => {
+                cssEditor.setBreakpoint(minPx);
+                // Jump the canvas to the breakpoint width so you can see it (Base
+                // applies at all widths — leave the canvas where it is).
+                if (minPx) resize.previewAtWidth(minPx);
+              }}
               onClose={cssEditor.toggleEditMode}
               pinned={editorPinned}
               onTogglePin={toggleEditorPinned}

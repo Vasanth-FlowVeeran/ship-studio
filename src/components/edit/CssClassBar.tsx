@@ -11,6 +11,33 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { CSS_BREAKPOINTS } from '../../lib/cssControls';
+
+/** Breakpoint switcher — picks which `@media (min-width)` layer edits target. */
+export function CssBreakpointBar({
+  minPx,
+  onChange,
+}: {
+  minPx: number | null;
+  onChange: (minPx: number | null) => void;
+}) {
+  return (
+    <div className="ss-cc-seg ss-css-breakpoints" role="group" aria-label="Breakpoint">
+      {CSS_BREAKPOINTS.map((b) => (
+        <button
+          key={b.label}
+          type="button"
+          className={`ss-cc-seg__btn${minPx === b.minPx ? ' is-active' : ''}`}
+          aria-pressed={minPx === b.minPx}
+          title={b.minPx ? `≥ ${b.minPx}px` : 'All sizes'}
+          onClick={() => onChange(b.minPx)}
+        >
+          {b.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const COMMON_STATES: { label: string; value: string | null }[] = [
   { label: 'Default', value: null },

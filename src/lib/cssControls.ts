@@ -289,6 +289,16 @@ export const CSS_CATEGORIES: CssCategory[] = [
   { id: 'custom', label: 'Custom', controls: [] },
 ];
 
+/** The breakpoints the CSS editor targets (min-width). `null` = base (all
+ *  sizes). An edit at a breakpoint writes into `@media (min-width: …)`. */
+export const CSS_BREAKPOINTS: { label: string; minPx: number | null }[] = [
+  { label: 'Base', minPx: null },
+  { label: 'SM', minPx: 640 },
+  { label: 'MD', minPx: 768 },
+  { label: 'LG', minPx: 1024 },
+  { label: 'XL', minPx: 1280 },
+];
+
 /** Map a CSS property to the category whose controls edit it — powers "add a
  *  property" jumping to the right section. Spacing shorthands/longhands map to
  *  the box-model editor's category. */

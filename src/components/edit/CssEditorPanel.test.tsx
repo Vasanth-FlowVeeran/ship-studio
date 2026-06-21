@@ -31,10 +31,12 @@ function renderPanel(
     targetClass: null,
     pseudo: null,
     allClasses: [],
+    breakpointMinPx: null,
     onSelectClass: vi.fn(),
     onAddClass: vi.fn(),
     onRemoveClass: vi.fn(),
     onSetPseudo: vi.fn(),
+    onSetBreakpoint: vi.fn(),
     onClose: vi.fn(),
     ...overrides,
   };
@@ -88,6 +90,15 @@ describe('CssEditorPanel', () => {
     expect(onRemoveClass).toHaveBeenCalledWith('hero-title');
     fireEvent.click(screen.getByRole('button', { name: 'Hover' }));
     expect(onSetPseudo).toHaveBeenCalledWith('hover');
+  });
+
+  it('the breakpoint switcher targets a media layer', () => {
+    const onSetBreakpoint = vi.fn();
+    renderPanel(resolved([{ property: 'color', value: 'red', important: false }]), {
+      onSetBreakpoint,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'MD' }));
+    expect(onSetBreakpoint).toHaveBeenCalledWith(768);
   });
 
   it('a structured control saves a single property', () => {

@@ -22,7 +22,7 @@ import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { trackEvent } from '../../lib/analytics';
 import { buildCssPrepPrompt } from '../../lib/edit-css';
 import { CssControls, AddProp } from './CssControls';
-import { CssClassBar, CssStateSwitcher } from './CssClassBar';
+import { CssClassBar, CssStateSwitcher, CssBreakpointBar } from './CssClassBar';
 import { CSS_CATEGORIES, PROP_TO_CATEGORY } from '../../lib/cssControls';
 
 /** Common sections start open; the long-tail ones collapse to keep it scannable. */
@@ -92,14 +92,16 @@ interface Props {
   onCreateRule: (file: string, selector: string, declarations?: CssDeclaration[]) => void;
   /** Paste the prep prompt into the agent terminal (user presses Enter). */
   onSendToClaude?: (prompt: string) => void;
-  // Class bar + state switcher.
+  // Class bar + state switcher + breakpoints.
   targetClass: string | null;
   pseudo: string | null;
   allClasses: string[];
+  breakpointMinPx: number | null;
   onSelectClass: (name: string) => void;
   onAddClass: (name: string) => void;
   onRemoveClass: (name: string) => void;
   onSetPseudo: (pseudo: string | null) => void;
+  onSetBreakpoint: (minPx: number | null) => void;
   onClose: () => void;
   pinned?: boolean;
   onTogglePin?: () => void;
@@ -158,10 +160,12 @@ export function CssEditorPanel({
   targetClass,
   pseudo,
   allClasses,
+  breakpointMinPx,
   onSelectClass,
   onAddClass,
   onRemoveClass,
   onSetPseudo,
+  onSetBreakpoint,
   onClose,
   pinned,
   onTogglePin,
@@ -340,6 +344,7 @@ export function CssEditorPanel({
 
         {!prep && selection && (
           <>
+            <CssBreakpointBar minPx={breakpointMinPx} onChange={onSetBreakpoint} />
             <CssClassBar
               classes={classes}
               active={activeClass}
