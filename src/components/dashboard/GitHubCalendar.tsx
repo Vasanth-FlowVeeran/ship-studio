@@ -31,8 +31,19 @@ interface GitHubCalendarProps {
   onHide?: () => void;
 }
 
-// Custom theme using app colors
+// Custom theme using app colors.
+//
+// BOTH `light` and `dark` MUST be provided as explicit 5-color hex scales, even
+// though we only ever render `colorScheme="dark"`. react-activity-calendar fills
+// any missing scale from its own default, and that default is generated with
+// `color-mix(in oklab, …)`. It mutates the passed-in theme object to cache that
+// scale, then re-validates it on a later render via `CSS.supports('color', …)`.
+// macOS 12 ships Safari 15, which predates `color-mix()` — so the check returns
+// false and the library throws "Invalid color …", white-screening the whole app
+// a few seconds after launch (once the calendar data loads and it re-renders).
+// Supplying both scales as plain hex keeps the library off every color-mix path.
 const theme = {
+  light: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'],
   dark: ['#2d2d2d', '#0e4429', '#006d32', '#26a641', '#54e36e'],
 };
 
