@@ -24,15 +24,22 @@ import {
   uninstallAgent,
   disconnectClaudeAccount,
 } from '../../lib/agents-management';
-import { getActiveAccountId, listAccounts, DEFAULT_ACCOUNT_ID } from '../../lib/accounts';
+import {
+  getActiveAccountId,
+  listAccounts,
+  getAccountCredentialStatus,
+  DEFAULT_ACCOUNT_ID,
+  type AccountCredentialStatus,
+} from '../../lib/accounts';
 import { OnboardingTerminal } from '../setup/OnboardingTerminal';
 import { ClaudeConnectTerminal } from './ClaudeConnectTerminal';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { useWorkspaceConnect } from '../../hooks/useWorkspaceConnect';
 import { logger } from '../../lib/logger';
-import { CheckIcon, ClaudeIcon } from '../icons';
+import { CheckIcon, ClaudeIcon, GitHubIcon, VercelIcon } from '../icons';
 
 function KebabGlyph() {
   return (
@@ -149,18 +156,18 @@ function ClaudeConnectModal({
       isOpen
       onClose={onClose}
       title={reconnect ? 'Reconnect Claude' : 'Connect Claude'}
-      className={phase === 'terminal' ? 'agents-panel-terminal-modal' : 'claude-connect-modal'}
+      className={phase === 'terminal' ? 'agents-panel-terminal-modal' : 'connect-modal'}
     >
       {phase === 'email' ? (
-        <div className="claude-connect-body">
+        <div className="connect-modal-body">
           <p>
             A browser window will open. Sign in with the Claude account you want{' '}
             <strong>{workspaceName}</strong> to use — its login stays isolated to this workspace and
             won't affect your other workspaces or your machine's default login.
           </p>
-          <label className="claude-connect-field">
+          <label className="connect-modal-field">
             <span>
-              Account email <span className="claude-connect-muted">(shown on the card)</span>
+              Account email <span className="connect-modal-muted">(shown on the card)</span>
             </span>
             <input
               type="email"
@@ -173,7 +180,7 @@ function ClaudeConnectModal({
               }}
             />
           </label>
-          <div className="claude-connect-actions">
+          <div className="connect-modal-actions">
             <Button variant="secondary" onClick={onClose}>
               Cancel
             </Button>
@@ -183,8 +190,8 @@ function ClaudeConnectModal({
           </div>
         </div>
       ) : (
-        <div className="claude-connect-terminal-phase">
-          <p className="claude-connect-instructions">
+        <div className="connect-modal-terminal-phase">
+          <p className="connect-modal-instructions">
             Sign in in the browser, then <strong>paste the code it shows</strong> into the terminal
             below and press Enter.
           </p>
@@ -206,8 +213,8 @@ function ClaudeConnectModal({
             />
           </div>
           {exited && (
-            <div className="claude-connect-actions">
-              <span className="claude-connect-muted">Login didn't finish.</span>
+            <div className="connect-modal-actions">
+              <span className="connect-modal-muted">Login didn't finish.</span>
               <Button variant="secondary" onClick={beginTerminal}>
                 Start over
               </Button>
@@ -232,8 +239,12 @@ export function AgentsPanel() {
   const [activeAccount, setActiveAccount] = useState<{
     id: string;
     name: string;
+    color: string;
     isDefault: boolean;
   } | null>(null);
+  // Workspace-scoped login/credential status for the Services rows (GitHub,
+  // Vercel). Same source the Settings modal reads, so the two surfaces agree.
+  const [credStatus, setCredStatus] = useState<AccountCredentialStatus | null>(null);
   // When set, the Claude connect/reconnect modal is open for the active workspace.
   const [claudeConnect, setClaudeConnect] = useState<{ reconnect: boolean } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -277,15 +288,65 @@ export function AgentsPanel() {
         const acc = accounts.find((a) => a.id === id);
         setActiveAccount(
           acc
-            ? { id: acc.id, name: acc.name, isDefault: acc.isDefault }
-            : { id, name: 'Workspace', isDefault: id === DEFAULT_ACCOUNT_ID }
+            ? { id: acc.id, name: acc.name, color: acc.color, isDefault: acc.isDefault }
+            : {
+                id,
+                name: 'Workspace',
+                color: 'var(--text-muted)',
+                isDefault: id === DEFAULT_ACCOUNT_ID,
+              }
         );
       } catch {
         // Fall back to treating it as Default (native login) on failure.
-        setActiveAccount({ id: DEFAULT_ACCOUNT_ID, name: 'Default', isDefault: true });
+        setActiveAccount({
+          id: DEFAULT_ACCOUNT_ID,
+          name: 'Default',
+          color: 'var(--text-muted)',
+          isDefault: true,
+        });
       }
     })();
   }, []);
+
+  // Workspace-scoped login status for the Services rows. Shells out to
+  // `gh auth status` / `vercel whoami` (~10s worst case), so fetch on mount and
+  // after connect actions — never on a tight poll.
+  const loadCredStatus = useCallback(async (accountId: string) => {
+    try {
+      setCredStatus(await getAccountCredentialStatus(accountId));
+    } catch {
+      logger.warn('Failed to load workspace credential status');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeAccount) void loadCredStatus(activeAccount.id);
+  }, [activeAccount, loadCredStatus]);
+
+  // Reload everything after a connect/disconnect. A freshly-written auth
+  // indicator can land a beat late, so re-check on the same staggered cadence
+  // the agent rows use.
+  const refreshAll = useCallback(() => {
+    void refresh();
+    const id = activeAccount?.id;
+    if (id) {
+      void loadCredStatus(id);
+      [600, 1500, 3000].forEach((delay) => setTimeout(() => void loadCredStatus(id), delay));
+    }
+  }, [refresh, loadCredStatus, activeAccount]);
+
+  // One shared connect layer for the Services rows (GitHub, Vercel), the same
+  // hook the per-workspace Settings modal uses so the surfaces never drift.
+  const {
+    connect: connectService,
+    disconnect: disconnectService,
+    modals: connectModals,
+  } = useWorkspaceConnect({
+    accountId: activeAccount?.id ?? DEFAULT_ACCOUNT_ID,
+    accountName: activeAccount?.name ?? 'Workspace',
+    isDefault: activeAccount?.isDefault ?? true,
+    onChanged: refreshAll,
+  });
 
   // Close kebab menu on outside click
   useEffect(() => {
@@ -429,14 +490,25 @@ export function AgentsPanel() {
     <section className="agents-panel" ref={panelRef}>
       <header className="agents-panel-header">
         <div>
-          <h3 className="agents-panel-title">Coding Agents</h3>
+          <h3 className="agents-panel-title">Workspace accounts</h3>
           <p className="agents-panel-subtitle">
-            Install, sign in, or switch the default agent new terminals use.
+            Logins for{' '}
+            {activeAccount && (
+              <span className="agents-panel-badge">
+                <span
+                  className="agents-panel-badge-dot"
+                  style={{ background: activeAccount.color }}
+                />
+                {activeAccount.name}
+              </span>
+            )}{' '}
+            — each workspace signs in separately, like a separate client.
           </p>
         </div>
         {loading && <Spinner size="sm" className="agents-panel-spinner" />}
       </header>
 
+      <p className="agents-section-title">Coding agents</p>
       <div className="agents-panel-list">
         {agents.map((agent) => {
           // "Ready" (eligible to be the default agent) means connected AND valid.
@@ -598,6 +670,111 @@ export function AgentsPanel() {
           );
         })}
       </div>
+
+      {activeAccount && (
+        <>
+          <p className="agents-section-title">Services</p>
+          <div className="agents-panel-list">
+            {(
+              [
+                {
+                  id: 'github' as const,
+                  name: 'GitHub',
+                  icon: <GitHubIcon size={18} />,
+                  identity: credStatus?.githubAuthEmail ?? null,
+                },
+                {
+                  id: 'vercel' as const,
+                  name: 'Vercel',
+                  icon: <VercelIcon size={16} />,
+                  identity: credStatus?.vercelUsername ?? null,
+                },
+              ] as const
+            ).map((svc) => {
+              const connected = !!svc.identity;
+              const menuKey = `service:${svc.id}`;
+              const menuOpen = openMenuId === menuKey;
+              // Until the (slow) status fetch resolves, say "Checking…" rather
+              // than flashing a false "Not connected".
+              const statusText = connected
+                ? svc.identity
+                : credStatus
+                  ? 'Not connected'
+                  : 'Checking…';
+              // Services never show the red reconnect stroke — there's no expiry
+              // signal here, only connected vs. never-connected (neutral border).
+              const stateClass = connected ? 'is-connected' : '';
+              // Disconnect manages the workspace's own credential; the Default
+              // workspace's logins are the machine's native ones — leave untouched.
+              const canDisconnect = connected && !activeAccount.isDefault;
+
+              return (
+                <div key={svc.id} className={`agents-panel-row ${stateClass}`}>
+                  <div className="agents-panel-row-icon">{svc.icon}</div>
+
+                  <div className="agents-panel-row-main">
+                    <div className="agents-panel-row-name">{svc.name}</div>
+                    <div className="agents-panel-row-status">{statusText}</div>
+                  </div>
+
+                  <div className="agents-panel-row-actions">
+                    {!connected && (
+                      <Button variant="primary" size="sm" onClick={() => connectService(svc.id)}>
+                        Connect
+                      </Button>
+                    )}
+
+                    {connected && (
+                      <div className="agents-panel-menu-wrap">
+                        <button
+                          type="button"
+                          className="agents-panel-kebab"
+                          onClick={() => setOpenMenuId(menuOpen ? null : menuKey)}
+                          title={`More actions for ${svc.name}`}
+                          aria-label={`More actions for ${svc.name}`}
+                          aria-haspopup="menu"
+                          aria-expanded={menuOpen}
+                        >
+                          <KebabGlyph />
+                        </button>
+                        {menuOpen && (
+                          <div className="agents-panel-menu" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                connectService(svc.id);
+                              }}
+                            >
+                              {activeAccount.isDefault ? 'Sign in again' : 'Switch account'}
+                            </button>
+                            {canDisconnect && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="agents-panel-menu-danger"
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  void disconnectService(svc.id);
+                                }}
+                              >
+                                Disconnect
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {connectModals}
 
       {claudeConnect && activeAccount && (
         <ClaudeConnectModal

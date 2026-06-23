@@ -23,6 +23,7 @@ import { listen } from '@tauri-apps/api/event';
 import { logger } from '../../lib/logger';
 import { setTerminalState } from '../../lib/project';
 import { Terminal } from '../terminal/Terminal';
+import { StaleEnvBanner } from '../terminal/StaleEnvBanner';
 import { DevServerLogs } from '../terminal/DevServerLogs';
 import { Preview } from '../preview/Preview';
 import type { PreviewHandle, InspectTab } from '../preview/Preview';
@@ -1180,6 +1181,7 @@ export const WorkspaceView = memo(function WorkspaceView({
                             />
                           </div>
                         </div>
+                        <StaleEnvBanner projectPath={currentProject.path} />
                         <div
                           className={`terminal-content${isSplitActive ? ' split' : ''}`}
                           data-education-id="claude-terminal"

@@ -486,6 +486,11 @@ pub fn run() {
             commands::accounts::claude_connect_resize,
             commands::accounts::claude_connect_close,
             commands::accounts::disconnect_claude_account,
+            commands::accounts::workspace_connect_start,
+            commands::accounts::workspace_connect_write,
+            commands::accounts::workspace_connect_resize,
+            commands::accounts::workspace_connect_close,
+            commands::accounts::workspace_disconnect_service,
             // Projects folder
             commands::settings::get_projects_root,
             commands::settings::set_projects_root,

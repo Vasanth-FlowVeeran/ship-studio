@@ -25,6 +25,14 @@ export function GitHubIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function VercelIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2 22 20H2L12 2Z" />
+    </svg>
+  );
+}
+
 export function VSCodeIcon({ size = 14 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="currentColor">

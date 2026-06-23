@@ -18,6 +18,7 @@
  */
 
 import { Terminal } from '../terminal/Terminal';
+import { StaleEnvBanner } from '../terminal/StaleEnvBanner';
 import type { TerminalHandle, AgentStatus } from '../terminal/Terminal';
 import { PlusIcon } from '../icons';
 import { CompactTopbar } from './CompactTopbar';
@@ -190,6 +191,8 @@ export function CompactWorkspace({
           </button>
         )}
       </div>
+
+      <StaleEnvBanner projectPath={currentProject.path} />
 
       <div className="compact-terminal-stack">
         {allSessions.flatMap((session) =>

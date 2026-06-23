@@ -879,11 +879,41 @@ pub async fn get_account_credential_status(
         Err(_) => None,
     };
 
+    // Vercel identity, resolved the same way setup/status.rs does: verify the
+    // workspace's injected token via `vercel whoami`. The Default workspace
+    // (no injected token) falls back to the machine's native CLI session.
+    let vercel_username = {
+        let token = get_env_vars_for_account(&id).remove("VERCEL_TOKEN");
+        if token.is_some() || id == DEFAULT_ACCOUNT_ID {
+            if let Some(p) = find_binary_by_name("vercel") {
+                let mut cmd = tokio::process::Command::from(create_command(&p));
+                cmd.args(["whoami"]);
+                cmd.env("PATH", get_extended_path());
+                if let Some(ref t) = token {
+                    cmd.env("VERCEL_TOKEN", t);
+                }
+                match run_with_timeout(cmd, "vercel whoami", 10).await {
+                    Ok(output) if output.status.success() => {
+                        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        (!name.is_empty()).then_some(name)
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            // Non-default workspace without a token → not connected for Vercel.
+            None
+        }
+    };
+
     Ok(AccountCredentialStatus {
         claude_auth_email,
         codex_auth_email,
         opencode_auth_email,
         github_auth_email,
+        vercel_username,
         has_anthropic_base_url: read_from_keychain(&id, "anthropic_base_url").is_some(),
         has_vercel_token: read_from_keychain(&id, "vercel_token").is_some(),
         has_git_name: read_from_keychain(&id, "git_name").is_some(),
@@ -1336,6 +1366,340 @@ pub fn disconnect_claude_account(id: String) -> Result<(), CommandError> {
     Ok(())
 }
 
+// ── Generalized per-workspace login PTY (GitHub / Codex / Opencode) ──────────
+//
+// Claude needs token scraping (its login is a global keychain entry), but the
+// other three logins are *config-dir* based: running their login CLI under the
+// workspace's injected `GH_CONFIG_DIR` / `CODEX_HOME` / `XDG_DATA_HOME` writes
+// the credentials into the workspace's isolated dir. So these reuse the same
+// backend-owned PTY machinery as Claude (ConnectSession + CONNECT_REGISTRY) but
+// stream output verbatim — there's no secret to redact — and treat process exit
+// as the completion signal (no "captured" event).
+
+/// A login service that authenticates by writing into a per-workspace config dir.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ConnectService {
+    Github,
+    Codex,
+    Opencode,
+}
+
+impl ConnectService {
+    fn parse(s: &str) -> Option<Self> {
+        match s {
+            "github" => Some(Self::Github),
+            "codex" => Some(Self::Codex),
+            "opencode" => Some(Self::Opencode),
+            _ => None,
+        }
+    }
+
+    /// The CLI binary name to look up on PATH.
+    fn binary(self) -> &'static str {
+        match self {
+            Self::Github => "gh",
+            Self::Codex => "codex",
+            Self::Opencode => "opencode",
+        }
+    }
+
+    /// Login subcommand args for the binary.
+    fn args(self) -> &'static [&'static str] {
+        match self {
+            // `--web` uses the device flow (prints a one-time code + opens the
+            // browser); `--git-protocol https` skips the protocol prompt.
+            Self::Github => &["auth", "login", "--web", "--git-protocol", "https"],
+            Self::Codex => &["login"],
+            Self::Opencode => &["auth", "login"],
+        }
+    }
+
+    /// Whether this service's CLI pauses on a "Press Enter to open…" prompt that
+    /// we can auto-advance so the browser opens without a manual keystroke.
+    fn auto_enter(self) -> bool {
+        matches!(self, Self::Github)
+    }
+}
+
+/// Emit a chunk of PTY output to the webview for a workspace-connect session.
+fn emit_workspace_connect_data(app: &AppHandle, session_id: &str, bytes: &[u8]) {
+    let _ = app.emit(
+        "workspace-connect-data",
+        serde_json::json!({ "sessionId": session_id, "data": bytes }),
+    );
+}
+
+/// Start an interactive GitHub/Codex/Opencode login for a workspace in a
+/// backend-owned PTY.
+///
+/// Spawns the service's login CLI under the workspace's isolated env (so the
+/// credentials land in the workspace's config dir, never the global one).
+/// Output streams to the webview via `workspace-connect-data`; the user types
+/// into it via [`workspace_connect_write`]. There is no token to capture — the
+/// CLI writes its own credential files — so completion is signalled purely by
+/// `workspace-connect-exit` when the process ends. For GitHub we watch for the
+/// "Press Enter to open…" prompt and send Enter once so the browser opens
+/// immediately.
+#[tauri::command]
+#[tracing::instrument(skip(app), fields(session_id = %session_id, id = %id, service = %service))]
+pub fn workspace_connect_start(
+    app: AppHandle,
+    session_id: String,
+    id: String,
+    service: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), CommandError> {
+    validate_account_id(&id)?;
+    validate_account_id(&session_id)?;
+    let svc = ConnectService::parse(&service).ok_or_else(|| CommandError::Validation {
+        field: "service".into(),
+        reason: format!("unknown connect service '{service}'"),
+    })?;
+    if id == DEFAULT_ACCOUNT_ID {
+        return Err(CommandError::Validation {
+            field: "id".into(),
+            reason: "The Default workspace uses your machine's native logins; \
+                     run the CLI's login command in a terminal instead of connecting."
+                .into(),
+        });
+    }
+
+    let binary = find_binary_by_name(svc.binary()).ok_or_else(|| CommandError::Io {
+        message: format!(
+            "{} CLI not found. Install it first, then connect.",
+            svc.binary()
+        ),
+    })?;
+
+    // Idempotent: a live session under this id means connect is already running.
+    {
+        let map = CONNECT_REGISTRY
+            .lock()
+            .map_err(|e| format!("connect registry poisoned: {e}"))?;
+        if map.contains_key(&session_id) {
+            return Ok(());
+        }
+    }
+
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| format!("openpty: {e}"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| format!("take_writer: {e}"))?;
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| format!("clone_reader: {e}"))?;
+
+    let mut cmd = CommandBuilder::new(&binary);
+    for arg in svc.args() {
+        cmd.arg(arg);
+    }
+    cmd.cwd(dirs::home_dir().unwrap_or_default());
+    cmd.env("PATH", get_extended_path());
+    cmd.env("TERM", "xterm-256color");
+    // Run inside the workspace's isolated env so the login writes into the
+    // workspace's config dir (GH_CONFIG_DIR / CODEX_HOME / XDG_DATA_HOME).
+    for (k, v) in get_env_vars_for_account(&id) {
+        cmd.env(k, v);
+    }
+
+    let mut child = pair
+        .slave
+        .spawn_command(cmd)
+        .map_err(|e| format!("spawn_command: {e}"))?;
+    let child_killer = child.clone_killer();
+
+    let session = Arc::new(ConnectSession {
+        writer: Mutex::new(writer),
+        child_killer: Mutex::new(child_killer),
+        master: Mutex::new(pair.master),
+        captured: AtomicBool::new(false),
+    });
+    CONNECT_REGISTRY
+        .lock()
+        .map_err(|e| format!("connect registry poisoned: {e}"))?
+        .insert(session_id.clone(), session.clone());
+
+    // Reader thread: stream output verbatim. For GitHub, auto-send Enter once we
+    // see the "Press Enter to open…" prompt so the browser launches itself.
+    {
+        let app = app.clone();
+        let session_id = session_id.clone();
+        let session = session.clone();
+        let auto_enter = svc.auto_enter();
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            let mut sent_enter = false;
+            // Small rolling window so the prompt is matched even when it straddles
+            // a read boundary.
+            let mut tail: Vec<u8> = Vec::new();
+            loop {
+                let n = match reader.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => n,
+                };
+                emit_workspace_connect_data(&app, &session_id, &buf[..n]);
+                if auto_enter && !sent_enter {
+                    tail.extend_from_slice(&buf[..n]);
+                    let hay = String::from_utf8_lossy(&tail).to_lowercase();
+                    if hay.contains("press enter") {
+                        if let Ok(mut w) = session.writer.lock() {
+                            let _ = w.write_all(b"\r");
+                        }
+                        sent_enter = true;
+                        tail.clear();
+                    } else if tail.len() > 4096 {
+                        // Bound the window; keep only the most recent bytes.
+                        let keep = tail.len() - 2048;
+                        tail.drain(..keep);
+                    }
+                }
+            }
+        });
+    }
+
+    // Waiter thread: reaps the child, drops the registry entry, signals exit.
+    {
+        let app = app.clone();
+        let session_id = session_id.clone();
+        std::thread::spawn(move || {
+            let code = match child.wait() {
+                Ok(status) if status.success() => 0,
+                Ok(status) => status.exit_code() as i32,
+                Err(_) => -1,
+            };
+            if let Ok(mut map) = CONNECT_REGISTRY.lock() {
+                map.remove(&session_id);
+            }
+            let _ = app.emit(
+                "workspace-connect-exit",
+                serde_json::json!({ "sessionId": session_id, "exitCode": code }),
+            );
+        });
+    }
+
+    Ok(())
+}
+
+/// Forward keystrokes to a workspace-connect PTY.
+#[tauri::command]
+#[tracing::instrument(skip(data))]
+pub fn workspace_connect_write(session_id: String, data: Vec<u8>) -> Result<(), CommandError> {
+    let session = {
+        let map = CONNECT_REGISTRY
+            .lock()
+            .map_err(|e| format!("connect registry poisoned: {e}"))?;
+        map.get(&session_id).cloned()
+    };
+    let Some(session) = session else {
+        return Err("unknown connect session".to_string().into());
+    };
+    let mut w = session
+        .writer
+        .lock()
+        .map_err(|e| format!("writer lock poisoned: {e}"))?;
+    w.write_all(&data).map_err(|e| format!("write: {e}"))?;
+    Ok(())
+}
+
+/// Resize a workspace-connect PTY to match the on-screen terminal.
+#[tauri::command]
+#[tracing::instrument]
+pub fn workspace_connect_resize(
+    session_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), CommandError> {
+    let session = {
+        let map = CONNECT_REGISTRY
+            .lock()
+            .map_err(|e| format!("connect registry poisoned: {e}"))?;
+        map.get(&session_id).cloned()
+    };
+    let Some(session) = session else {
+        return Err("unknown connect session".to_string().into());
+    };
+    let master = session
+        .master
+        .lock()
+        .map_err(|e| format!("master lock poisoned: {e}"))?;
+    master
+        .resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| format!("resize: {e}"))?;
+    Ok(())
+}
+
+/// Kill a workspace-connect PTY and drop its registry entry. Idempotent.
+#[tauri::command]
+#[tracing::instrument]
+pub fn workspace_connect_close(session_id: String) -> Result<(), CommandError> {
+    let session = {
+        let mut map = CONNECT_REGISTRY
+            .lock()
+            .map_err(|e| format!("connect registry poisoned: {e}"))?;
+        map.remove(&session_id)
+    };
+    if let Some(session) = session {
+        if let Ok(mut killer) = session.child_killer.lock() {
+            let _ = killer.kill();
+        }
+    }
+    Ok(())
+}
+
+/// Sign a workspace out of a config-dir login (GitHub / Codex / Opencode) by
+/// running the CLI's logout under the workspace's isolated env. Best-effort:
+/// returns the captured output for surfacing, but a non-zero exit (already
+/// logged out) is not treated as an error.
+#[tauri::command]
+#[tracing::instrument]
+pub fn workspace_disconnect_service(id: String, service: String) -> Result<(), CommandError> {
+    validate_account_id(&id)?;
+    let svc = ConnectService::parse(&service).ok_or_else(|| CommandError::Validation {
+        field: "service".into(),
+        reason: format!("unknown connect service '{service}'"),
+    })?;
+    if id == DEFAULT_ACCOUNT_ID {
+        return Err(CommandError::Validation {
+            field: "id".into(),
+            reason: "The Default workspace uses your machine's native logins; \
+                     sign out with the CLI directly."
+                .into(),
+        });
+    }
+    let binary = find_binary_by_name(svc.binary()).ok_or_else(|| CommandError::Io {
+        message: format!("{} CLI not found.", svc.binary()),
+    })?;
+    let logout_args: &[&str] = match svc {
+        ConnectService::Github => &["auth", "logout", "--hostname", "github.com"],
+        ConnectService::Codex => &["logout"],
+        ConnectService::Opencode => &["auth", "logout"],
+    };
+    let mut command = std::process::Command::new(&binary);
+    command.args(logout_args);
+    command.env("PATH", get_extended_path());
+    for (k, v) in get_env_vars_for_account(&id) {
+        command.env(k, v);
+    }
+    // Best-effort: failures (e.g. "not logged in") are fine.
+    let _ = command.output();
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1400,6 +1764,50 @@ mod tests {
         // Surrounding text is preserved verbatim.
         assert!(shown.contains("Long-lived token created!"));
         assert!(shown.contains("Store it."));
+    }
+
+    #[test]
+    fn connect_service_parses_known_services_only() {
+        assert_eq!(
+            ConnectService::parse("github"),
+            Some(ConnectService::Github)
+        );
+        assert_eq!(ConnectService::parse("codex"), Some(ConnectService::Codex));
+        assert_eq!(
+            ConnectService::parse("opencode"),
+            Some(ConnectService::Opencode)
+        );
+        assert_eq!(ConnectService::parse("claude"), None);
+        assert_eq!(ConnectService::parse("vercel"), None);
+        assert_eq!(ConnectService::parse(""), None);
+    }
+
+    #[test]
+    fn connect_service_only_github_auto_enters() {
+        // Only GitHub's device flow pauses on a "Press Enter to open…" prompt.
+        assert!(ConnectService::Github.auto_enter());
+        assert!(!ConnectService::Codex.auto_enter());
+        assert!(!ConnectService::Opencode.auto_enter());
+    }
+
+    #[test]
+    fn connect_service_uses_isolated_login_commands() {
+        assert_eq!(ConnectService::Github.binary(), "gh");
+        assert!(ConnectService::Github
+            .args()
+            .starts_with(&["auth", "login"]));
+        assert_eq!(ConnectService::Codex.binary(), "codex");
+        assert_eq!(ConnectService::Codex.args(), &["login"]);
+        assert_eq!(ConnectService::Opencode.binary(), "opencode");
+        assert_eq!(ConnectService::Opencode.args(), &["auth", "login"]);
+    }
+
+    #[test]
+    fn workspace_disconnect_rejects_default_and_unknown_service() {
+        // Unknown service is rejected before anything is run.
+        assert!(workspace_disconnect_service("some-workspace".into(), "bogus".into()).is_err());
+        // The Default workspace's native logins aren't managed here.
+        assert!(workspace_disconnect_service(DEFAULT_ACCOUNT_ID.into(), "github".into()).is_err());
     }
 
     #[test]

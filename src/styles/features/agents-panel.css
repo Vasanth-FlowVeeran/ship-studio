@@ -35,6 +35,44 @@
   color: var(--text-muted);
 }
 
+/* Workspace badge in the header — names the workspace these logins belong to,
+   the single clearest "which account am I looking at?" cue. A compact tag, not
+   a stretched pill. */
+.agents-panel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 1px var(--spacing-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-weight: 500;
+  vertical-align: baseline;
+}
+
+.agents-panel-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+/* Subheader splitting the card into "Coding agents" and "Services" tiers. */
+.agents-section-title {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: var(--spacing-md) 0 var(--spacing-sm);
+}
+
+/* First subheader sits right under the header — trim its top gap. */
+.agents-panel-header + .agents-section-title {
+  margin-top: 0;
+}
+
 .agents-panel-list {
   display: flex;
   flex-direction: column;
@@ -426,26 +464,27 @@ button.dashboard-card-row {
   background: var(--error-light);
 }
 
-/* ── Claude connect modal ──────────────────────────────────────────────── */
-.claude-connect-body {
+/* ── Connect modals (shared: Claude token, GitHub/Codex/Opencode PTY, Vercel
+   token) — one visual language so the surfaces never drift. ────────────── */
+.connect-modal-body {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
   padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
 }
 
-.claude-connect-body p {
+.connect-modal-body p {
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--font-size-base);
   line-height: 1.5;
 }
 
-.claude-connect-body strong {
+.connect-modal-body strong {
   color: var(--text-primary);
 }
 
-.claude-connect-field {
+.connect-modal-field {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
@@ -453,7 +492,7 @@ button.dashboard-card-row {
   color: var(--text-primary);
 }
 
-.claude-connect-field input {
+.connect-modal-field input {
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-primary);
   border: 1px solid var(--border);
@@ -462,17 +501,17 @@ button.dashboard-card-row {
   font-size: var(--font-size-md);
 }
 
-.claude-connect-field input:focus {
+.connect-modal-field input:focus {
   outline: none;
   border-color: var(--action);
 }
 
-.claude-connect-muted {
+.connect-modal-muted {
   color: var(--text-secondary);
   font-weight: 400;
 }
 
-.claude-connect-actions {
+.connect-modal-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -481,7 +520,7 @@ button.dashboard-card-row {
 
 /* Terminal phase — fills the (terminal-sized) modal: instructions on top, the
    embedded backend-PTY terminal taking the remaining height. */
-.claude-connect-terminal-phase {
+.connect-modal-terminal-phase {
   display: flex;
   flex: 1;
   min-height: 0;
@@ -490,13 +529,13 @@ button.dashboard-card-row {
   padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
 }
 
-.claude-connect-instructions {
+.connect-modal-instructions {
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--font-size-base);
   line-height: 1.5;
 }
 
-.claude-connect-instructions strong {
+.connect-modal-instructions strong {
   color: var(--text-primary);
 }

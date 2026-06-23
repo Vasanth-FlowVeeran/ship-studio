@@ -102,6 +102,48 @@ export const OPTIONAL_ITEMS = new Set([
   'vercel_auth',
 ]);
 
+/**
+ * Tier classification for a setup item.
+ *
+ * The app conflated two very different things in one flat list: tools that are
+ * installed once on the machine and shared by every workspace, and logins that
+ * are isolated per workspace. Splitting them is purely a frontend concern — the
+ * id taxonomy already encodes the tier (the five `*_auth` ids are the logins),
+ * so we classify here rather than widening the backend SetupItemInfo.
+ *
+ *  - `machine`   — Homebrew, Node, Git, and the CLI binaries. Installed once.
+ *  - `workspace` — the five logins (gh / claude / codex / opencode / vercel),
+ *                  isolated per workspace via `get_env_vars_for_account`.
+ */
+export type SetupTier = 'machine' | 'workspace';
+
+/** The five per-workspace logins (the `*_auth` items). Everything else is machine-tier. */
+export const WORKSPACE_LOGIN_ITEM_IDS = new Set([
+  'gh_auth',
+  'claude_auth',
+  'codex_auth',
+  'opencode_auth',
+  'vercel_auth',
+]);
+
+/** Machine-tier items: runtimes + CLI binaries installed once and shared by every workspace. */
+export const MACHINE_ITEM_IDS = new Set([
+  'homebrew',
+  'node',
+  'npm_fix',
+  'git',
+  'gh',
+  'claude',
+  'codex',
+  'opencode',
+  'vercel',
+]);
+
+/** Classify a setup item id as machine- or workspace-tier. */
+export function tierOf(itemId: string): SetupTier {
+  return WORKSPACE_LOGIN_ITEM_IDS.has(itemId) ? 'workspace' : 'machine';
+}
+
 /** Quick setup check result (fast Tier-1 check) */
 interface QuickSetupCheck {
   /** Whether all binaries and auth files exist */
