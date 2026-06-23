@@ -135,7 +135,9 @@ describe('OnboardingScreen', () => {
     render(<OnboardingScreen onComplete={onComplete} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Set up version control and repository hosting')).toBeInTheDocument();
+      expect(
+        screen.getByText('Save your work safely and publish it online. Required.')
+      ).toBeInTheDocument();
     });
   });
 
@@ -155,7 +157,9 @@ describe('OnboardingScreen', () => {
     render(<OnboardingScreen onComplete={onComplete} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Set up version control and repository hosting')).toBeInTheDocument();
+      expect(
+        screen.getByText('Save your work safely and publish it online. Required.')
+      ).toBeInTheDocument();
     });
   });
 
@@ -500,7 +504,7 @@ describe('OnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 
@@ -534,7 +538,7 @@ describe('OnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 
@@ -587,7 +591,9 @@ describe('OnboardingScreen', () => {
 
       // Should land on hosting step
       await waitFor(() => {
-        expect(screen.getByText('Deploy your projects to the web')).toBeInTheDocument();
+        expect(
+          screen.getByText('Optional. Connect later to put your site on the web.')
+        ).toBeInTheDocument();
       });
 
       // Skip for Now should be visible
@@ -610,7 +616,7 @@ describe('OnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 
@@ -627,7 +633,9 @@ describe('OnboardingScreen', () => {
         fireEvent.click(screen.getByText('Next'));
       });
 
-      expect(screen.getByText('Set up version control and repository hosting')).toBeInTheDocument();
+      expect(
+        screen.getByText('Save your work safely and publish it online. Required.')
+      ).toBeInTheDocument();
     });
   });
 
@@ -807,7 +815,7 @@ describe('OnboardingScreen', () => {
       // Auto-advances to step 2
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 
@@ -825,7 +833,7 @@ describe('OnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 
@@ -1135,7 +1143,7 @@ describe('OnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 
@@ -1230,7 +1238,7 @@ describe('OnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 
@@ -1531,7 +1539,7 @@ describe('OnboardingScreen', () => {
       });
 
       // Node depends on homebrew — with homebrew not installed, node should show "Waiting for..."
-      expect(screen.getByText('Waiting for Package Manager')).toBeInTheDocument();
+      expect(screen.getByText('Unlocks after Package Manager')).toBeInTheDocument();
     });
 
     it('node becomes installable after homebrew is installed', async () => {
@@ -1549,7 +1557,7 @@ describe('OnboardingScreen', () => {
       });
 
       // Node should NOT show "Waiting for..." anymore
-      expect(screen.queryByText('Waiting for Package Manager')).not.toBeInTheDocument();
+      expect(screen.queryByText('Unlocks after Package Manager')).not.toBeInTheDocument();
 
       // Node should have an Install button
       const installButtons = screen.getAllByText('Install');
@@ -1563,12 +1571,12 @@ describe('OnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 
       // gh_auth depends on gh — with gh not installed, should show blocked
-      expect(screen.getByText('Waiting for GitHub CLI')).toBeInTheDocument();
+      expect(screen.getByText('Unlocks after GitHub CLI')).toBeInTheDocument();
     });
 
     it('claude_auth shows as blocked when claude is not installed (step 3)', async () => {
@@ -1581,7 +1589,7 @@ describe('OnboardingScreen', () => {
       });
 
       // claude_auth depends on claude — should show blocked
-      expect(screen.getByText('Waiting for Claude Code')).toBeInTheDocument();
+      expect(screen.getByText('Unlocks after Claude Code')).toBeInTheDocument();
     });
   });
 
@@ -1600,7 +1608,7 @@ describe('OnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 
@@ -1839,7 +1847,7 @@ describe('OnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText('Set up version control and repository hosting')
+          screen.getByText('Save your work safely and publish it online. Required.')
         ).toBeInTheDocument();
       });
 

@@ -317,7 +317,7 @@ export const WIZARD_STEPS: WizardStepDef[] = [
   {
     id: 'git-github',
     title: 'Git & GitHub',
-    subtitle: 'Set up version control and repository hosting',
+    subtitle: 'Save your work safely and publish it online. Required.',
     itemIds: ['git', 'gh', 'gh_auth'],
     skippable: false,
   },
@@ -331,7 +331,7 @@ export const WIZARD_STEPS: WizardStepDef[] = [
   {
     id: 'hosting',
     title: 'Hosting Provider',
-    subtitle: 'Deploy your projects to the web',
+    subtitle: 'Optional. Connect later to put your site on the web.',
     itemIds: ['vercel', 'vercel_auth'],
     skippable: true,
   },

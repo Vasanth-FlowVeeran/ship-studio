@@ -61,7 +61,9 @@ pub async fn install_node_via_brew(app: tauri::AppHandle) -> Result<(), CommandE
         return Ok(());
     }
 
-    let brew = get_brew_command().ok_or("Homebrew not found")?;
+    let brew = get_brew_command().ok_or(
+        "Homebrew is needed to install this. Install Homebrew from the Package Manager step first, then try again.",
+    )?;
 
     let output = create_command(&brew)
         .args(["install", "node"])
@@ -95,7 +97,9 @@ pub async fn install_git_via_brew(app: tauri::AppHandle) -> Result<(), CommandEr
         return Ok(());
     }
 
-    let brew = get_brew_command().ok_or("Homebrew not found")?;
+    let brew = get_brew_command().ok_or(
+        "Homebrew is needed to install this. Install Homebrew from the Package Manager step first, then try again.",
+    )?;
 
     let output = create_command(&brew)
         .args(["install", "git"])
@@ -129,7 +133,9 @@ pub async fn install_gh_via_brew(app: tauri::AppHandle) -> Result<(), CommandErr
         return Ok(());
     }
 
-    let brew = get_brew_command().ok_or("Homebrew not found")?;
+    let brew = get_brew_command().ok_or(
+        "Homebrew is needed to install this. Install Homebrew from the Package Manager step first, then try again.",
+    )?;
 
     let output = create_command(&brew)
         .args(["install", "gh"])
@@ -180,7 +186,9 @@ pub async fn install_brew_packages(
         return Ok(());
     }
 
-    let brew = get_brew_command().ok_or("Homebrew not found")?;
+    let brew = get_brew_command().ok_or(
+        "Homebrew is needed to install this. Install Homebrew from the Package Manager step first, then try again.",
+    )?;
 
     let brew_packages: Vec<&str> = packages.iter().map(|p| p.as_str()).collect();
 
