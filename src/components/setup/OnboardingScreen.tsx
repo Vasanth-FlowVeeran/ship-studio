@@ -43,6 +43,7 @@ import {
 } from '../../lib/setup';
 import { initDefaultAgent } from '../../lib/agent';
 import { checkGitHubCliStatus } from '../../lib/github';
+import { asCommandError, formatCommandError } from '../../lib/errors';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { SlackIcon } from '../icons';
 
@@ -344,7 +345,10 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
         setActiveItemId(null);
       } catch (err) {
         logger.warn(`Failed to process ${itemId}`);
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        // Tauri commands reject with a structured CommandError object (not an
+        // Error instance), so `String(err)` would render "[object Object]".
+        // Route through the shared helpers to get a real user-facing message.
+        const errorMessage = formatCommandError(asCommandError(err));
         const cleanedMessage = errorMessage.replace(/\[[\w_]+\]\s*/g, '').trim();
 
         if (PKG_MGR_PACKAGES.has(itemId)) {
